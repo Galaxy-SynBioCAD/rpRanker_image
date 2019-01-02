@@ -10,13 +10,14 @@ import component_contribution
 
 
 class Thermodynamics:
-    """Combination of equilibrator and group_contribution analysis to caclualte the thermodymaics of the individual 
+    """Combination of equilibrator and group_contribution analysis to caclualte the thermodymaics of the individual
     metabolic pathways output from RP2paths and thus RetroPath2.0
     """
-    def __init__(self, mnxm_dG, cc_preprocess, pH=7.0, pMg=14.0, I=0.1, temperature=298.15):
+    def __init__(self, mnxm_dG, cc_preprocess, deprecatedMNXM_mnxm, pH=7.0, pMg=14.0, I=0.1, temperature=298.15):
         #self.compound_dict = compound_dict
         self.mnxm_dG = mnxm_dG
         self.cc_preprocess = cc_preprocess
+        self.deprecatedMNXM_mnxm = deprecatedMNXM_mnxm
         #### set the physiological parameters
         self.pH = pH
         self.pMg = pMg
@@ -50,27 +51,27 @@ class Thermodynamics:
     ################ PRIVATE FUNCTIONS ###################
 
 
-    def _select_mnxm_dG(mnxm):
+    def _select_mnxm_dG(self, mnxm):
         """Given that there can be multiple precalculated dG for a given molecule (MNXM)
         this function gives the priority to a particular order for a given MNXM ID
         alberty>smallest(KEGG_ID)>other(KEGG_ID)
         """
         if mnxm in self.mnxm_dG:
-            if 'alberty' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['alberty']:
-                if len(self.mnxm_dG[mnxm]['alberty'])==1:
-                    return None, None, self.mnxm_dG[mnxm]['alberty'][0]['species']
-                else:
-                    return False
-            elif 'component_contribution' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['component_contribution']:
+            if 'component_contribution' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['component_contribution']:
                 if len(self.mnxm_dG[mnxm]['component_contribution'])==1:
                     return self.mnxm_dG[mnxm]['component_contribution'][0]['compound_index'], self.mnxm_dG[mnxm]['component_contribution'][0]['group_vector'], self.mnxm_dG[mnxm]['component_contribution'][0]['pmap']['species']
-                elif:
+                else:
                     #select the lowest CID and make sure that there
                     toRet = {'CID': 'C99999'}
                     for cmp_dict in self.mnxm_dG[mnxm]['component_contribution']:
                         if int(cmp_dict['CID'][1:])<int(toRet['CID'][1:]):
                             toRet = cmp_dict
                     return toRet['compound_index'], toRet['group_vector'], toRet['pmap']['species']
+            elif 'alberty' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['alberty']:
+                if len(self.mnxm_dG[mnxm]['alberty'])==1:
+                    return None, None, self.mnxm_dG[mnxm]['alberty'][0]['species']
+                else:
+                    return False
             else:
                 logging.warning('There are no valid dictionnary of precalculated dG for '+str(mnxm))
                 raise KeyError
@@ -90,7 +91,7 @@ class Thermodynamics:
     #TODO generate the uncertainty here
     #TODO add the option of accepting InChI strings as well as SMILES
     def scrt_dG0(self, srct_type, srct_string, stochio):
-        """ Decompose a SMILES string 
+        """ Decompose a SMILES string
         #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
         calculate pKas of the target and intermediates using cxcalc
         """
@@ -152,9 +153,9 @@ class Thermodynamics:
         trans = -self.R * self.temperature * logsumexp(dG0_prime_vector / (-self.R * self.temperature))
         #### _ddG
         ddG = None
-        if 0 == major_microspecies:
+        if 0==major_microspecies:
             ddG = 0
-        elif 0 < self.I:
+        elif 0<self.I:
             ddG = sum(p_kas[0:major_microspecies]) * self.R * self.temperature * np.log(10)
         else:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
@@ -173,7 +174,7 @@ class Thermodynamics:
         """Get a detla-deltaG estimate for this group of species.
             i.e., this is the difference between the dG0 and the dG'0, which
             only depends on the pKa of the pseudoisomers, but not on their
-            formation energies.          
+            formation energies.
         """
         # Compute per-species transforms, scaled down by R*T.
         dG0_prime_vec = []
@@ -192,9 +193,11 @@ class Thermodynamics:
                     ddG_prime += cmp_spe['nMg']*(self.RTlog10*self.pMg-self.mg_formation_energy)
                 dG0_prime_vec.append(cmp_spe['dG0_f']+ddG_prime)
             except KeyError:
-                #TODO: pass the mnxm to print where is the error
+                #TODO: choose wether to continue the calculation although some of the species_list is missing parameters
+                #I think continue is fine ---> check against equilibrator
                 logging.warning('Some species_list parameters are missing')
                 continue
+                #raise KeyError
         dG0_prime_vec = np.array(dG0_prime_vec)
         # Numerical issues: taking a sum of exp(v) for |v| quite large.
         # Use the fact that we take a log later to offset all values by a
@@ -208,28 +211,97 @@ class Thermodynamics:
         ###### compute X and G
         x = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)))
         g = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)))
-        for g_ind, g_count in group_vector:
-            g[g_ind, 0] += g_count
-        x[compound_index, 0] = 1
+        if not compound_index==None and not group_vector==None:
+            for g_ind, g_count in group_vector:
+                g[g_ind, 0] += g_count
+            x[compound_index, 0] = 1
         return dG0_f_prime*stochio, stochio*x, stochio*g
 
-    
-    def sigma_matrix(self, X, G)
+
+    def sigma_matrix(self, X, G):
+        """Calculate the uncertainty  of a precalculated compound using matrices X and G
+        """
         #Calculate the uncertainty of a precalculated compound or group of compounds 
         U = X.T @ self.cc_preprocess['C1'] @ X + \
             X.T @ self.cc_preprocess['C2'] @ G + \
             G.T @ self.cc_preprocess['C2'].T @ X + \
-            G.T @ self.cc_preprocess['C3'] @ G 
+            G.T @ self.cc_preprocess['C3'] @ G
         #Below is terrible score, if we want to calculate the dG0 using the matrix
         #dG0_cc = X.T @ self.cc_preprocess['v_r'] + G.T @ self.cc_preprocess['v_g']
         return np.sqrt(U[0, 0])#, dG0_cc
-    
+
 
     #### select either precalculated or structure dG for the calculation of dG for a pathway ####
 
-    
+    #TODO: save the calculated InChI dG and uncertainty to be used once again 
+    def rp_paths_dG0(self, rp_paths, rp_smiles):
+        """Return the paths dG from precalculated and on-the-fly
+        """
+        #TODO: save the caluclated MNXM and save them to the cache to speed up future calculations
+        for path_id in rp_paths:
+            path_dG = 0.0
+            path_count = 0
+            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['step']) for step_id in rp_paths[path_id]['path']])
+            X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
+            G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
+            for step_id in rp_paths[path_id]['path']:
+                reaction_dG = 0.0
+                react_count = 0
+                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
+                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
+                for cmp_id in rp_paths[path_id]['path'][step_id]['step']:
+                    X = None
+                    G = None
+                    compound_dG = None
+                    #check that the deprecated mnxm is not used
+                    try:
+                        mnxm = self.deprecatedMNXM_mnxm[cmp_id]
+                    except KeyError:
+                        mnxm = cmp_id
+                    try:
+                        compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
+                        compound_dG, X, G = self.compound_dG0(species_list,
+                                                              compound_index,
+                                                              group_vector,
+                                                              rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                    except KeyError:
+                        logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                        try:
+                            compound_dG, X, G = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                        except KeyError:
+                            logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                        except LookupError:
+                            logging.warning(str(cmp_id)+' cannot calculate dG using component contribution ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                    if type(X)==np.ndarray and type(G)==np.ndarray:
+                        X_reaction[:, react_count:react_count+1] = X
+                        G_reaction[:, react_count:react_count+1] = G
+                        X_path[:, path_count:path_count+1] = X
+                        G_path[:, path_count:path_count+1] = G
+                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
+                    if not compound_dG==None:
+                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG'] = compound_dG
+                        reaction_dG += compound_dG
+                        path_dG += compound_dG
+                    react_count += 1
+                    path_count += 1
+                    logging.info('############################')
+                rp_paths[path_id]['path'][step_id]['dG'] = reaction_dG
+                rp_paths[path_id]['path'][step_id]['dG_uncertainty'] = self.sigma_matrix(X_reaction, G_reaction)
+            rp_paths[path_id]['dG'] = path_dG
+            rp_paths[path_id]['dG_uncertainty'] = self.sigma_matrix(X_path, G_path)
+
+
+
+
+
+
+
+    ########################### WORK IN PROGRESS #####################
+
+
+    '''
     def rp_paths_dG0(self, input_rp_paths, rp_smiles):
-        """Return the paths dG from precalculated and on-the-fly 
+        """Return the paths dG from precalculated and on-the-fly
         """
         rp_paths = copy.deepcopy(input_rp_paths)
         for path in rp_paths:
@@ -241,17 +313,17 @@ class Thermodynamics:
             for react in path:
                 reaction_dG = 0.0
                 react_count = 0
-                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
-                                                len(react['right'])+len(react['left']))), ndmin=2) 
-                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
+                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0],
+                                                len(react['right'])+len(react['left']))), ndmin=2)
+                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0],
                                                 len(react['right'])+len(react['left']))), ndmin=2)
                 for lr, stochio_mult in zip(['left', 'right'], [-1, 1]):
                     for mnxm in react[lr]:
                         try:
                             compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
-                            compound_dG, X, G = self.compound_dG0(species_list, 
-                                                                  compound_index, 
-                                                                  group_vector, 
+                            compound_dG, X, G = self.compound_dG0(species_list,
+                                                                  compound_index,
+                                                                  group_vector,
                                                                   react[lr][mnxm]*stochio_mult)
                         except KeyError:
                             try:
@@ -270,39 +342,13 @@ class Thermodynamics:
                         path_count += 1
                 react['dG'] = compound_dG
                 react['dG_uncertainty'] = sigma_matrix(X, G)
-                path_dG += react_dG            
+                path_dG += react_dG
             path.append({'dG': path_dG, 'dG_uncertainty': sigma_matrix(X_path, G_path)})
         return rp_paths
+        '''
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    '''
     def rp_paths_dG0(self, input_rp_paths):
         """return the paths dG from precalculated and 
         """
@@ -379,29 +425,7 @@ class Thermodynamics:
             rp_paths[path_id]['dG'] = path_dG
             rp_paths[path_id]['dG_std'] = self.matrix_uncertainty(X_path, G_path)
         return rp_paths 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    ########################### WORK IN PROGRESS #####################
+    '''
 
     ################## Compound to matrix and calculate uncertainty ################
     """
@@ -459,6 +483,7 @@ class Thermodynamics:
             return False
     """
 
+    '''
     ########################### REACTIONS #####################
 
     ###uselesss since we are passing
@@ -734,6 +759,7 @@ class Thermodynamics:
         return stochio*dG0_prime, sigma_cc
 
     '''
+    '''
     ##################### THIS IS TESTING SUITE ##################    
     def compare_scores(self):
         import equilibrator_api
@@ -921,7 +947,6 @@ class Thermodynamics:
             g += inputReaction[cmp_name]['stochio']*g_c
         return x, g
     '''
-
 
 
 

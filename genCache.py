@@ -55,7 +55,7 @@ class Cache:
                 logging.error('Local path is not a directory: '+str(path))
                 return None
 
-    
+
     def all(self):
         """Run all the files required to generate the cache
         Requires: mvc.db, chem_xref.tsv, chem_prop.tsv, cc_compounds.json.gz and alberty.json
@@ -77,6 +77,7 @@ class Cache:
         pickle.dump(self.rr_reactions(), open('cache/rr_reactions.pickle', 'wb'))
 
 
+    #TODO: save the deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def deprecatedMNXM_mnxm(self, chem_xref_path=None):
         """generate the deprecatedMNXM_mnxmdictionnary parameter from chem_xref.tsv from MNX
         """
@@ -86,16 +87,17 @@ class Cache:
             for row in c:
                 mnx = row[0].split(':')
                 if mnx[0]=='deprecated':
-                    a[row[1]] = mnx[1]
+                    #a[row[1]] = mnx[1]
+                    a[mnx[1]] = row[1]
             a.update(self.convertMNXM)
             a['MNXM01'] = 'MNXM1'
         return a
 
 
-    def mnxm_dG(self, 
-                deprecatedMNXM_mnxm, 
-                chem_xref_path=None, 
-                cc_compounds_path=None, 
+    def mnxm_dG(self,
+                deprecatedMNXM_mnxm,
+                chem_xref_path=None,
+                cc_compounds_path=None,
                 alberty_path=None):
         cc_alberty = {}
         ###################### mnxm_kegg ################
@@ -110,11 +112,10 @@ class Cache:
                             'Replaced '+str(mnx[1])+': '+str(kegg_mnxm[mnx[1]])+' from '+str(row[1])
                         )
                     else:
-                        mnxm = mnx[1]
                         try:
                             mnxm = deprecatedMNXM_mnxm[mnx[1]]
                         except KeyError:
-                            pass
+                            mnxm = mnx[1]
                         kegg_mnxm[mnxm] = row[1]
         ####################### cc_compounds ############
         notFound_cc = []

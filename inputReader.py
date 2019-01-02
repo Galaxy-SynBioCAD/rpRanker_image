@@ -12,7 +12,7 @@ import copy
 class InputReader:
     """Parser for the databases and the files related to the pathway ranking output
 
-        WARNING: if you define inputPath, then all the files must have specific names to 
+        WARNING: if you define inputPath, then all the files must have specific names to
         make sure that it can find the appropriate files
     """
     def __init__(self, inputPath=None):
@@ -82,12 +82,12 @@ class InputReader:
             self.rr_reactions = pickle.load(open(self._checkFilePath(path, 'rr_reactions.pickle'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path, '/rr_reactions.pickle')+' does not seem to exist')
-            return False 
+            return False
         try:
             self.deprecatedMNXM_mnxm = pickle.load(open(self._checkFilePath(path, 'deprecatedMNXM_mnxm.pickle'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/deprecatedMNXM_mnxm.pickle')+' does not seem to exist')
-            return False 
+            return False
         try:
             self.mnxm_dG = pickle.load(open(self._checkFilePath(path, 'mnxm_dG.pickle'), 'rb'))
         except FileNotFoundError:
@@ -117,7 +117,7 @@ class InputReader:
         self.cobra_model = self.model()
         self.model_chemicals = self.chemicals()
         self.model_compartments = self.compartments()
-        return True 
+        return True
 
 
     def compounds(self, path=None):
@@ -155,10 +155,10 @@ class InputReader:
                         path_step += 1
                     current_path_id = int(row[0])
                     for singleRule in row[2].split(','):
-                        tmpReac = {'rule_id': singleRule, 
-                                'right': {}, 
-                                'left': {}, 
-                                'step': path_step, 
+                        tmpReac = {'rule_id': singleRule,
+                                'right': {},
+                                'left': {},
+                                'step': path_step,
                                 'path_id': int(row[0])}
                         for l in row[3].split(':'):
                             tmp_l = l.split('.')
@@ -169,7 +169,7 @@ class InputReader:
                                     mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
                                 else:
                                     mnxm = tmp_l[1]
-                                tmpReac['left'][mnxm] = int(tmp_l[0])                               
+                                tmpReac['left'][mnxm] = int(tmp_l[0])
                             except ValueError:
                                 logging.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
                                 return {}
@@ -184,7 +184,7 @@ class InputReader:
                                     mnxm = tmp_r[1]
                                 tmpReac['right'][mnxm] = int(tmp_r[0])
                             except ValueError:
-                                logging.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')          
+                                logging.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
                                 return {}
                         try:
                             if not int(row[0]) in rp_paths:
@@ -206,7 +206,7 @@ class InputReader:
                     toRet_rp_paths.append(rp_paths[path])
                 else:
                     keep_always_index = [i for i in [y for y in range(len(rp_paths[path]))] if i not in flat_dupli_index]
-                    for dupli_include in list(itertools.product(*dupli_index)): 
+                    for dupli_include in list(itertools.product(*dupli_index)):
                         toAdd_index = list(keep_always_index+list(dupli_include))
                         new_path = []
                         for ta_i in toAdd_index:
@@ -232,13 +232,13 @@ class InputReader:
                 except KeyError:
                     logging.error('Cannot find rule_id: '+step['rule_id'])
                     break
-                rp_path_left = None 
+                rp_path_left = None
                 rp_path_right = None
                 if step['rule_id'].split('_')[1] in reac['right']:
-                    rp_path_right = 'right' 
+                    rp_path_right = 'right'
                     rp_path_left = 'left'
                 if step['rule_id'].split('_')[1] in reac['left']:
-                    rp_path_right = 'left' 
+                    rp_path_right = 'left'
                     rp_path_left = 'right'
                 if step['rule_id'].split('_')[1] in reac['right'] and step['rule_id'].split('_')[1] in reac['left']:
                     logging.error('The rule_id substrate is on the left and the right of the original reaction')
@@ -267,7 +267,29 @@ class InputReader:
                 #this is to add the mnx identifiers to the reactions - should not since the RP cofactors 
                 #are not the same as the ones from MNX. Determine if that is valid
                 #step['cmp_mnx'] = step_iden_CMP
-        return rp_paths
+        ##### change the format of rp_paths from lists to dictionnaries #####
+        out_rp_paths = {}
+        for path in rp_paths:
+            out_rp_paths[path[0]['path_id']] = {}
+            out_rp_paths[path[0]['path_id']]['path'] = {}
+            out_rp_paths[path[0]['path_id']]['dG'] = None
+            out_rp_paths[path[0]['path_id']]['dG_uncertainty'] = None
+            for step in path:
+                out_rp_paths[step['path_id']]['path'][step['step']] = {}
+                out_rp_paths[step['path_id']]['path'][step['step']]['step'] = {}
+                out_rp_paths[step['path_id']]['path'][step['step']]['dG'] = None
+                out_rp_paths[step['path_id']]['path'][step['step']]['dG_uncertainty'] = None
+                for compound in step['left']:
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = -step['left'][compound]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+                for compound in step['right']:
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = step['right'][compound]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+        return out_rp_paths
 
 
     def compartments(self, path=None):
@@ -302,7 +324,7 @@ class InputReader:
                     mass = None
                     if not row[4]=='':
                         try:
-                            mass = float(row[4])                        
+                            mass = float(row[4])
                         except ValueError:
                             logging.error('Could not convert the mass to float ('+str(row[4])+')')
                     ########## charge ##################
