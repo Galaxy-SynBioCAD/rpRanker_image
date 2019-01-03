@@ -65,8 +65,8 @@ class FBA:
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
-        self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments)
-        self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, isCPLEX=isCPLEX)
+        self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, True)
+        self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, True)
         if isCPLEX:
             self._switchToCPLEX(self.rp_sbml_models)
         self.results = {}
@@ -87,7 +87,7 @@ class FBA:
         return True 
 
 
-    def constructModels(self, rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
+    def constructModels(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
         """
             Returns a dictionnary of models with the keys the path from RP2paths out_paths.csv
             and the instructions to plot the heterologous pathway (as well as the metabolic sink and the source)
@@ -96,14 +96,17 @@ class FBA:
         all_rp_models = {}
         cytoplasm_compartment = [i for i in ori_model_compartments if ori_model_compartments[i]['short_name']=='c'][0] # this assuming that there is always only one result
         extracellular_compartment = [i for i in ori_model_compartments if ori_model_compartments[i]['short_name']=='e'][0] # this assuming that there is always only one result
+        #list all the metabolites in the model. WARNING: works only for MNXM models
+        all_inputModel_metabo = [i.id.split('__')[0] for i in ori_model.metabolites]
         #NOTE: we assume that the metabolites are all in the cytoplasm (apart from the last transport step)
         #TODO: need to flag that the metabolites (sink) first step in the reaction is contained in the model - to validate the rp_path
-        for path in rp_paths:
+        for path_id in cofactors_rp_paths:
             ########### METABOLITES #########################
             #create a new model where we will add this path to it
             model = ori_model.copy()
             #enumerate all the different compounds from the path
-            new_meta = list(set([y for i in path for y in itertools.chain(i['right'], i['left'])]))
+            #new_meta = list(set([y for i in path for y in itertools.chain(i['right'], i['left'])]))
+            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
             all_meta = {}
             for meta in new_meta:
                 #remove the ones that already exist in the model
@@ -116,17 +119,14 @@ class FBA:
                         #if not in the model create a new one
                         all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
             ############## REACTIONS ##########################
-            for step in path:
-                reaction = cobra.Reaction(step['rule_id'].split('_')[0])
-                reaction.name = step['rule_id'].split('_')[0]
+            for step_id in cofactors_rp_paths[path_id]['path']:
+                reaction = cobra.Reaction('rpReaction.'+str(step_id))
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
-                reaction.gene_reaction_rule = 'HeteroGene.'+step['rule_id'].split('_')[0]
+                reaction.gene_reaction_rule = 'rpGene.'+str(step_id)
                 reac_meta = {}
-                for left_meta in step['left']:
-                    reac_meta[all_meta[left_meta]] = float(-step['left'][left_meta])
-                for right_meta in step['right']:
-                    reac_meta[all_meta[right_meta]] = float(step['right'][right_meta])
+                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
+                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
                 reaction.add_metabolites(reac_meta)
                 model.add_reactions([reaction])
             ################# Extracellular transport of target
@@ -159,7 +159,7 @@ class FBA:
                 {extracell_target: -1.0})
             model.add_reactions([sinkReaction])
             '''
-            all_rp_models[path[0]['path_id']] = model
+            all_rp_models[path_id] = model
         if isExport:
             self._exportSBML('sbml_models', all_rp_models, inPath)
         return all_rp_models
@@ -175,30 +175,29 @@ class FBA:
         extracellular_compartment = [i for i in ori_model_compartments if ori_model_compartments[i]['short_name']=='e'][0] # this assuming that there is always only one result
         #NOTE: we assume that the metabolites are all in the cytoplasm (apart from the last transport step)
         #TODO: need to flag that the metabolites (sink) first step in the reaction is contained in the model - to validate the rp_path
-        for path in cofactors_rp_paths:
+        for path_id in cofactors_rp_paths:
             ########### METABOLITES #########################
             #create a new model where we will add this path to it
-            model = cobra.Model(str(path[0]['path_id']))
-            #enumerate all the different compounds from the path
-            new_meta = list(set([y for i in path for y in itertools.chain(i['right'], i['left'])]))
+            model = cobra.Model(str(path_id))
+            #new_meta=list(set([y for i in cofactors_rp_paths[path] for y in itertools.chain(i['right'], i['left'])]))
+            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
             all_meta = {}
+            #enumerate all the unique compounds from a path
             for meta in new_meta:
                 #remove the ones that already exist in the model
                 if not meta in all_meta:
                     all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
             ############## REACTIONS ##########################
-            for step in path:
+            for step_id in cofactors_rp_paths[path_id]['path']:
                 #TODO: could this lead to a conflict if there is the same reactionID and a different substrateID
-                reaction = cobra.Reaction(step['rule_id'].split('_')[0])
-                reaction.name = step['rule_id'].split('_')[0]
+                #reaction = cobra.Reaction(step['rule_id'].split('_')[0])
+                reaction = cobra.Reaction('rpReaction.path.'+str(path_id)+'_step.'+str(step_id))
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
-                reaction.gene_reaction_rule = 'HeteroGene.'+step['rule_id'].split('_')[0]
+                reaction.gene_reaction_rule = 'RPGene.path.'+str(path_id)+'_step.'+str(step_id)
                 reac_meta = {}
-                for left_meta in step['left']:
-                    reac_meta[all_meta[left_meta]] = float(-step['left'][left_meta])
-                for right_meta in step['right']:
-                    reac_meta[all_meta[right_meta]] = float(step['right'][right_meta])
+                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
+                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
                 reaction.add_metabolites(reac_meta)
                 model.add_reactions([reaction])
             ################# Extracellular transport of target
@@ -223,7 +222,8 @@ class FBA:
             exportReaction.add_metabolites({all_meta[target_name]: -1.0})
             #print(exportReaction.data_frame())  
             model.add_reactions([exportReaction])
-            rp_sbml_paths[path[0]['path_id']] = model
+            #rp_sbml_paths[path[0]['path_id']] = model
+            rp_sbml_paths[path_id] = model
         if isExport:
             self._exportSBML('sbml_paths', rp_sbml_paths, inPath)
         return rp_sbml_paths

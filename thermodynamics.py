@@ -46,7 +46,8 @@ class Thermodynamics:
         self.DH_beta = 1.6
         # Debye-Huckel
         self.debye_huckel = self.DH_alpha * self.I **(0.5) / (1.0 + self.DH_beta * self.I**(0.5))
-
+        #temporarely save the calculated dG's
+        self.calculated_dG = {}
 
     ################ PRIVATE FUNCTIONS ###################
 
@@ -58,6 +59,8 @@ class Thermodynamics:
         """
         if mnxm in self.mnxm_dG:
             if 'component_contribution' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['component_contribution']:
+                ####### select the smallest one
+                '''
                 if len(self.mnxm_dG[mnxm]['component_contribution'])==1:
                     return self.mnxm_dG[mnxm]['component_contribution'][0]['compound_index'], self.mnxm_dG[mnxm]['component_contribution'][0]['group_vector'], self.mnxm_dG[mnxm]['component_contribution'][0]['pmap']['species']
                 else:
@@ -67,6 +70,33 @@ class Thermodynamics:
                         if int(cmp_dict['CID'][1:])<int(toRet['CID'][1:]):
                             toRet = cmp_dict
                     return toRet['compound_index'], toRet['group_vector'], toRet['pmap']['species']
+                '''
+                ###### select the one with the most information
+                #return the smallest one that has all the information required
+                for cmp_d in sorted(self.mnxm_dG[mnxm]['component_contribution'], key=lambda k: int(k['CID'][1:])):
+                    if 'compound_index' in cmp_d and 'group_vector' in cmp_d and 'pmap' in cmp_d and 'species' in cmp_d['pmap']:
+                        return cmp_d['compound_index'], cmp_d['group_vector'], cmp_d['pmap']['species']
+                #if cannot find return the smallest one and return the info that you can
+                compound_index = None
+                group_vector = None
+                pmap_species = None
+                try:
+                    compound_index = self.mnxm_dG[mnxm]['component_contribution'][0]['compound_index'] 
+                except KeyError:
+                    pass
+                try:
+                    group_vector = self.mnxm_dG[mnxm]['component_contribution'][0]['group_vector']
+                except KeyError:
+                    pass
+                try:
+                    pmap_species = self.mnxm_dG[mnxm]['component_contribution'][0]['pmap']['species']
+                except KeyError:
+                    raise KeyError
+                #if compound_index==None and group_vector==None and pmap_species==None:
+                    #exit the component_conribution condition if all are none
+                #    continue
+                return compound_index, group_vector, pmap_species
+            #if you cannot find the component in the component_contribution then select the alberty dataset
             elif 'alberty' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['alberty']:
                 if len(self.mnxm_dG[mnxm]['alberty'])==1:
                     return None, None, self.mnxm_dG[mnxm]['alberty'][0]['species']
@@ -80,8 +110,9 @@ class Thermodynamics:
             raise KeyError
 
 
+    #######################################################
     ################ PUBLIC FUNCTIONS #####################
-
+    #######################################################
 
     ################# MOLECULAR STRUCTURE #######################
 
@@ -142,15 +173,15 @@ class Thermodynamics:
         dG0_cc = X.T @ self.cc_preprocess['v_r'] + \
                  G.T @ self.cc_preprocess['v_g']
         dG0_cc = dG0_cc[0]
-        #### _dG0_prime_vector
+        #### _dG0_vector
         dG0s = -np.cumsum([0] + p_kas) * self.R * self.temperature * np.log(10)
         # dG0' = dG0 + nH * (R T ln(10) pH + DH) - charge^2 * DH
         pseudoisomers = np.vstack([dG0s, np.array(number_of_protons), np.array(charges)]).T
-        dG0_prime_vector = pseudoisomers[:, 0] + \
+        dG0_vector = pseudoisomers[:, 0] + \
             pseudoisomers[:, 1]*(self.R*self.temperature*np.log(10)*self.pH+self.debye_huckel) - \
             pseudoisomers[:, 2]**2 * self.debye_huckel
         #### _transform
-        trans = -self.R * self.temperature * logsumexp(dG0_prime_vector / (-self.R * self.temperature))
+        trans = -self.R * self.temperature * logsumexp(dG0_vector / (-self.R * self.temperature))
         #### _ddG
         ddG = None
         if 0==major_microspecies:
@@ -160,11 +191,11 @@ class Thermodynamics:
         else:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
         ddG0_forward = trans+ddG
-        dG0_prime = dG0_cc+ddG0_forward
-        toRet = stochio*dG0_prime
+        dG0 = dG0_cc+ddG0_forward
+        toRet = stochio*dG0
         if type(toRet)==np.ndarray:
             toRet = toRet[0].astype(float)
-        return toRet, X, G
+        return toRet, X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
 
 
     ################### PRECALCULATED ########################
@@ -177,7 +208,7 @@ class Thermodynamics:
             formation energies.
         """
         # Compute per-species transforms, scaled down by R*T.
-        dG0_prime_vec = []
+        dG0_vec = []
         for cmp_spe in species_list:
             try:
                 #Transform this individual estimate to difference conditions.
@@ -191,19 +222,19 @@ class Thermodynamics:
                 # add the potential related to the Mg ions
                 if cmp_spe['nMg']>0:
                     ddG_prime += cmp_spe['nMg']*(self.RTlog10*self.pMg-self.mg_formation_energy)
-                dG0_prime_vec.append(cmp_spe['dG0_f']+ddG_prime)
+                dG0_vec.append(cmp_spe['dG0_f']+ddG_prime)
             except KeyError:
                 #TODO: choose wether to continue the calculation although some of the species_list is missing parameters
                 #I think continue is fine ---> check against equilibrator
                 logging.warning('Some species_list parameters are missing')
                 continue
                 #raise KeyError
-        dG0_prime_vec = np.array(dG0_prime_vec)
+        dG0_vec = np.array(dG0_vec)
         # Numerical issues: taking a sum of exp(v) for |v| quite large.
         # Use the fact that we take a log later to offset all values by a
         # constant (the minimum value).
-        if len(dG0_prime_vec)>0:
-            dG0_f_prime = -self.RT*np.logaddexp.reduce((-1.0/self.RT)*dG0_prime_vec)
+        if len(dG0_vec)>0:
+            dG0 = -self.RT*np.logaddexp.reduce((-1.0/self.RT)*dG0_vec)
         else:
             logging.warning('Compounds with unspecific structure')
             raise KeyError
@@ -215,7 +246,53 @@ class Thermodynamics:
             for g_ind, g_count in group_vector:
                 g[g_ind, 0] += g_count
             x[compound_index, 0] = 1
-        return dG0_f_prime*stochio, stochio*x, stochio*g
+        #return dG0, x, g
+        return dG0*stochio, x*stochio, g*stochio
+
+
+    #need to do this so that we can calculate dG0 without stochio
+    #def compound_dG0_stochio(self, species_list, compound_index, group_vector, stochio):
+    #    dG0, x, g = compound_dG0(species_list, compound_index, group_vector)
+    #    return dG0*stochio, x*stochio, g*stochio
+    
+
+    #i_to --> major_ms
+    #i_from --> 0
+    #TODO: make this work--- right now too many errors
+    def compound_dG0_prime(self, dG0, p_kas, number_of_protons, charges, stochio, i_to, i_from=0):
+        ## _dG0_prime_vector ## 
+        #Calculates the difference in kJ/mol between dG'0 and dG0 of the MS with the least hydrogens (dG0[0])
+        #if not self.inchi:
+        #    return 0
+        if not p_kas:
+            dG0s = np.zeros((1, 1))
+        else:
+            dG0s = -np.cumsum([0]+p_kas)*self.R*self.temperature*np.log(10)
+            dG0s = dG0s
+        pseudoisomers = np.vstack([dG0s, np.array(number_of_protons), np.array(charges)]).T
+        dG0_prime_vector = pseudoisomers[:, 0] + \
+            pseudoisomers[:, 1]*(self.R*self.temperature*np.log(10)*self.pH+self.debye_huckel) - \
+            pseudoisomers[:, 2]**2*self.debye_huckel
+        ## _ddG ##
+        #Calculate the difference in kJ/mol between two MSs
+        ddG = 0
+        if not (0 <= i_from <= len(p_kas)):
+            raise ValueError('MS index is out of bounds: 0 <= %d <= %d' % (
+                i_from, len(p_kas)))
+        if not (0 <= i_to <= len(p_kas)):
+            raise ValueError('MS index is out of bounds: 0 <= %d <= %d' % (
+                i_to, len(p_kas)))
+        if i_from == i_to:
+            ddG = 0
+        elif i_from < i_to:
+            ddG = sum(p_kas[i_from:i_to])*self.R*self.temperature*np.log(10)
+        else:
+            ddG = -sum(p_kas[i_to:i_from])*self.R*self.temperature*np.log(10)
+        ##### transform
+        #-self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature))
+        #return dG0_prime_vector
+        dG0_prime_vector = -self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature)) 
+        return dG0+stochio*(dG0_prime_vector+ddG)
 
 
     def sigma_matrix(self, X, G):
@@ -233,7 +310,6 @@ class Thermodynamics:
 
     #### select either precalculated or structure dG for the calculation of dG for a pathway ####
 
-    #TODO: save the calculated InChI dG and uncertainty to be used once again 
     def rp_paths_dG0(self, rp_paths, rp_smiles):
         """Return the paths dG from precalculated and on-the-fly
         """
@@ -259,6 +335,7 @@ class Thermodynamics:
                     except KeyError:
                         mnxm = cmp_id
                     try:
+                        logging.info('######### '+str(mnxm)+' ##############')
                         compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
                         compound_dG, X, G = self.compound_dG0(species_list,
                                                               compound_index,
@@ -267,7 +344,15 @@ class Thermodynamics:
                     except KeyError:
                         logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
                         try:
-                            compound_dG, X, G = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                            if cmp_id in self.calculated_dG:
+                                compound_dG = self.calculated_dG[cmp_id]['compound_dG']
+                                X = self.calculated_dG[cmp_id]['X']
+                                G = self.calculated_dG[cmp_id]['G']
+                                cmp_info = self.calculated_dG[cmp_id]['cmp_info']
+                            else:
+                                compound_dG, X, G, cmp_info = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                                #save it for the next iteractions to avoid duplicates
+                                self.calculated_dG[cmp_id] = {'compound_dG': compound_dG, 'X': X, 'G': G, 'cmp_info': cmp_info}
                         except KeyError:
                             logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
                         except LookupError:
@@ -292,8 +377,92 @@ class Thermodynamics:
 
 
 
-
-
+    #TODO: save the calculated InChI dG and uncertainty to be used once again 
+    def rp_paths_dG0_dGPrime(self, rp_paths, rp_smiles):
+        """Return the paths dG from precalculated and on-the-fly
+        """
+        #TODO: save the caluclated MNXM and save them to the cache to speed up future calculations
+        for path_id in rp_paths:
+            path_dG = 0.0
+            path_dG_prime = 0.0
+            path_count = 0
+            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['step']) for step_id in rp_paths[path_id]['path']])
+            X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
+            G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
+            for step_id in rp_paths[path_id]['path']:
+                reaction_dG = 0.0
+                reaction_dG_prime = 0.0
+                react_count = 0
+                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
+                    len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
+                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
+                    len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
+                for cmp_id in rp_paths[path_id]['path'][step_id]['step']:
+                    X = None
+                    G = None
+                    cmp_dG = None
+                    cmp_dG_prime = None
+                    #check that the deprecated mnxm is not used
+                    try:
+                        mnxm = self.deprecatedMNXM_mnxm[cmp_id]
+                    except KeyError:
+                        mnxm = cmp_id
+                    try:
+                        logging.info('######### '+str(mnxm)+' ##############')
+                        compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
+                        logging.info('compound_index: '+str(compound_index))
+                        logging.info('group_vector: '+str(group_vector))
+                        logging.info('species_list: '+str(species_list))
+                        cmp_dG, X, G = self.compound_dG0(species_list,
+                                        compound_index,
+                                        group_vector,
+                                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                        try:
+                            cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
+                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['p_kas'], 
+                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['number_of_protons'],
+                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['charges'],
+                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'],
+                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['major_ms'])
+                        except KeyError:
+                            pass
+                    except KeyError:
+                        logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                        try:
+                            cmp_dG, X, G, cmp_info = self.scrt_dG0('smiles', 
+                                                rp_smiles[cmp_id], 
+                                                rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                            cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
+                                                cmp_info['p_kas'], 
+                                                cmp_info['number_of_protons'],
+                                                cmp_info['charges'],
+                                                rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'],
+                                                cmp_info['major_ms'])
+                        except KeyError:
+                            logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                        except LookupError:
+                            logging.warning(str(cmp_id)+' cannot calculate dG using component contribution ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
+                    if type(X)==np.ndarray and type(G)==np.ndarray:
+                        X_reaction[:, react_count:react_count+1] = X
+                        G_reaction[:, react_count:react_count+1] = G
+                        X_path[:, path_count:path_count+1] = X
+                        G_path[:, path_count:path_count+1] = G
+                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
+                    if not cmp_dG==None and not cmp_dG_prime==None:
+                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG'] = cmp_dG
+                        reaction_dG += cmp_dG
+                        reaction_dG_prime += cmp_dG_prime
+                        path_dG += cmp_dG
+                        path_dG_prime += cmp_dG_prime
+                    react_count += 1
+                    path_count += 1
+                    logging.info('############################')
+                rp_paths[path_id]['path'][step_id]['dG'] = reaction_dG
+                rp_paths[path_id]['path'][step_id]['dG_prime'] = reaction_dG_prime
+                rp_paths[path_id]['path'][step_id]['dG_uncertainty'] = self.sigma_matrix(X_reaction, G_reaction)
+            rp_paths[path_id]['dG'] = path_dG
+            rp_paths[path_id]['dG_prime'] = path_dG_prime
+            rp_paths[path_id]['dG_uncertainty'] = self.sigma_matrix(X_path, G_path)
 
 
     ########################### WORK IN PROGRESS #####################

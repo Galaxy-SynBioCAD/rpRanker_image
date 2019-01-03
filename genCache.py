@@ -5,6 +5,7 @@ import gzip
 import os
 import pickle
 import sqlite3
+from ast import literal_eval
 
 class Cache:
     def __init__(self, inputPath=None):
@@ -98,8 +99,22 @@ class Cache:
                 deprecatedMNXM_mnxm,
                 chem_xref_path=None,
                 cc_compounds_path=None,
-                alberty_path=None):
+                alberty_path=None,
+                compounds_path=None):
         cc_alberty = {}
+        ########################## compounds ##################
+        #contains the p_kas and molecule decomposition 
+        cid_comp = {}
+        with open(self._checkFilePath(compounds_path, 'compounds.csv')) as f:
+            c = csv.reader(f, delimiter=',', quotechar='"')
+            next(c)
+            for row in c:
+                cid_comp[row[-1].split(':')[1]] = {}
+                cid_comp[row[-1].split(':')[1]]['atom_bag'] = literal_eval(row[3])
+                cid_comp[row[-1].split(':')[1]]['p_kas'] = literal_eval(row[4])
+                cid_comp[row[-1].split(':')[1]]['major_ms'] = int(literal_eval(row[6]))
+                cid_comp[row[-1].split(':')[1]]['number_of_protons'] = literal_eval(row[7]) 
+                cid_comp[row[-1].split(':')[1]]['charges'] = literal_eval(row[8])
         ###################### mnxm_kegg ################
         kegg_mnxm = {}
         with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
@@ -123,6 +138,7 @@ class Cache:
         f_c = gz_file.read()
         c = json.loads(f_c)
         for cd in c:
+            #find MNXM from CID
             try:
                 mnxm = kegg_mnxm[cd['CID']]
             except KeyError:
@@ -136,6 +152,12 @@ class Cache:
                     logging.warning('Cannot find: '+str(cd))
                     notFound_cc.append(cd['CID'])
                     continue
+            #find the compound descriptions
+            try:
+                cd.update(cid_comp[cd['CID']])
+            except KeyError:
+                pass
+            #add the CID
             if not mnxm in cc_alberty:
                 cc_alberty[mnxm] = {}
             if not 'component_contribution' in cc_alberty[mnxm]:
@@ -146,26 +168,33 @@ class Cache:
         notFound_alberty = []
         with open(self._checkFilePath(alberty_path, 'alberty.json')) as json_data:
             d = json.loads(json_data.read())
-        for cd in d:
-            try:
-                mnxm = kegg_mnxm[cd['cid']]
-            except KeyError:
+            for cd in d:
+                #find the MNXM from CID
                 try:
-                    mnxm = self.curated_kegg_mnxm[cd['cid']]
-                    try:
-                        mnxm = deprecatedMNXM_mnxm[mnxm]
-                    except KeyError:
-                        pass
+                    mnxm = kegg_mnxm[cd['cid']]
                 except KeyError:
-                    logging.warning('Cannot find: '+str(cd))
-                    notFound_alberty.append(cd['cid'])
-                    continue
-            if not mnxm in cc_alberty:
-                cc_alberty[mnxm] = {}
-            if not 'alberty' in cc_alberty[mnxm]:
-                cc_alberty[mnxm]['alberty'] = [cd]
-            else:
-                cc_alberty[mnxm]['alberty'].append(cd)
+                    try:
+                        mnxm = self.curated_kegg_mnxm[cd['cid']]
+                        try:
+                            mnxm = deprecatedMNXM_mnxm[mnxm]
+                        except KeyError:
+                            pass
+                    except KeyError:
+                        logging.warning('Cannot find: '+str(cd))
+                        notFound_alberty.append(cd['cid'])
+                        continue
+                #find the compound description
+                try:
+                    cd.update(cid_comp[cd['CID']])
+                except KeyError:
+                    pass
+                #add the CID
+                if not mnxm in cc_alberty:
+                    cc_alberty[mnxm] = {}
+                if not 'alberty' in cc_alberty[mnxm]:
+                    cc_alberty[mnxm]['alberty'] = [cd]
+                else:
+                    cc_alberty[mnxm]['alberty'].append(cd)
         return cc_alberty
 
 
