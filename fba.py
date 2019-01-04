@@ -121,6 +121,7 @@ class FBA:
             ############## REACTIONS ##########################
             for step_id in cofactors_rp_paths[path_id]['path']:
                 reaction = cobra.Reaction('rpReaction.'+str(step_id))
+                reaction.name = 
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
                 reaction.gene_reaction_rule = 'rpGene.'+str(step_id)
