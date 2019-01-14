@@ -52,6 +52,11 @@ class FBA:
             cobra.io.write_sbml_model(models[model_id], 
                                         p+'/'+str(model_id)+'.sbml', 
                                         use_fbc_package=False)
+            '''
+            cobra.io.write_legacy_sbml(models[model_id], 
+                                        p+'/'+str(model_id)+'.sbml', 
+                                        use_fbc_package=False)
+            '''
         return True
 
 
@@ -60,12 +65,12 @@ class FBA:
 
     #function that takes the location of the database, the model of interest, and the RetroPath2.0 output
     #and constructs models including the heterologous pathway
-    def runAll(self, cofactors_rp_paths, rr_reactions, model_compartments, cobra_model, isCPLEX=False):
+    def runAll(self, cofactors_rp_paths, rr_reactions, model_compartments, cobra_model, rp_smiles, isCPLEX=False):
         """run all the FBA models
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
-        self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, True)
+        self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, rp_smiles, True)
         self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, True)
         if isCPLEX:
             self._switchToCPLEX(self.rp_sbml_models)
@@ -76,6 +81,9 @@ class FBA:
         self.results['biLevel'] = self.simulateBiLevel(self.rp_sbml_models)
         self.results['splitObjective'] = self.simulateSplitObjective(self.rp_sbml_models)
         '''
+
+
+        """
         self.results['biomass'] = {}
         self.results['biomass']['cameo'], self.results['biomass']['sorted'] = self.simulateBiomass(self.rp_sbml_models)
         self.results['target'] = {}
@@ -84,6 +92,7 @@ class FBA:
         self.results['splitObjective']['cameo'], self.results['splitObjective']['sorted'] = self.simulateSplitObjective(self.rp_sbml_models)
         self.results['biLevel'] = {}
         self.results['biLevel']['cameo'], self.results['biLevel']['sorted'] = self.simulateBiLevel(self.rp_sbml_models)
+        """
         return True 
 
 
@@ -121,7 +130,7 @@ class FBA:
             ############## REACTIONS ##########################
             for step_id in cofactors_rp_paths[path_id]['path']:
                 reaction = cobra.Reaction('rpReaction.'+str(step_id))
-                reaction.name = 
+                #reaction.name = 
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
                 reaction.gene_reaction_rule = 'rpGene.'+str(step_id)
@@ -166,7 +175,7 @@ class FBA:
         return all_rp_models
 
 
-    def constructPaths(self, cofactors_rp_paths, ori_model_compartments, isExport=False, inPath=None):
+    def constructPaths(self, cofactors_rp_paths, ori_model_compartments, rp_smiles, isExport=False, inPath=None):
         """Construct the cobra models of the RetroPath paths with the cofactors and export them to SBML
 
             Assumes that all the reactions are happening in the cytoplasm
@@ -188,6 +197,7 @@ class FBA:
                 #remove the ones that already exist in the model
                 if not meta in all_meta:
                     all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
+                    all_meta[meta].annotation = { 'ImaginaryCompDB':'SpecificCompIdentifier', "uniprot": ["Q12345", "P12345"]}
             ############## REACTIONS ##########################
             for step_id in cofactors_rp_paths[path_id]['path']:
                 #TODO: could this lead to a conflict if there is the same reactionID and a different substrateID
