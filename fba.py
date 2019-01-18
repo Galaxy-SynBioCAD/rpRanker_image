@@ -83,7 +83,6 @@ class FBA:
         '''
 
 
-        """
         self.results['biomass'] = {}
         self.results['biomass']['cameo'], self.results['biomass']['sorted'] = self.simulateBiomass(self.rp_sbml_models)
         self.results['target'] = {}
@@ -92,7 +91,6 @@ class FBA:
         self.results['splitObjective']['cameo'], self.results['splitObjective']['sorted'] = self.simulateSplitObjective(self.rp_sbml_models)
         self.results['biLevel'] = {}
         self.results['biLevel']['cameo'], self.results['biLevel']['sorted'] = self.simulateBiLevel(self.rp_sbml_models)
-        """
         return True 
 
 
@@ -129,11 +127,11 @@ class FBA:
                         all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
             ############## REACTIONS ##########################
             for step_id in cofactors_rp_paths[path_id]['path']:
-                reaction = cobra.Reaction('rpReaction.'+str(step_id))
+                reaction = cobra.Reaction('rpReaction_'+str(step_id))
                 #reaction.name = 
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
-                reaction.gene_reaction_rule = 'rpGene.'+str(step_id)
+                reaction.gene_reaction_rule = 'rpGene_'+str(step_id)
                 reac_meta = {}
                 for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
                     reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
@@ -202,10 +200,10 @@ class FBA:
             for step_id in cofactors_rp_paths[path_id]['path']:
                 #TODO: could this lead to a conflict if there is the same reactionID and a different substrateID
                 #reaction = cobra.Reaction(step['rule_id'].split('_')[0])
-                reaction = cobra.Reaction('rpReaction.path.'+str(path_id)+'_step.'+str(step_id))
+                reaction = cobra.Reaction('rpReaction_'+str(step_id))
                 reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
-                reaction.gene_reaction_rule = 'RPGene.path.'+str(path_id)+'_step.'+str(step_id)
+                reaction.gene_reaction_rule = 'RPGene_'+str(step_id)
                 reac_meta = {}
                 for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
                     reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
@@ -240,6 +238,12 @@ class FBA:
         return rp_sbml_paths
 
 
+    ############################### FBA pathway ranking ####################
+
+    #1) Number of interventions
+
+    #2) Maximal growth rate
+
     def simulateBiomass(self, all_rp_models):
         biomass = {}
         for model_id in all_rp_models:
@@ -248,6 +252,23 @@ class FBA:
         #return biomass, sorted(biomass.items(), key=lambda x: x[1], reverse=True)
         return biomass, sorted([(biomass[i].fluxes['targetSink'], i) for i in biomass.keys()], reverse=True)
         #TODO: return a sorted list of the best performing pathways
+
+
+    #3) Minimum product yeild at maximal growth rate
+
+    #4) Minimum product yeild
+
+    #5) Anaerobic condition
+
+    #6) Number of potentially disruptive products
+
+    #7) Number of accessible metabolites (avoid intermediate accumulation)
+
+    #8) Thermodynamics (MDF)
+
+    #9) The overlap of the same changes --> might not be applicable in our case
+
+    #10) Reduced model:q
 
 
     def simulateTarget(self, all_rp_models):
@@ -267,6 +288,7 @@ class FBA:
             return {}
         splitObj = {}
         for model_id in all_rp_models:
+            #TODO: need to define what is the biomass reaction from function input
             all_rp_models[model_id].objective = {all_rp_models[model_id].reactions.R48E37591: biomass, all_rp_models[model_id].reactions.targetSink: 1.0-biomass}
             splitObj[model_id] = all_rp_models[model_id].optimize()
         #return split_Obj, sorted(splitObj.items(), key=lambda x: x[1], reverse=True)
