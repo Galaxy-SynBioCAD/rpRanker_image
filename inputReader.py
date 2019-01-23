@@ -31,6 +31,7 @@ class InputReader:
         self.cobra_model = None
         self.model_chemicals = None
         self.model_compartments = None
+        self.rp_transformation = None
         if not self._loadCache(os.getcwd()+'/cache'):
             raise ValueError
 
@@ -112,8 +113,12 @@ class InputReader:
             logging.error('The global path is not a directory: '+str(self.globalPath))
             return False
         self.rp_paths = self.outPaths()
-        self.cofactors_rp_paths = self.addCofactors(self.rp_paths, self.rr_reactions)
+        self.rp_transformation = self.transformation()
         self.rp_smiles = self.compounds()
+        self.cofactors_rp_paths = self.addCofactors(self.rp_paths, 
+                                                    self.rr_reactions, 
+                                                    self.rp_smiles,
+                                                    self.rp_transformation)
         self.cobra_model = self.model()
         self.model_chemicals = self.chemicals()
         self.model_compartments = self.compartments()
@@ -121,17 +126,36 @@ class InputReader:
 
 
     def compounds(self, path=None):
+        """ Method to parse all the RP output compounds.
+        TODO: remove
+        """
         rp_compounds = {}
         try:
             with open(self._checkFilePath(path, 'compounds.txt')) as f:
                 reader = csv.reader(f, delimiter='\t')
                 next(reader)
-                for row in  reader:
+                for row in reader:
                     rp_compounds[row[0]] = row[1]
         except (TypeError, FileNotFoundError) as e:
             logging.error('Could not read the compounds file ('+str(path)+')')
             return {}
         return rp_compounds
+
+
+    def transformation(self, path=None):
+        """Extract the reaction rules from the retroPath2.0 output using the scope.csv file
+        """
+        rp_transformation = {}
+        try:
+            with open(self._checkFilePath(path, 'scope.csv')) as f:
+                reader = csv.reader(f, delimiter=',')
+                next(reader)
+                for row in reader:
+                    rp_transformation[row[1]] = row[2]
+        except (TypeError, FileNotFoundError) as e:
+            logging.error('Could not read the compounds file ('+str(path)+')')
+            return {}
+        return rp_transformation
 
 
     def outPaths(self, path=None):
@@ -159,7 +183,8 @@ class InputReader:
                                 'right': {},
                                 'left': {},
                                 'step': path_step,
-                                'path_id': int(row[0])}
+                                'path_id': int(row[0]),
+                                'transformation_id': row[1]}
                         for l in row[3].split(':'):
                             tmp_l = l.split('.')
                             try:
@@ -220,7 +245,7 @@ class InputReader:
             return {}
 
 
-    def addCofactors(self, in_rp_paths, rr_reactions):
+    def addCofactors(self, in_rp_paths, rr_reactions, rp_smiles, rp_transformation):
         """Adds the cofactors to the retropath reactions
         """
         rp_paths = copy.deepcopy(in_rp_paths)
@@ -279,21 +304,34 @@ class InputReader:
                 out_rp_paths[step['path_id']]['path'][step['step']]['step'] = {}
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG'] = None
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG_uncertainty'] = None
+                try: 
+                    out_rp_paths[step['path_id']]['path'][step['step']]['smarts'] = rp_transformation[step['transformation_id']]
+                except KeyError:
+                    out_rp_paths[step['path_id']]['path'][step['step']]['smarts'] = None
                 for compound in step['left']:
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = -step['left'][compound]
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+                    try:
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = rp_smiles[compound]
+                    except KeyError:
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = None 
                 for compound in step['right']:
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = step['right'][compound]
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+                    try: 
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smarts'] = rp_smiles[compound]
+                    except KeyError:
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smarts'] = None
         return out_rp_paths
 
 
     def compartments(self, path=None):
         """ Open the compartments,tsv file from Metanetx that gives the common name to the MNX ID's
+            TODO: make this optional
         """
         model_compartments = {}
         try:
@@ -308,7 +346,9 @@ class InputReader:
 
 
     def chemicals(self, path=None):
-        """Open the chemicals.tsv file from MetaNetX that describes the sink from a model with InChI
+        """ Open the chemicals.tsv file from MetaNetX that describes the sink from a model with InChI
+            TODO: Replace this with a method that scans an SBML document and extracts all the chemical
+            species
         """
         model_chemicals = {}
         ################# open the chemicals file #############

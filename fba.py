@@ -60,8 +60,25 @@ class FBA:
         return True
 
 
-    ############################### PUBLIC FUNCTIONS ############################# 
+    def _check(value, message):
+        """
+        Taken from: http://sbml.org/Software/libSBML/docs/python-api/create_simple_model_8py-example.html
+        """
+        if value is None:
+            raise SystemExit('LibSBML returned a null value trying to ' + message + '.')
+        elif type(value) is int:
+            if value == LIBSBML_OPERATION_SUCCESS:
+                return
+            else:
+                err_msg = 'Error encountered trying to ' + message + '.' \
+                        + 'LibSBML returned error code ' + str(value) + ': "' \
+                        + OperationReturnValue_toString(value).strip() + '"'
+                raise SystemExit(err_msg)
+        else:
+            return
 
+
+    ############################### PUBLIC FUNCTIONS ############################# 
 
     #function that takes the location of the database, the model of interest, and the RetroPath2.0 output
     #and constructs models including the heterologous pathway
@@ -171,6 +188,79 @@ class FBA:
         if isExport:
             self._exportSBML('sbml_models', all_rp_models, inPath)
         return all_rp_models
+
+
+
+
+    def constructPaths_libSBML():
+        """
+        Function to construct a series of libSBML objects for using FBC (constraint based) 
+        """
+        for path_id in cofactors_rp_paths:
+            sbmlDoc = libsbml.SBMLDocument(3,2) #level, version
+            #Model
+            model = libsbml.createModel()
+            self._check(model, 'create model')
+            self._check(model.setTimeUnits('second'), 'set model-wide time units')
+            self._check(model.setExtentUnits('mole'), 'set model units of extent')
+            self._check(model.setSubstanceUnits('mole'), 'set model substance units')
+            model.setId('Path '+str(path_id))
+            #Unit definition
+            per_second = model.createUnitDefinition()
+            self._check(per_second, 'create unit definition')
+            self._check(per_second.setId('per_second'), 'set unit definition id')
+            unit = per_second.createUnit()
+            self._check(unit, 'create unit on per_second')
+            self._check(unit.setKind(UNIT_KIND_SECOND), 'set unit kind')
+            self._check(unit.setExponent(-1), 'set unit exponent')
+            self._check(unit.setScale(0), 'set unit scale')
+            self._check(unit.setMultiplier(1), 'set unit multiplier')
+            #Compartments
+            cytoplasm = model.createCompartment()
+            self._check(cytoplasm, 'create compartment')
+            self._check(cytoplasm.setId('cytoplasm'), 'set compartment id')
+            self._check(cytoplasm.setConstant(True), 'set compartment "constant"')
+            self._check(cytoplasm.setSize(1), 'set compartment "size"')
+            self._check(cytoplasm.setSpatialDimensions(3), 'set compartment dimensions')
+            self._check(cytoplasm.setUnits('litre'), 'set compartment size units')
+            #Species
+            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
+            for meta in new_meta:
+                #TODO: annotate it with MNXC3 id for cytoplasm compartment
+                #Species --> Loop through all the RP paths
+                spe = model.createSpecies()
+                self._check(spe, 'create species spe')
+                self._check(spe.setId('spe'), 'set species spe id')
+                self._check(spe.setCompartment('c1'), 'set species spe compartment')
+                self._check(spe.setConstant(False), 'set "constant" attribute on spe')
+                self._check(spe.setInitialAmount(1), 'set initial amount for spe')
+                self._check(spe.setSubstanceUnits('mole'), 'set substance units for spe')
+                self._check(spe.setBoundaryCondition(False), 'set "boundaryCondition" on spe')
+                self._check(spe.setHasOnlySubstanceUnits(False), 'set "hasOnlySubstanceUnits" on spe')
+            #Reactions
+            for step_id in cofactors_rp_paths[path_id]['path']:
+                r1 = model.createReaction()
+                check(r1, 'create reaction')
+                check(r1.setId('r1'), 'set reaction id')
+                check(r1.setReversible(False), 'set reaction reversibility flag')
+                check(r1.setFast(False), 'set reaction "fast" attribute')
+                species_ref1 = r1.createReactant()
+                check(species_ref1, 'create reactant')
+                check(species_ref1.setSpecies('s1'), 'assign reactant species')
+                check(species_ref1.setConstant(True), 'set "constant" on species ref 1')
+                species_ref2 = r1.createProduct()
+                check(species_ref2, 'create product')
+                check(species_ref2.setSpecies('s2'), 'assign product species')
+                check(species_ref2.setConstant(True), 'set "constant" on species ref 2')
+                #Annotations for reaction
+                cv = libsbml.CVTerm()
+                cv.setQualifierType(libsbml.BIOLOGICAL_QUALIFIER)
+                cv.setBiologicalQualifierType(libsbml.BQB_IS_DESCRIBED_BY)
+                cv.addResource("https://retrorules.org/RULE/RR00121121/16/False")
+                react.addCVTerm(cv)
+
+
+
 
 
     def constructPaths(self, cofactors_rp_paths, ori_model_compartments, rp_smiles, isExport=False, inPath=None):
