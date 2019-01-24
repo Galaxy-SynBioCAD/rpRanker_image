@@ -147,7 +147,7 @@ class InputReader:
         """
         rp_transformation = {}
         try:
-            with open(self._checkFilePath(path, 'scope.csv')) as f:
+            with open(self._checkFilePath(path, 'results.csv')) as f:
                 reader = csv.reader(f, delimiter=',')
                 next(reader)
                 for row in reader:
@@ -184,7 +184,7 @@ class InputReader:
                                 'left': {},
                                 'step': path_step,
                                 'path_id': int(row[0]),
-                                'transformation_id': row[1]}
+                                'transformation_id': row[1][:-2]}
                         for l in row[3].split(':'):
                             tmp_l = l.split('.')
                             try:
@@ -304,10 +304,13 @@ class InputReader:
                 out_rp_paths[step['path_id']]['path'][step['step']]['step'] = {}
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG'] = None
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG_uncertainty'] = None
+                out_rp_paths[step['path_id']]['path'][step['step']]['origin_reaction'] = step['rule_id'].split('_')[0]
+                out_rp_paths[step['path_id']]['path'][step['step']]['origin_substrate'] = step['rule_id'].split('_')[1]
                 try: 
-                    out_rp_paths[step['path_id']]['path'][step['step']]['smarts'] = rp_transformation[step['transformation_id']]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = rp_transformation[step['transformation_id']]
                 except KeyError:
-                    out_rp_paths[step['path_id']]['path'][step['step']]['smarts'] = None
+                    print(step['transformation_id'])
+                    out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = None
                 for compound in step['left']:
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = -step['left'][compound]
@@ -323,9 +326,9 @@ class InputReader:
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
                     try: 
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smarts'] = rp_smiles[compound]
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = rp_smiles[compound]
                     except KeyError:
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smarts'] = None
+                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = None
         return out_rp_paths
 
 

@@ -2,6 +2,8 @@ import cobra
 import itertools
 import os
 from cameo.strain_design import OptKnock
+import libsbml
+from hashlib import md5
 
 class FBA:
     def __init__(self, outputPath=None):
@@ -27,7 +29,12 @@ class FBA:
 
     #TODO: export the models into SBML, controlling the versions
     #TODO: export the heterologous reactions into SBML format
-    def _exportSBML(self, type_name, models, path=None):
+    def _exportSBML(self, type_name, models, inputType, path=None):
+        """
+        cobra.io.write_legacy_sbml(models[model_id], 
+                                    p+'/'+str(model_id)+'.sbml', 
+                                    use_fbc_package=False)
+        """
         ####### check the path #########
         p = None
         if path:
@@ -49,30 +56,50 @@ class FBA:
             os.makedirs(p)
         ########## export ###################
         for model_id in models:
-            cobra.io.write_sbml_model(models[model_id], 
-                                        p+'/'+str(model_id)+'.sbml', 
-                                        use_fbc_package=False)
-            '''
-            cobra.io.write_legacy_sbml(models[model_id], 
-                                        p+'/'+str(model_id)+'.sbml', 
-                                        use_fbc_package=False)
-            '''
+            if inputType=='cobrapy':
+                cobra.io.write_sbml_model(models[model_id], 
+                                            use_fbc_package=False)
+            elif inputType=='libsbml':
+                libsbml.writeSBMLToFile(models[model_id],
+                                p+'/'+str(model_id)+'.sbml')
+            else:
+                logging.error('Cannot recognise input type')
+                return False
         return True
 
 
-    def _check(value, message):
+    def _nameToSbmlId(self, name):
+        IdStream = []
+        count = 0
+        end = len(name) 
+        if '0' <= name[count] and name[count] <= '9':
+            IdStream.append('_')
+        for count in range(0, end):     
+            if (('0' <= name[count] and name[count] <= '9') or
+                    ('a' <= name[count] and name[count] <= 'z') or
+                    ('A' <= name[count] and name[count] <= 'Z')):
+                IdStream.append(name[count])
+            else:
+                IdStream.append('_')
+        Id = ''.join(IdStream)
+        if Id[len(Id) - 1] != '_':
+            return Id
+        return Id[:-1]
+
+
+    def _check(self, value, message):
         """
         Taken from: http://sbml.org/Software/libSBML/docs/python-api/create_simple_model_8py-example.html
         """
         if value is None:
             raise SystemExit('LibSBML returned a null value trying to ' + message + '.')
         elif type(value) is int:
-            if value == LIBSBML_OPERATION_SUCCESS:
+            if value==libsbml.LIBSBML_OPERATION_SUCCESS:
                 return
             else:
                 err_msg = 'Error encountered trying to ' + message + '.' \
                         + 'LibSBML returned error code ' + str(value) + ': "' \
-                        + OperationReturnValue_toString(value).strip() + '"'
+                        + libsbml.OperationReturnValue_toString(value).strip() + '"'
                 raise SystemExit(err_msg)
         else:
             return
@@ -87,8 +114,9 @@ class FBA:
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
-        self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, rp_smiles, True)
-        self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, True)
+        self.rp_sbml_paths = self.constructPaths_libSBML(cofactors_rp_paths, True)
+        #self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, rp_smiles, True)
+        #self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, True)
         if isCPLEX:
             self._switchToCPLEX(self.rp_sbml_models)
         self.results = {}
@@ -97,7 +125,6 @@ class FBA:
         self.results['target'] = self.simulateTarget(self.rp_sbml_models)
         self.results['biLevel'] = self.simulateBiLevel(self.rp_sbml_models)
         self.results['splitObjective'] = self.simulateSplitObjective(self.rp_sbml_models)
-        '''
 
 
         self.results['biomass'] = {}
@@ -108,10 +135,11 @@ class FBA:
         self.results['splitObjective']['cameo'], self.results['splitObjective']['sorted'] = self.simulateSplitObjective(self.rp_sbml_models)
         self.results['biLevel'] = {}
         self.results['biLevel']['cameo'], self.results['biLevel']['sorted'] = self.simulateBiLevel(self.rp_sbml_models)
+        '''
         return True 
 
 
-    def constructModels(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
+    def constructModels_cobraPy(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
         """
             Returns a dictionnary of models with the keys the path from RP2paths out_paths.csv
             and the instructions to plot the heterologous pathway (as well as the metabolic sink and the source)
@@ -192,78 +220,109 @@ class FBA:
 
 
 
-    def constructPaths_libSBML():
+    def constructPaths_libSBML(self, cofactors_rp_paths, isExport=False, inPath=None, compartment='MNXC3'):
         """
         Function to construct a series of libSBML objects for using FBC (constraint based) 
         """
+        #mplugin = model.getPlugin('fbc') #this is the package for the contraint based modelling
+        all_rp_models = {}
         for path_id in cofactors_rp_paths:
-            sbmlDoc = libsbml.SBMLDocument(3,2) #level, version
+            try:
+                sbmlDoc = libsbml.SBMLDocument(3,1) #level, version
+            except ValueError:
+                logging.error('Cannot create SBMLDocument object')
+                return None 
+            sbmlDoc.setPackageRequired('fbc', False)
             #Model
-            model = libsbml.createModel()
+            model = sbmlDoc.createModel()
             self._check(model, 'create model')
-            self._check(model.setTimeUnits('second'), 'set model-wide time units')
-            self._check(model.setExtentUnits('mole'), 'set model units of extent')
-            self._check(model.setSubstanceUnits('mole'), 'set model substance units')
-            model.setId('Path '+str(path_id))
-            #Unit definition
-            per_second = model.createUnitDefinition()
-            self._check(per_second, 'create unit definition')
-            self._check(per_second.setId('per_second'), 'set unit definition id')
-            unit = per_second.createUnit()
-            self._check(unit, 'create unit on per_second')
-            self._check(unit.setKind(UNIT_KIND_SECOND), 'set unit kind')
-            self._check(unit.setExponent(-1), 'set unit exponent')
-            self._check(unit.setScale(0), 'set unit scale')
-            self._check(unit.setMultiplier(1), 'set unit multiplier')
             #Compartments
             cytoplasm = model.createCompartment()
             self._check(cytoplasm, 'create compartment')
-            self._check(cytoplasm.setId('cytoplasm'), 'set compartment id')
+            self._check(cytoplasm.setId(compartment), 'set compartment id')
             self._check(cytoplasm.setConstant(True), 'set compartment "constant"')
             self._check(cytoplasm.setSize(1), 'set compartment "size"')
-            self._check(cytoplasm.setSpatialDimensions(3), 'set compartment dimensions')
-            self._check(cytoplasm.setUnits('litre'), 'set compartment size units')
             #Species
             new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
             for meta in new_meta:
                 #TODO: annotate it with MNXC3 id for cytoplasm compartment
                 #Species --> Loop through all the RP paths
                 spe = model.createSpecies()
-                self._check(spe, 'create species spe')
-                self._check(spe.setId('spe'), 'set species spe id')
-                self._check(spe.setCompartment('c1'), 'set species spe compartment')
-                self._check(spe.setConstant(False), 'set "constant" attribute on spe')
-                self._check(spe.setInitialAmount(1), 'set initial amount for spe')
-                self._check(spe.setSubstanceUnits('mole'), 'set substance units for spe')
-                self._check(spe.setBoundaryCondition(False), 'set "boundaryCondition" on spe')
-                self._check(spe.setHasOnlySubstanceUnits(False), 'set "hasOnlySubstanceUnits" on spe')
+                self._check(spe, 'create species')
+                self._check(spe.setId('M_'+str(meta)+'_'+str(compartment)), 'set species id') #same as cobrapy
+                self._check(spe.setName(meta), 'set name for '+str(meta))
+                self._check(spe.setCompartment(compartment), 'set species spe compartment')
+                self._check(spe.setMetaId(self._nameToSbmlId(str(path_id)+'_'+meta)), 'setting reaction metaID')
+                ###### annotation ###
+                if meta[:3]=='MNX':
+                    """
+                    #Annotations for reaction
+                    cv = libsbml.CVTerm()
+                    #TODO: experimental
+                    #self._check(cv.setIdAttribute(str(path_id)+'_'+str(step_id)+'_'+meta), 'create metaID')
+                    self._check(cv, 'creating annotation')
+                    self._check(cv.setQualifierType(libsbml.BIOLOGICAL_QUALIFIER), 'set annotation type')
+                    self._check(cv.setBiologicalQualifierType(libsbml.BQB_IS_DESCRIBED_BY), 'set annotation description')
+                    self._check(cv.addResource("http://identifiers.org/metanetx.chemical/"+str(meta)), 'set the annotation url')
+                    self._check(reac.addCVTerm(cv), 'add the annotation')
+                    """
+                    #<rdf:Description rdf:about="#'''+str(path_id)+'_'+str(step_id)+'_'+meta+'''">
+                    annotation = '''<annotation>
+                       <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/">
+                         <rdf:Description rdf:about="#'''+str(self._nameToSbmlId(meta))+'''">
+                           <bqbiol:is>
+                             <rdf:Bag>
+                               <rdf:li rdf:resource="http://identifiers.org/metanetx.chemical/'''+str(meta)+'''"/>
+                             </rdf:Bag>
+                           </bqbiol:is>
+                         </rdf:Description>
+                       </rdf:RDF>
+                     </annotation>'''
+                    #if reac.isSetAnnotation():
+                    #    self._check(reac.getAnnotationString(), 'printAnnotation')
+                    #    self._check(reac.appendAnnotation(annotation), 'adding annotation')
+                    #else:
+                    self._check(spe.setAnnotation(annotation), 'setting the annotation for new reac') 
             #Reactions
             for step_id in cofactors_rp_paths[path_id]['path']:
-                r1 = model.createReaction()
-                check(r1, 'create reaction')
-                check(r1.setId('r1'), 'set reaction id')
-                check(r1.setReversible(False), 'set reaction reversibility flag')
-                check(r1.setFast(False), 'set reaction "fast" attribute')
-                species_ref1 = r1.createReactant()
-                check(species_ref1, 'create reactant')
-                check(species_ref1.setSpecies('s1'), 'assign reactant species')
-                check(species_ref1.setConstant(True), 'set "constant" on species ref 1')
-                species_ref2 = r1.createProduct()
-                check(species_ref2, 'create product')
-                check(species_ref2.setSpecies('s2'), 'assign product species')
-                check(species_ref2.setConstant(True), 'set "constant" on species ref 2')
-                #Annotations for reaction
-                cv = libsbml.CVTerm()
-                cv.setQualifierType(libsbml.BIOLOGICAL_QUALIFIER)
-                cv.setBiologicalQualifierType(libsbml.BQB_IS_DESCRIBED_BY)
-                cv.addResource("https://retrorules.org/RULE/RR00121121/16/False")
-                react.addCVTerm(cv)
+                reac = model.createReaction()
+                self._check(reac, 'create reaction')
+                self._check(reac.setId('R_rpReaction_'+str(step_id)), 'set reaction id') #same convention as cobrapy
+                self._check(reac.setName('rpReaction_'+str(step_id)), 'set name') #same convention as cobrapy
+                self._check(reac.setReversible(False), 'set reaction reversibility flag')
+                self._check(reac.setFast(False), 'set reaction "fast" attribute')
+                self._check(reac.setMetaId(self._nameToSbmlId(str(path_id)+'_'+str(step_id))), 'setting reaction metaID')
+                #if the annotation is not MNX then add the SMILES to the notes
+                #else:
+                #    self._check(spe.appendNotes('SMILES:'+str(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['smiles'])), 'appending the SMILES notes for the reaction')
+                for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']: 
+                    #### reactants ###
+                    if float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])<0:
+                        spe_r = reac.createReactant()
+                        self._check(spe_r, 'create reactant')
+                        self._check(spe_r.setSpecies('M_'+str(meta)+'_'+str(compartment)), 'assign reactant species')
+                        self._check(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
+                        self._check(spe_r.setConstant(True), 'set "constant" on species '+str(meta))
+                        self._check(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio']))), 'set stoichiometry')
+                    #### products ###
+                    elif float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])>0:
+                        pro_r = reac.createProduct()
+                        self._check(pro_r, 'create product')
+                        self._check(pro_r.setSpecies('M_'+str(meta)+'_'+str(compartment)), 'assign product species')
+                        self._check(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
+                        self._check(pro_r.setConstant(True), 'set "constant" on species '+str(meta))
+                        self._check(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])), 'set the stoichiometry')
+                    else:
+                        logging.error('The stochiometry is 0 for path_id: '+str(path_id)+', step_id: '+str(step_id))
+                #add the SMILES to the notes
+                self._check(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>'SMILES:"+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
+            all_rp_models[path_id] = sbmlDoc
+        if isExport:
+            self._exportSBML('sbml_models', all_rp_models, 'libsbml', inPath)
+        return all_rp_models
 
 
-
-
-
-    def constructPaths(self, cofactors_rp_paths, ori_model_compartments, rp_smiles, isExport=False, inPath=None):
+    def constructPaths_cobraPy(self, cofactors_rp_paths, ori_model_compartments, rp_smiles, isExport=False, inPath=None):
         """Construct the cobra models of the RetroPath paths with the cofactors and export them to SBML
 
             Assumes that all the reactions are happening in the cytoplasm
@@ -324,7 +383,7 @@ class FBA:
             #rp_sbml_paths[path[0]['path_id']] = model
             rp_sbml_paths[path_id] = model
         if isExport:
-            self._exportSBML('sbml_paths', rp_sbml_paths, inPath)
+            self._exportSBML('sbml_paths', rp_sbml_paths, 'cobrapy', inPath)
         return rp_sbml_paths
 
 
