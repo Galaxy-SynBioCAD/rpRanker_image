@@ -227,8 +227,10 @@ class FBA:
         #mplugin = model.getPlugin('fbc') #this is the package for the contraint based modelling
         all_rp_models = {}
         for path_id in cofactors_rp_paths:
+            sbmlns = libsbml.SBMLNamespaces(3,1,'fbc',1)
             try:
-                sbmlDoc = libsbml.SBMLDocument(3,1) #level, version
+                #sbmlDoc = libsbml.SBMLDocument(3,1) #level, version
+                sbmlDoc = libsbml.SBMLDocument(sbmlns)
             except ValueError:
                 logging.error('Cannot create SBMLDocument object')
                 return None 
@@ -242,31 +244,26 @@ class FBA:
             self._check(cytoplasm.setId(compartment), 'set compartment id')
             self._check(cytoplasm.setConstant(True), 'set compartment "constant"')
             self._check(cytoplasm.setSize(1), 'set compartment "size"')
+            self._check(cytoplasm.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
             #Species
-            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
+            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
+            ##### TODO replace with list comprehension
+            meta_smiles = {}
+            for step_id in cofactors_rp_paths[path_id]['path']:
+                for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']:
+                    meta_smiles[meta] = cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['smiles']
+            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
             for meta in new_meta:
-                #TODO: annotate it with MNXC3 id for cytoplasm compartment
-                #Species --> Loop through all the RP paths
                 spe = model.createSpecies()
-                self._check(spe, 'create species')
-                self._check(spe.setId('M_'+str(meta)+'_'+str(compartment)), 'set species id') #same as cobrapy
-                self._check(spe.setName(meta), 'set name for '+str(meta))
+                self._check(spe, 'create species') 
                 self._check(spe.setCompartment(compartment), 'set species spe compartment')
-                self._check(spe.setMetaId(self._nameToSbmlId(str(path_id)+'_'+meta)), 'setting reaction metaID')
+                #ID same as cobrapy
+                self._check(spe.setId(self._nameToSbmlId(str(meta)+'__64__'+str(compartment))), 'set species id')
+                self._check(spe.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+meta).encode('utf-8')).hexdigest())), 'setting reaction metaID')
+                #TODO: change this to the chemical name if known
+                #self._check(spe.setName(meta), 'set name for '+str(meta))
                 ###### annotation ###
                 if meta[:3]=='MNX':
-                    """
-                    #Annotations for reaction
-                    cv = libsbml.CVTerm()
-                    #TODO: experimental
-                    #self._check(cv.setIdAttribute(str(path_id)+'_'+str(step_id)+'_'+meta), 'create metaID')
-                    self._check(cv, 'creating annotation')
-                    self._check(cv.setQualifierType(libsbml.BIOLOGICAL_QUALIFIER), 'set annotation type')
-                    self._check(cv.setBiologicalQualifierType(libsbml.BQB_IS_DESCRIBED_BY), 'set annotation description')
-                    self._check(cv.addResource("http://identifiers.org/metanetx.chemical/"+str(meta)), 'set the annotation url')
-                    self._check(reac.addCVTerm(cv), 'add the annotation')
-                    """
-                    #<rdf:Description rdf:about="#'''+str(path_id)+'_'+str(step_id)+'_'+meta+'''">
                     annotation = '''<annotation>
                        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/" xmlns:bqmodel="http://biomodels.net/model-qualifiers/">
                          <rdf:Description rdf:about="#'''+str(self._nameToSbmlId(meta))+'''">
@@ -278,44 +275,41 @@ class FBA:
                          </rdf:Description>
                        </rdf:RDF>
                      </annotation>'''
-                    #if reac.isSetAnnotation():
-                    #    self._check(reac.getAnnotationString(), 'printAnnotation')
-                    #    self._check(reac.appendAnnotation(annotation), 'adding annotation')
-                    #else:
                     self._check(spe.setAnnotation(annotation), 'setting the annotation for new reac') 
+                else:
+                    self._check(spe.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(meta_smiles[meta])+"</p></body>"), 'appending the SMILES notes for the reaction')
             #Reactions
             for step_id in cofactors_rp_paths[path_id]['path']:
                 reac = model.createReaction()
                 self._check(reac, 'create reaction')
-                self._check(reac.setId('R_rpReaction_'+str(step_id)), 'set reaction id') #same convention as cobrapy
+                self._check(reac.setId('RP'+str(step_id)), 'set reaction id') #same convention as cobrapy
                 self._check(reac.setName('rpReaction_'+str(step_id)), 'set name') #same convention as cobrapy
-                self._check(reac.setReversible(False), 'set reaction reversibility flag')
+                self._check(reac.setSBOTerm(185), 'setting the system biology ontology (SBO)') #set as process
+                self._check(reac.setReversible(True), 'set reaction reversibility flag')
                 self._check(reac.setFast(False), 'set reaction "fast" attribute')
-                self._check(reac.setMetaId(self._nameToSbmlId(str(path_id)+'_'+str(step_id))), 'setting reaction metaID')
-                #if the annotation is not MNX then add the SMILES to the notes
-                #else:
-                #    self._check(spe.appendNotes('SMILES:'+str(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['smiles'])), 'appending the SMILES notes for the reaction')
+                #TODO: different files with the same step_id and path_id would have the same metaid --> check that its not a problem
+                self._check(reac.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+str(step_id)).encode('utf-8')).hexdigest())), 'setting species metaID')
                 for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']: 
                     #### reactants ###
                     if float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])<0:
                         spe_r = reac.createReactant()
                         self._check(spe_r, 'create reactant')
-                        self._check(spe_r.setSpecies('M_'+str(meta)+'_'+str(compartment)), 'assign reactant species')
-                        self._check(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
+                        self._check(spe_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign reactant species')
+                        #self._check(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
                         self._check(spe_r.setConstant(True), 'set "constant" on species '+str(meta))
                         self._check(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio']))), 'set stoichiometry')
                     #### products ###
                     elif float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])>0:
                         pro_r = reac.createProduct()
                         self._check(pro_r, 'create product')
-                        self._check(pro_r.setSpecies('M_'+str(meta)+'_'+str(compartment)), 'assign product species')
-                        self._check(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
+                        self._check(pro_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign product species')
+                        #self._check(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
                         self._check(pro_r.setConstant(True), 'set "constant" on species '+str(meta))
                         self._check(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])), 'set the stoichiometry')
                     else:
                         logging.error('The stochiometry is 0 for path_id: '+str(path_id)+', step_id: '+str(step_id))
                 #add the SMILES to the notes
-                self._check(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>'SMILES:"+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
+                self._check(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
             all_rp_models[path_id] = sbmlDoc
         if isExport:
             self._exportSBML('sbml_models', all_rp_models, 'libsbml', inPath)
