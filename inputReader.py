@@ -8,6 +8,7 @@ import numpy as np
 import sqlite3
 import pickle
 import copy
+import logging
 
 class InputReader:
     """Parser for the databases and the files related to the pathway ranking output
@@ -43,23 +44,32 @@ class InputReader:
         """Check that the directory and the filename are valid and choose to use
         either the local or the global path
         """
-        if path and path[-1:]=='/':
-            path = path[:-1]
         if path==None:
             if self.globalPath==None:
                 logging.error('Both global path and local are not set')
                 return None
             else:
                 if os.path.isdir(self.globalPath):
-                    if os.path.isfile(self.globalPath+'/'+filename):
-                        return self.globalPath+'/'+filename
+                    try:
+                        fName = [i for i in os.listdir(self.globalPath) 
+                                    if not i.find(filename)==-1 
+                                    if not i[-3:]=='swp'
+                                    if not i[-1]=='#'][0]
+                        logging.info('Automatically selected '+str(fName))
+                    except IndexError:
+                        logging.error('Problem finding the correct '+str(filename)+' in '+str(path))
+                        return None
+                    if os.path.isfile(self.globalPath+'/'+fName):
+                        return self.globalPath+'/'+fName
                     else:
-                        logging.error('Global path file: '+str(filename)+', does not exist')
+                        logging.error('Global path file: '+str(fName)+', does not exist')
                         return None
                 else:
                     logging.error('Global path is not a directory: '+str(self.globalPath))
                     return None
         else:
+            if path[-1:]=='/':
+                path = path[:-1]
             if os.path.isdir(path):
                 if os.path.isfile(path+'/'+filename):
                     return path+'/'+filename
@@ -105,11 +115,11 @@ class InputReader:
         """
         #TODO: have the option to parse the flatfile instead of the whole database
         #TODO: have the ability to make SQL requests (such as only reactions related to particular)
-        if path:
+        if not path==None:
             self.globalPath = path
         if self.globalPath==None:
             return False
-        elif not os.path.isdir(self.globalPath):
+        if not os.path.isdir(self.globalPath):
             logging.error('The global path is not a directory: '+str(self.globalPath))
             return False
         self.rp_paths = self.outPaths()
@@ -131,7 +141,7 @@ class InputReader:
         """
         rp_compounds = {}
         try:
-            with open(self._checkFilePath(path, 'compounds.txt')) as f:
+            with open(self._checkFilePath(path, 'compounds')) as f:
                 reader = csv.reader(f, delimiter='\t')
                 next(reader)
                 for row in reader:
@@ -147,7 +157,7 @@ class InputReader:
         """
         rp_transformation = {}
         try:
-            with open(self._checkFilePath(path, 'results.csv')) as f:
+            with open(self._checkFilePath(path, 'scope.csv')) as f:
                 reader = csv.reader(f, delimiter=',')
                 next(reader)
                 for row in reader:
@@ -159,6 +169,95 @@ class InputReader:
 
 
     def outPaths(self, path=None):
+        """RP2path Metabolic pathways form out_paths.csv
+        create all the different values for heterologous paths from the RP2path out_paths.csv file
+        Note that path_step are in reverse order here
+        """
+        ########## open either the global path or the local defined path ############
+        #### (with priority with the local path)
+        try:
+            rp_paths = {}
+            with open(self._checkFilePath(path, 'out_paths')) as f:
+                reader = csv.reader(f)
+                next(reader)
+                current_path_id = 0
+                path_step = 0
+                for row in reader:
+                    if not int(row[0])==current_path_id:
+                        path_step = 0
+                    else:
+                        path_step += 1
+                    current_path_id = int(row[0])
+                    ################################################################
+                    # WARNING: we are using ONLY the first rule and not the others #
+                    ################################################################
+                    #for singleRule in row[2].split(','):
+                    tmpReac = {'rule_id': row[2].split(',')[0],
+                            'right': {},
+                            'left': {},
+                            'step': path_step,
+                            'path_id': int(row[0]),
+                            'transformation_id': row[1][:-2]}
+                    for l in row[3].split(':'):
+                        tmp_l = l.split('.')
+                        try:
+                            #tmpReac['left'].append({'stochio': int(tmp_l[0]), 'name': tmp_l[1]})
+                            mnxm = ''
+                            if tmp_l[1] in self.deprecatedMNXM_mnxm:
+                                mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
+                            else:
+                                mnxm = tmp_l[1]
+                            tmpReac['left'][mnxm] = int(tmp_l[0])
+                        except ValueError:
+                            logging.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
+                            return {}
+                    for r in row[4].split(':'):
+                        tmp_r = r.split('.')
+                        try:
+                            #tmpReac['right'].append({'stochio': int(tmp_r[0]), 'name': tmp_r[1]})
+                            mnxm = ''
+                            if tmp_r[1] in self.deprecatedMNXM_mnxm:
+                                mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]
+                            else:
+                                mnxm = tmp_r[1]
+                            tmpReac['right'][mnxm] = int(tmp_r[0])
+                        except ValueError:
+                            logging.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
+                            return {}
+                    try:
+                        if not int(row[0]) in rp_paths:
+                            rp_paths[int(row[0])] = []
+                        rp_paths[int(row[0])].insert(0, tmpReac)
+                    except ValueError:
+                        logging.error('Cannot convert path_id to int ('+str(row[0])+')')
+                        return {}
+            ####### now check where are the duplicates path_steps in each path and duplicate if yes ###
+            toRet_rp_paths = [] # we make this into a list instead of a dict 
+            #to find index positions in an array: usage find([1,3,4,5],[2,3])
+            find = lambda searchList, elem: [[i for i, x in enumerate(searchList) if x == e] for e in elem]
+            #loop through all path metabolic steps in order
+            for path in rp_paths:
+                dupli_items = [item for item, count in collections.Counter([i['step'] for i in rp_paths[path]]).items() if count>1]
+                dupli_index = find([i['step'] for i in rp_paths[path]], dupli_items)
+                flat_dupli_index = [item for sublist in dupli_index for item in sublist]
+                if not dupli_items:
+                    toRet_rp_paths.append(rp_paths[path])
+                else:
+                    keep_always_index = [i for i in [y for y in range(len(rp_paths[path]))] if i not in flat_dupli_index]
+                    for dupli_include in list(itertools.product(*dupli_index)):
+                        toAdd_index = list(keep_always_index+list(dupli_include))
+                        new_path = []
+                        for ta_i in toAdd_index:
+                            new_path.append(rp_paths[path][ta_i])
+                        new_path = sorted(new_path, key=lambda k: k['step'], reverse=True)
+                        toRet_rp_paths.append(new_path)
+            #self.rp_paths = toRet_rp_paths
+            return toRet_rp_paths
+        except (TypeError, FileNotFoundError) as e:
+            logging.error('Could not read the out_paths file ('+str(path)+')')
+            return {}
+
+    def OLD_outPaths(self, path=None):
         """RP2path Metabolic pathways form out_paths.csv
         create all the different values for heterologous paths from the RP2path out_paths.csv file
         Note that path_step are in reverse order here
@@ -259,6 +358,7 @@ class InputReader:
                     break
                 rp_path_left = None
                 rp_path_right = None
+                #determine where the substrate is located in the reaction of origin to determine the directionality of the reaction
                 if step['rule_id'].split('_')[1] in reac['right']:
                     rp_path_right = 'right'
                     rp_path_left = 'left'
@@ -309,7 +409,6 @@ class InputReader:
                 try: 
                     out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = rp_transformation[step['transformation_id']]
                 except KeyError:
-                    print(step['transformation_id'])
                     out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = None
                 for compound in step['left']:
                     out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
@@ -338,7 +437,7 @@ class InputReader:
         """
         model_compartments = {}
         try:
-            with open(self._checkFilePath(path, 'compartments.csv')) as f:
+            with open(self._checkFilePath(path, 'compartments')) as f:
                 reader = csv.reader(f, delimiter='\t')
                 next(reader)
                 for row in reader:
@@ -356,7 +455,7 @@ class InputReader:
         model_chemicals = {}
         ################# open the chemicals file #############
         try:
-            with open(self._checkFilePath(path, 'chemicals.csv')) as f:
+            with open(self._checkFilePath(path, 'chemicals')) as f:
                 reader = csv.reader(f, delimiter='\t')
                 for row in reader:
                     ######### chemical formula #############
@@ -398,7 +497,7 @@ class InputReader:
     #Given the path, open the model (NOTE: only MNX models for now)
     def model(self, path=None):
         try:
-            return cobra.io.read_sbml_model(self._checkFilePath(path, 'model.sbml'))
+            return cobra.io.read_sbml_model(self._checkFilePath(path, 'model'))
         except AttributeError:
             return None
 

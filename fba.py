@@ -4,23 +4,24 @@ import os
 from cameo.strain_design import OptKnock
 import libsbml
 from hashlib import md5
+import logging
 
+#TODO: define the biomass parameter here to be used. The default should be the BIGG (R48E37591)
 class FBA:
-    def __init__(self, outputPath=None):
+    def __init__(self, outputPath=None, biomassID='R48E37591'):
         if outputPath and outputPath[-1:]=='/':
             outputPath = outputPath[:-1]
         self.outputPath = outputPath
+        self.biomassID = biomassID
         self.rp_sbml_paths = None
         self.rp_sbml_models = None
         self.results = None
 
-
     ############################### PRIVATE FUNCTIONS ############################
-
 
     def _switchToCPLEX(self, models):
         """ 
-            All the models are swiched to using the CPLEX solver
+        All the models are swiched to using the CPLEX solver
         """
         #TODO: have a check to see if you can access the CPLEX solver before assigning it to each model
         for model_id in models:
@@ -31,6 +32,7 @@ class FBA:
     #TODO: export the heterologous reactions into SBML format
     def _exportSBML(self, type_name, models, inputType, path=None):
         """
+        Function to export models generated in libSBML or cobraPy to SBML
         cobra.io.write_legacy_sbml(models[model_id], 
                                     p+'/'+str(model_id)+'.sbml', 
                                     use_fbc_package=False)
@@ -57,7 +59,8 @@ class FBA:
         ########## export ###################
         for model_id in models:
             if inputType=='cobrapy':
-                cobra.io.write_sbml_model(models[model_id], 
+                cobra.io.write_sbml_model(models[model_id],
+                                            p+'/'+str(model_id)+'.sbml', 
                                             use_fbc_package=False)
             elif inputType=='libsbml':
                 libsbml.writeSBMLToFile(models[model_id],
@@ -69,6 +72,9 @@ class FBA:
 
 
     def _nameToSbmlId(self, name):
+        """
+        Function to rewrite the string for libSBML id to valid format
+        """
         IdStream = []
         count = 0
         end = len(name) 
@@ -87,7 +93,7 @@ class FBA:
         return Id[:-1]
 
 
-    def _check(self, value, message):
+    def _checklibSBML(self, value, message):
         """
         Taken from: http://sbml.org/Software/libSBML/docs/python-api/create_simple_model_8py-example.html
         """
@@ -114,13 +120,12 @@ class FBA:
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
-        self.rp_sbml_paths = self.constructPaths_libSBML(cofactors_rp_paths, True)
+        #self.rp_sbml_paths = self.constructPaths_libSBML(cofactors_rp_paths, True)
         #self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, rp_smiles, True)
-        #self.rp_sbml_models = self.constructModels(cofactors_rp_paths, model_compartments, cobra_model, True)
+        self.rp_sbml_models = self.constructModels_cobraPy(cofactors_rp_paths, model_compartments, cobra_model, True)
         if isCPLEX:
             self._switchToCPLEX(self.rp_sbml_models)
         self.results = {}
-        '''
         self.results['biomass'] =  self.simulateBiomass(self.rp_sbml_models)
         self.results['target'] = self.simulateTarget(self.rp_sbml_models)
         self.results['biLevel'] = self.simulateBiLevel(self.rp_sbml_models)
@@ -135,10 +140,13 @@ class FBA:
         self.results['splitObjective']['cameo'], self.results['splitObjective']['sorted'] = self.simulateSplitObjective(self.rp_sbml_models)
         self.results['biLevel'] = {}
         self.results['biLevel']['cameo'], self.results['biLevel']['sorted'] = self.simulateBiLevel(self.rp_sbml_models)
-        '''
         return True 
 
+    #TODO: write the function
+    def constructModels_liSBML(self):
+        return False
 
+    #TODO: rewrite it to match with other functions
     def constructModels_cobraPy(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
         """
             Returns a dictionnary of models with the keys the path from RP2paths out_paths.csv
@@ -214,7 +222,7 @@ class FBA:
             '''
             all_rp_models[path_id] = model
         if isExport:
-            self._exportSBML('sbml_models', all_rp_models, inPath)
+            self._exportSBML('sbml_models', all_rp_models, 'cobrapy', inPath)
         return all_rp_models
 
 
@@ -237,14 +245,14 @@ class FBA:
             sbmlDoc.setPackageRequired('fbc', False)
             #Model
             model = sbmlDoc.createModel()
-            self._check(model, 'create model')
+            self._checklibSBML(model, 'create model')
             #Compartments
             cytoplasm = model.createCompartment()
-            self._check(cytoplasm, 'create compartment')
-            self._check(cytoplasm.setId(compartment), 'set compartment id')
-            self._check(cytoplasm.setConstant(True), 'set compartment "constant"')
-            self._check(cytoplasm.setSize(1), 'set compartment "size"')
-            self._check(cytoplasm.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
+            self._checklibSBML(cytoplasm, 'create compartment')
+            self._checklibSBML(cytoplasm.setId(compartment), 'set compartment id')
+            self._checklibSBML(cytoplasm.setConstant(True), 'set compartment "constant"')
+            self._checklibSBML(cytoplasm.setSize(1), 'set compartment "size"')
+            self._checklibSBML(cytoplasm.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
             #Species
             new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
             ##### TODO replace with list comprehension
@@ -255,13 +263,13 @@ class FBA:
             new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
             for meta in new_meta:
                 spe = model.createSpecies()
-                self._check(spe, 'create species') 
-                self._check(spe.setCompartment(compartment), 'set species spe compartment')
+                self._checklibSBML(spe, 'create species') 
+                self._checklibSBML(spe.setCompartment(compartment), 'set species spe compartment')
                 #ID same as cobrapy
-                self._check(spe.setId(self._nameToSbmlId(str(meta)+'__64__'+str(compartment))), 'set species id')
-                self._check(spe.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+meta).encode('utf-8')).hexdigest())), 'setting reaction metaID')
+                self._checklibSBML(spe.setId(self._nameToSbmlId(str(meta)+'__64__'+str(compartment))), 'set species id')
+                self._checklibSBML(spe.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+meta).encode('utf-8')).hexdigest())), 'setting reaction metaID')
                 #TODO: change this to the chemical name if known
-                #self._check(spe.setName(meta), 'set name for '+str(meta))
+                #self._checklibSBML(spe.setName(meta), 'set name for '+str(meta))
                 ###### annotation ###
                 if meta[:3]=='MNX':
                     annotation = '''<annotation>
@@ -275,47 +283,48 @@ class FBA:
                          </rdf:Description>
                        </rdf:RDF>
                      </annotation>'''
-                    self._check(spe.setAnnotation(annotation), 'setting the annotation for new reac') 
+                    self._checklibSBML(spe.setAnnotation(annotation), 'setting the annotation for new reac') 
                 else:
-                    self._check(spe.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(meta_smiles[meta])+"</p></body>"), 'appending the SMILES notes for the reaction')
+                    self._checklibSBML(spe.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(meta_smiles[meta])+"</p></body>"), 'appending the SMILES notes for the reaction')
             #Reactions
             for step_id in cofactors_rp_paths[path_id]['path']:
                 reac = model.createReaction()
-                self._check(reac, 'create reaction')
-                self._check(reac.setId('RP'+str(step_id)), 'set reaction id') #same convention as cobrapy
-                self._check(reac.setName('rpReaction_'+str(step_id)), 'set name') #same convention as cobrapy
-                self._check(reac.setSBOTerm(185), 'setting the system biology ontology (SBO)') #set as process
-                self._check(reac.setReversible(True), 'set reaction reversibility flag')
-                self._check(reac.setFast(False), 'set reaction "fast" attribute')
+                self._checklibSBML(reac, 'create reaction')
+                self._checklibSBML(reac.setId('RP'+str(step_id)), 'set reaction id') #same convention as cobrapy
+                self._checklibSBML(reac.setName('rpReaction_'+str(step_id)), 'set name') #same convention as cobrapy
+                self._checklibSBML(reac.setSBOTerm(185), 'setting the system biology ontology (SBO)') #set as process
+                self._checklibSBML(reac.setReversible(True), 'set reaction reversibility flag')
+                self._checklibSBML(reac.setFast(False), 'set reaction "fast" attribute')
                 #TODO: different files with the same step_id and path_id would have the same metaid --> check that its not a problem
-                self._check(reac.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+str(step_id)).encode('utf-8')).hexdigest())), 'setting species metaID')
+                self._checklibSBML(reac.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+str(step_id)).encode('utf-8')).hexdigest())), 'setting species metaID')
                 for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']: 
                     #### reactants ###
                     if float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])<0:
                         spe_r = reac.createReactant()
-                        self._check(spe_r, 'create reactant')
-                        self._check(spe_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign reactant species')
-                        #self._check(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
-                        self._check(spe_r.setConstant(True), 'set "constant" on species '+str(meta))
-                        self._check(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio']))), 'set stoichiometry')
+                        self._checklibSBML(spe_r, 'create reactant')
+                        self._checklibSBML(spe_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign reactant species')
+                        #self._checklibSBML(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
+                        self._checklibSBML(spe_r.setConstant(True), 'set "constant" on species '+str(meta))
+                        self._checklibSBML(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio']))), 'set stoichiometry')
                     #### products ###
                     elif float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])>0:
                         pro_r = reac.createProduct()
-                        self._check(pro_r, 'create product')
-                        self._check(pro_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign product species')
-                        #self._check(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
-                        self._check(pro_r.setConstant(True), 'set "constant" on species '+str(meta))
-                        self._check(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])), 'set the stoichiometry')
+                        self._checklibSBML(pro_r, 'create product')
+                        self._checklibSBML(pro_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign product species')
+                        #self._checklibSBML(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
+                        self._checklibSBML(pro_r.setConstant(True), 'set "constant" on species '+str(meta))
+                        self._checklibSBML(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])), 'set the stoichiometry')
                     else:
                         logging.error('The stochiometry is 0 for path_id: '+str(path_id)+', step_id: '+str(step_id))
                 #add the SMILES to the notes
-                self._check(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
+                self._checklibSBML(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
             all_rp_models[path_id] = sbmlDoc
         if isExport:
             self._exportSBML('sbml_models', all_rp_models, 'libsbml', inPath)
         return all_rp_models
 
 
+    #TODO: rewrite to match other functions
     def constructPaths_cobraPy(self, cofactors_rp_paths, ori_model_compartments, rp_smiles, isExport=False, inPath=None):
         """Construct the cobra models of the RetroPath paths with the cofactors and export them to SBML
 
@@ -338,7 +347,7 @@ class FBA:
                 #remove the ones that already exist in the model
                 if not meta in all_meta:
                     all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
-                    all_meta[meta].annotation = { 'ImaginaryCompDB':'SpecificCompIdentifier', "uniprot": ["Q12345", "P12345"]}
+                    #all_meta[meta].annotation = { 'ImaginaryCompDB':'SpecificCompIdentifier', "uniprot": ["Q12345", "P12345"]}
             ############## REACTIONS ##########################
             for step_id in cofactors_rp_paths[path_id]['path']:
                 #TODO: could this lead to a conflict if there is the same reactionID and a different substrateID
@@ -411,8 +420,11 @@ class FBA:
 
     #9) The overlap of the same changes --> might not be applicable in our case
 
-    #10) Reduced model:q
+    #10) Reduced model
 
+
+    #TODO: all simulations are done with cobrapy and as such, if the model is created with libSBML, needs to
+    #be passed to cobraPy
 
     def simulateTarget(self, all_rp_models):
         target = {}
@@ -432,6 +444,7 @@ class FBA:
         splitObj = {}
         for model_id in all_rp_models:
             #TODO: need to define what is the biomass reaction from function input
+            #get the reaction ID that defines the biomass
             all_rp_models[model_id].objective = {all_rp_models[model_id].reactions.R48E37591: biomass, all_rp_models[model_id].reactions.targetSink: 1.0-biomass}
             splitObj[model_id] = all_rp_models[model_id].optimize()
         #return split_Obj, sorted(splitObj.items(), key=lambda x: x[1], reverse=True)
@@ -448,9 +461,9 @@ class FBA:
                 #   since we are introducing new pathways that are indeed not associated
                 #   with genes we need to remove this parameter
                 optknock = OptKnock(all_rp_models[model_id], exclude_non_gene_reactions=False, remove_blocked=False)
-                sim_res[model_id] = optknock.run(max_knockouts=0, target='targetSink', biomass='R48E37591')
+                sim_res[model_id] = optknock.run(max_knockouts=0, target='targetSink', biomass=self.biomassID)
             except KeyError:
-                print('KeyError with targetSink.... Not sure why that is')
+                logging.error('KeyError with targetSink.... Not sure why that is')
         #return sim_res, sorted(sim_res.items(), key=lambda x: x[1], reverse=True)
         return sim_res, sorted([(sim_res[i].fluxes[0]['targetSink'], i) for i in sim_res.keys()], reverse=True)
 
