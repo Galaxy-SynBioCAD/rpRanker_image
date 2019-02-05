@@ -121,7 +121,7 @@ class Thermodynamics:
     #TODO export the matrices
     #TODO generate the uncertainty here
     #TODO add the option of accepting InChI strings as well as SMILES
-    def scrt_dG0(self, srct_type, srct_string, stochio):
+    def scrt_dG0(self, srct_type, srct_string, stoichio):
         """ Decompose a SMILES string
         #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
         calculate pKas of the target and intermediates using cxcalc
@@ -192,7 +192,7 @@ class Thermodynamics:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
         ddG0_forward = trans+ddG
         dG0 = dG0_cc+ddG0_forward
-        toRet = stochio*dG0
+        toRet = stoichio*dG0
         if type(toRet)==np.ndarray:
             toRet = toRet[0].astype(float)
         return toRet, X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
@@ -201,7 +201,7 @@ class Thermodynamics:
     ################### PRECALCULATED ########################
 
 
-    def compound_dG0(self, species_list, compound_index, group_vector, stochio):
+    def compound_dG0(self, species_list, compound_index, group_vector, stoichio):
         """Get a detla-deltaG estimate for this group of species.
             i.e., this is the difference between the dG0 and the dG'0, which
             only depends on the pKa of the pseudoisomers, but not on their
@@ -247,19 +247,19 @@ class Thermodynamics:
                 g[g_ind, 0] += g_count
             x[compound_index, 0] = 1
         #return dG0, x, g
-        return dG0*stochio, x*stochio, g*stochio
+        return dG0*stoichio, x*stoichio, g*stoichio
 
 
-    #need to do this so that we can calculate dG0 without stochio
-    #def compound_dG0_stochio(self, species_list, compound_index, group_vector, stochio):
+    #need to do this so that we can calculate dG0 without stoichio
+    #def compound_dG0_stoichio(self, species_list, compound_index, group_vector, stoichio):
     #    dG0, x, g = compound_dG0(species_list, compound_index, group_vector)
-    #    return dG0*stochio, x*stochio, g*stochio
+    #    return dG0*stoichio, x*stoichio, g*stoichio
     
 
     #i_to --> major_ms
     #i_from --> 0
     #TODO: make this work--- right now too many errors
-    def compound_dG0_prime(self, dG0, p_kas, number_of_protons, charges, stochio, i_to, i_from=0):
+    def compound_dG0_prime(self, dG0, p_kas, number_of_protons, charges, stoichio, i_to, i_from=0):
         ## _dG0_prime_vector ## 
         #Calculates the difference in kJ/mol between dG'0 and dG0 of the MS with the least hydrogens (dG0[0])
         #if not self.inchi:
@@ -292,7 +292,7 @@ class Thermodynamics:
         #-self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature))
         #return dG0_prime_vector
         dG0_prime_vector = -self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature)) 
-        return dG0+stochio*(dG0_prime_vector+ddG)
+        return dG0+stoichio*(dG0_prime_vector+ddG)
 
 
     def sigma_matrix(self, X, G):
@@ -317,15 +317,15 @@ class Thermodynamics:
         for path_id in rp_paths:
             path_dG = 0.0
             path_count = 0
-            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['step']) for step_id in rp_paths[path_id]['path']])
+            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['steps']) for step_id in rp_paths[path_id]['path']])
             X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
             G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
             for step_id in rp_paths[path_id]['path']:
                 reaction_dG = 0.0
                 react_count = 0
-                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
-                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
-                for cmp_id in rp_paths[path_id]['path'][step_id]['step']:
+                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
+                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
+                for cmp_id in rp_paths[path_id]['path'][step_id]['steps']:
                     X = None
                     G = None
                     compound_dG = None
@@ -340,7 +340,7 @@ class Thermodynamics:
                         compound_dG, X, G = self.compound_dG0(species_list,
                                                               compound_index,
                                                               group_vector,
-                                                              rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                                                              rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
                     except KeyError:
                         logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
                         try:
@@ -350,7 +350,7 @@ class Thermodynamics:
                                 G = self.calculated_dG[cmp_id]['G']
                                 cmp_info = self.calculated_dG[cmp_id]['cmp_info']
                             else:
-                                compound_dG, X, G, cmp_info = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                                compound_dG, X, G, cmp_info = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
                                 #save it for the next iteractions to avoid duplicates
                                 self.calculated_dG[cmp_id] = {'compound_dG': compound_dG, 'X': X, 'G': G, 'cmp_info': cmp_info}
                         except KeyError:
@@ -362,9 +362,9 @@ class Thermodynamics:
                         G_reaction[:, react_count:react_count+1] = G
                         X_path[:, path_count:path_count+1] = X
                         G_path[:, path_count:path_count+1] = G
-                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
+                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
                     if not compound_dG==None:
-                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG'] = compound_dG
+                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG'] = compound_dG
                         reaction_dG += compound_dG
                         path_dG += compound_dG
                     react_count += 1
@@ -386,7 +386,7 @@ class Thermodynamics:
             path_dG = 0.0
             path_dG_prime = 0.0
             path_count = 0
-            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['step']) for step_id in rp_paths[path_id]['path']])
+            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['steps']) for step_id in rp_paths[path_id]['path']])
             X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
             G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
             for step_id in rp_paths[path_id]['path']:
@@ -394,10 +394,10 @@ class Thermodynamics:
                 reaction_dG_prime = 0.0
                 react_count = 0
                 X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
-                    len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
+                    len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
                 G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
-                    len(rp_paths[path_id]['path'][step_id]['step']))), ndmin=2)
-                for cmp_id in rp_paths[path_id]['path'][step_id]['step']:
+                    len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
+                for cmp_id in rp_paths[path_id]['path'][step_id]['steps']:
                     X = None
                     G = None
                     cmp_dG = None
@@ -416,14 +416,14 @@ class Thermodynamics:
                         cmp_dG, X, G = self.compound_dG0(species_list,
                                         compound_index,
                                         group_vector,
-                                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
                         try:
                             cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
-                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['p_kas'], 
-                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['number_of_protons'],
-                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['charges'],
-                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'],
-                                            rp_paths[path_id]['path'][step_id]['step'][cmp_id]['major_ms'])
+                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['p_kas'], 
+                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['number_of_protons'],
+                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['charges'],
+                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'],
+                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['major_ms'])
                         except KeyError:
                             pass
                     except KeyError:
@@ -431,12 +431,12 @@ class Thermodynamics:
                         try:
                             cmp_dG, X, G, cmp_info = self.scrt_dG0('smiles', 
                                                 rp_smiles[cmp_id], 
-                                                rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'])
+                                                rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
                             cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
                                                 cmp_info['p_kas'], 
                                                 cmp_info['number_of_protons'],
                                                 cmp_info['charges'],
-                                                rp_paths[path_id]['path'][step_id]['step'][cmp_id]['stochio'],
+                                                rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'],
                                                 cmp_info['major_ms'])
                         except KeyError:
                             logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
@@ -447,9 +447,9 @@ class Thermodynamics:
                         G_reaction[:, react_count:react_count+1] = G
                         X_path[:, path_count:path_count+1] = X
                         G_path[:, path_count:path_count+1] = G
-                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
+                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
                     if not cmp_dG==None and not cmp_dG_prime==None:
-                        rp_paths[path_id]['path'][step_id]['step'][cmp_id]['dG'] = cmp_dG
+                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG'] = cmp_dG
                         reaction_dG += cmp_dG
                         reaction_dG_prime += cmp_dG_prime
                         path_dG += cmp_dG
@@ -464,6 +464,13 @@ class Thermodynamics:
             rp_paths[path_id]['dG_prime'] = path_dG_prime
             rp_paths[path_id]['dG_uncertainty'] = self.sigma_matrix(X_path, G_path)
 
+
+    def isBalanced():
+        """Function borrowed from the component contribution that checks is the per-atom
+        difference in a reaction is balanced
+        """
+        #TODO: check the difference between equilibrator and component_contribution
+        return False
 
     ########################### WORK IN PROGRESS #####################
 
@@ -486,14 +493,14 @@ class Thermodynamics:
                                                 len(react['right'])+len(react['left']))), ndmin=2)
                 G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0],
                                                 len(react['right'])+len(react['left']))), ndmin=2)
-                for lr, stochio_mult in zip(['left', 'right'], [-1, 1]):
+                for lr, stoichio_mult in zip(['left', 'right'], [-1, 1]):
                     for mnxm in react[lr]:
                         try:
                             compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
                             compound_dG, X, G = self.compound_dG0(species_list,
                                                                   compound_index,
                                                                   group_vector,
-                                                                  react[lr][mnxm]*stochio_mult)
+                                                                  react[lr][mnxm]*stoichio_mult)
                         except KeyError:
                             try:
                                 compound_dG, X, G = scrt_dG0('smiles', rp_smiles[mnxm], -react['left'][mnxm])
@@ -546,8 +553,8 @@ class Thermodynamics:
 
                     ####### USE THE KEGG ID ######
                     try:
-                        cmp_dG = self.compound_dG0(compound['kegg'], compound['stochio'])
-                        X, G = self.compound_vectors(compound['kegg'], compound['stochio'])
+                        cmp_dG = self.compound_dG0(compound['kegg'], compound['stoichiometry'])
+                        X, G = self.compound_vectors(compound['kegg'], compound['stoichiometry'])
                         cmp_std = self.matrix_uncertainty(X, G)
                     except KeyError:
                         try:
@@ -558,7 +565,7 @@ class Thermodynamics:
                                 G = smiles_calculated[compound['smiles']]['G']
                                 cmp_std = self.matrix_uncertainty(X, G) 
                             else:
-                                cmp_dG, X, G = self.dG0_prime('smiles', compound['smiles'], compound['stochio'])
+                                cmp_dG, X, G = self.dG0_prime('smiles', compound['smiles'], compound['stoichiometry'])
                                 cmp_std = self.matrix_uncertainty(X, G) 
                                 smiles_calculated[compound['smiles']] = {'cmp_dG': cmp_dG, 'X': X, 'G': G}
                         except (KeyError, LookupError) as e:
@@ -570,7 +577,7 @@ class Thermodynamics:
                                     G = inchi_calculated[compound['inchi']]['G']
                                     cmp_std = self.matrix_uncertainty(X, G) 
                                 else:
-                                    cmp_dG, X, G = self.dG0_prime('inchi',compound['inchi'],compound['stochio']) 
+                                    cmp_dG, X, G = self.dG0_prime('inchi',compound['inchi'],compound['stoichiometry']) 
                                     cmp_std = self.matrix_uncertainty(X, G) 
                                     inchi_calculated[compound['inchi']] = {'cmp_dG': cmp_dG, 'X': X, 'G': G}
                             except (KeyError, LookupError) as e:
@@ -599,7 +606,7 @@ class Thermodynamics:
     ################## Compound to matrix and calculate uncertainty ################
     """
     #Calulate the matrices to calculate the uncertainty parameter
-    def compound_vectors(self, kegg_id, stochio):
+    def compound_vectors(self, kegg_id, stoichio):
         ###get_stoich_vector
         x = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)))
         try:
@@ -608,9 +615,9 @@ class Thermodynamics:
             logging.error('This kegg_id ('+str(kegg_id)+') does not seem to exist in self.compound_dict or does not contain a compound index')
             raise KeyError
         x[compound_index, 0] = 1
-        return stochio*x
+        return stoichio*x
 
-    def group_incidence_vector(self, kegg_id, stochio):
+    def group_incidence_vector(self, kegg_id, stoichio):
         g = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)))
         try:
             group_vector = self.compound_dict[kegg_id]['group_vector']
@@ -619,7 +626,7 @@ class Thermodynamics:
             raise KeyError
         for g_ind, g_count in group_vector:
             g[g_ind, 0] += g_count
-        return stochio*g 
+        return stoichio*g 
 
     def 
 
@@ -628,8 +635,8 @@ class Thermodynamics:
         g = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)))
         for compound in reaction:
             if compound['kegg']:
-                x += self.compound_vectors(compound['kegg'], compound['stochio'])
-                g += self.group_incidence_vector(compound['kegg'], compound['stochio'])
+                x += self.compound_vectors(compound['kegg'], compound['stoichiometry'])
+                g += self.group_incidence_vector(compound['kegg'], compound['stoichiometry'])
             else:
                 logging.warning('Passing an empty kegg to the reaction_to_matrix')
         ## not sure about this transformation
@@ -668,11 +675,11 @@ class Thermodynamics:
             if compound['kegg'] and not compound['smiles']:
                 if compound['kegg'] in self.cc_compounds:
                     #TODO: change this to compound or change the below to smiles
-                    dG0_prime += self.compound_dG0(compound['kegg'], compound['stochio'])
+                    dG0_prime += self.compound_dG0(compound['kegg'], compound['stoichiometry'])
                 else:
                     logger.error('Compound '+str(compound['kegg']+' is not contained in the equilibrator list'))
             if not compound['kegg'] and compound['smiles']:
-                dG0_prime += self.dG0_prime(compound['smiles'], compound['stochio'])[0]
+                dG0_prime += self.dG0_prime(compound['smiles'], compound['stoichiometry'])[0]
             else:
                 logging.error('The compound contains no KEGG and no SMILES info')
                 return -1.0
@@ -688,7 +695,7 @@ class Thermodynamics:
         dG0_prime = self.dG0_prime(reaction)
         dG_correction = 0.0
         for compound in reaction:
-            dG_correction += compound['stochio']*np.log(compound['conc'])
+            dG_correction += compound['stoichiometry']*np.log(compound['conc'])
         return dG0_prime+(self.RT*dG_correction), reaction_uncertainty(reaction)
 
 
@@ -699,7 +706,7 @@ class Thermodynamics:
         dG0_prime = self.dG0_prime(reaction)
         dGm_correction = 0.0
         for compound in reaction:
-            dGm_correction += self.RT*compound['stochio']*np.log(1e-3)
+            dGm_correction += self.RT*compound['stoichiometry']*np.log(1e-3)
         return dG0_prime+dGm_correction, reaction_uncertainty(reaction)
 
 
@@ -744,7 +751,7 @@ class Thermodynamics:
 
     ############################## Matrices ###################################
 
-    def scrt_vector(self, srct_type, srct_string, stochio):
+    def scrt_vector(self, srct_type, srct_string, stoichio):
         """ Decompose a SMILES string 
         #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
         calculate pKas of the target and intermediates using cxcalc
@@ -791,11 +798,11 @@ class Thermodynamics:
         ### using equilibrator training data
         x = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)), ndmin=2)
         ###### calculate dG0_r
-        return stochio*x, stochio*g
+        return stoichio*x, stoichio*g
 
     """
     #Calulate the matrices to calculate the uncertainty parameter
-    def compound_vectors(self, kegg_id, stochio):
+    def compound_vectors(self, kegg_id, stoichio):
         ###get_stoich_vector
         x = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)))
         g = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)))
@@ -811,7 +818,7 @@ class Thermodynamics:
             logging.warning('The self.compound_dict does not contain group_vector for '+str(kegg_id)+' or does not exist')
             return None, None
         x[compound_index, 0] = 1
-        return stochio*x, stochio*g
+        return stoichio*x, stoichio*g
     """
 
     def reaction_vector(self, reaction):
@@ -825,13 +832,13 @@ class Thermodynamics:
             g = None
             used = 0
             if compound['kegg']:
-                x, g = self.compound_vectors(compound['kegg'], compound['stochio'])
+                x, g = self.compound_vectors(compound['kegg'], compound['stoichiometry'])
                 used = 1
             if not compound['smiles']==None and not type(x)==np.ndarray and not type(g)==np.ndarray:
-                x, g = self.scrt_vector('smiles', compound['smiles'], compound['stochio'])
+                x, g = self.scrt_vector('smiles', compound['smiles'], compound['stoichiometry'])
                 used = 2
             if not compound['inchi']==None and not type(x)==np.ndarray and not type(g)==np.ndarray:
-                x, g = self.scrt_vector('inchi', compound['inchi'], compound['stochio'])
+                x, g = self.scrt_vector('inchi', compound['inchi'], compound['stoichiometry'])
                 used = 3
             if not type(x)==np.ndarray and not type(g)==np.ndarray:
                 logging.warning('Cannot calculate vector for '+str(compound['mnx']))
@@ -920,12 +927,12 @@ class Thermodynamics:
             ddG = sum(p_kas[0:major_microspecies]) * self.R * self.temperature * np.log(10)
         else:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
-        #ddG0_forward = stochio*(trans+ddG)
+        #ddG0_forward = stoichio*(trans+ddG)
         #dG0_prime = dG0_cc+ddG0_forward
         #return dG0_prime, sigma_cc
         ddG0_forward = trans+ddG
         dG0_prime = dG0_cc+ddG0_forward
-        return stochio*dG0_prime, sigma_cc
+        return stoichio*dG0_prime, sigma_cc
 
     '''
     '''
@@ -987,7 +994,7 @@ class Thermodynamics:
         dG_correction = 0.0
         for i in inputReaction:
             if not inputReaction[i]['kegg']=='C00001':
-                dG_correction += inputReaction[i]['stochio']*np.log(inputReaction[i]['conc'])
+                dG_correction += inputReaction[i]['stoichiometry']*np.log(inputReaction[i]['conc'])
         return dG0_r_prime+(dG_correction*self.RT), dG0_uncertainty
     '''
 
@@ -1047,13 +1054,13 @@ class Thermodynamics:
         dG_correction = 0.0
         for i in inputReaction:
             if not inputReaction[i]['kegg']=='C00001' and inputReaction[i]['conc']:
-                dG_correction += inputReaction[i]['stochio']*np.log(inputReaction[i]['conc'])
+                dG_correction += inputReaction[i]['stoichiometry']*np.log(inputReaction[i]['conc'])
         return dG0_r_prime+(dG_correction*self.RT), dG0_uncertainty
 
 
 
 
-    #compound is a dictionnary with a KEGG within compound_dict and 'stochio'
+    #compound is a dictionnary with a KEGG within compound_dict and 'stoichio'
     def compound_to_matrix(self, compound):
         x = np.array(np.zeros((np.array(self.cc_preprocess['C1']).shape[0], 1)), ndmin=2)
         g = np.array(np.zeros((np.array(self.cc_preprocess['C3']).shape[0], 1)), ndmin=2)
@@ -1064,14 +1071,14 @@ class Thermodynamics:
             logging.error('could not find index for '+str(cmp_name))
             return x, g
         x[compound_index, 0] = 1
-        x = compound['stochio']*x
+        x = compound['stoichiometry']*x
         # g is the group incidence vector of all the other compounds
         gv = self.compound_dict[compound['kegg']]['group_vector']
         if gv is None:
             logging.error('could not find group vector for '+str(cmp_name))
         for g_ind, g_count in gv:
             g[g_ind, 0] += g_count
-        g = compound['stochio']*g
+        g = compound['stoichiometry']*g
         return x, g
     '''
 
@@ -1089,7 +1096,7 @@ class Thermodynamics:
                 dG0_f_prime = compound_dG0(inputReaction[cmp_name]['kegg'])
                 if dG0_f_prime is None:
                     return None
-                dG0_r_prime += inputReaction[cmp_name]['stochio']*dG0_f_prime
+                dG0_r_prime += inputReaction[cmp_name]['stoichiometry']*dG0_f_prime
         return dG0_r_prime
 
     def reaction_to_matrix(self, inputReaction, compound_dict):
@@ -1105,7 +1112,7 @@ class Thermodynamics:
             if compound_index is None:
                 logging.error('could not find index for '+str(cmp_name))
             x_c[compound_index, 0] = 1
-            x += inputReaction[cmp_name]['stochio']*x_c
+            x += inputReaction[cmp_name]['stoichiometry']*x_c
             # g is the group incidence vector of all the other compounds
             g_c = np.array(np.zeros((Ng, 1)))
             gv = compound_dict[inputReaction[cmp_name]['kegg']]['group_vector']
@@ -1113,7 +1120,7 @@ class Thermodynamics:
                 logging.error('could not find group vector for '+str(cmp_name))
             for g_ind, g_count in gv:
                 g_c[g_ind, 0] += g_count
-            g += inputReaction[cmp_name]['stochio']*g_c
+            g += inputReaction[cmp_name]['stoichiometry']*g_c
         return x, g
     '''
 

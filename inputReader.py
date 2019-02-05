@@ -9,6 +9,7 @@ import sqlite3
 import pickle
 import copy
 import logging
+import gzip
 
 class InputReader:
     """Parser for the databases and the files related to the pathway ranking output
@@ -33,6 +34,8 @@ class InputReader:
         self.model_chemicals = None
         self.model_compartments = None
         self.rp_transformation = None
+        self.rp_smiles_inchi = None
+        self.smiles_inchi = None
         if not self._loadCache(os.getcwd()+'/cache'):
             raise ValueError
 
@@ -104,6 +107,16 @@ class InputReader:
         except FileNotFoundError:
             logging.error('The file '+str(path+'/mnxm_dG.pickle')+' does not seem to exist')
             return False
+        """
+        try:
+            self.smiles_inchi = pickle.load(open(self._checkFilePath(path, 'smiles_inchi.pickle'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/smiles_inchi.pickle')+' does not seem to exists')
+        """
+        try:
+            self.smiles_inchi = pickle.load(gzip.open(self._checkFilePath(path, 'smiles_inchi.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/smiles_inchi.pickle')+' does not seem to exists')
         return True
 
 
@@ -123,12 +136,14 @@ class InputReader:
             logging.error('The global path is not a directory: '+str(self.globalPath))
             return False
         self.rp_paths = self.outPaths()
-        self.rp_transformation = self.transformation()
+        self.rp_transformation, self.rp_smiles_inchi = self.transformation()
         self.rp_smiles = self.compounds()
         self.cofactors_rp_paths = self.addCofactors(self.rp_paths, 
                                                     self.rr_reactions, 
                                                     self.rp_smiles,
-                                                    self.rp_transformation)
+                                                    self.rp_transformation,
+                                                    self.smiles_inchi,
+                                                    self.rp_smiles_inchi)
         self.cobra_model = self.model()
         self.model_chemicals = self.chemicals()
         self.model_compartments = self.compartments()
@@ -156,16 +171,21 @@ class InputReader:
         """Extract the reaction rules from the retroPath2.0 output using the scope.csv file
         """
         rp_transformation = {}
+        smiles_inchi = {}
         try:
             with open(self._checkFilePath(path, 'scope.csv')) as f:
                 reader = csv.reader(f, delimiter=',')
                 next(reader)
                 for row in reader:
                     rp_transformation[row[1]] = row[2]
+                    if not row[3] in smiles_inchi:
+                        smiles_inchi[row[3]] = row[4]
+                    if not row[5] in smiles_inchi:
+                        smiles_inchi[row[5]] = row[6]
         except (TypeError, FileNotFoundError) as e:
             logging.error('Could not read the compounds file ('+str(path)+')')
             return {}
-        return rp_transformation
+        return rp_transformation, smiles_inchi
 
 
     def outPaths(self, path=None):
@@ -201,7 +221,7 @@ class InputReader:
                     for l in row[3].split(':'):
                         tmp_l = l.split('.')
                         try:
-                            #tmpReac['left'].append({'stochio': int(tmp_l[0]), 'name': tmp_l[1]})
+                            #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
                             mnxm = ''
                             if tmp_l[1] in self.deprecatedMNXM_mnxm:
                                 mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
@@ -214,7 +234,7 @@ class InputReader:
                     for r in row[4].split(':'):
                         tmp_r = r.split('.')
                         try:
-                            #tmpReac['right'].append({'stochio': int(tmp_r[0]), 'name': tmp_r[1]})
+                            #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
                             mnxm = ''
                             if tmp_r[1] in self.deprecatedMNXM_mnxm:
                                 mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]
@@ -257,6 +277,7 @@ class InputReader:
             logging.error('Could not read the out_paths file ('+str(path)+')')
             return {}
 
+
     def OLD_outPaths(self, path=None):
         """RP2path Metabolic pathways form out_paths.csv
         create all the different values for heterologous paths from the RP2path out_paths.csv file
@@ -287,7 +308,7 @@ class InputReader:
                         for l in row[3].split(':'):
                             tmp_l = l.split('.')
                             try:
-                                #tmpReac['left'].append({'stochio': int(tmp_l[0]), 'name': tmp_l[1]})
+                                #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
                                 mnxm = ''
                                 if tmp_l[1] in self.deprecatedMNXM_mnxm:
                                     mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
@@ -300,7 +321,7 @@ class InputReader:
                         for r in row[4].split(':'):
                             tmp_r = r.split('.')
                             try:
-                                #tmpReac['right'].append({'stochio': int(tmp_r[0]), 'name': tmp_r[1]})
+                                #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
                                 mnxm = ''
                                 if tmp_r[1] in self.deprecatedMNXM_mnxm:
                                     mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]
@@ -344,7 +365,7 @@ class InputReader:
             return {}
 
 
-    def addCofactors(self, in_rp_paths, rr_reactions, rp_smiles, rp_transformation):
+    def addCofactors(self, in_rp_paths, rr_reactions, rp_smiles, rp_transformation, smiles_inchi, rp_smiles_inchi):
         """Adds the cofactors to the retropath reactions
         """
         rp_paths = copy.deepcopy(in_rp_paths)
@@ -399,35 +420,69 @@ class InputReader:
             out_rp_paths[path[0]['path_id']]['path'] = {}
             out_rp_paths[path[0]['path_id']]['dG'] = None
             out_rp_paths[path[0]['path_id']]['dG_uncertainty'] = None
+            out_rp_paths[path[0]['path_id']]['flux_sink'] = None
+            out_rp_paths[path[0]['path_id']]['flux_biomass'] = None
+            out_rp_paths[path[0]['path_id']]['flux_target'] = None
+            out_rp_paths[path[0]['path_id']]['flux_splitObj'] = None
+            out_rp_paths[path[0]['path_id']]['flux_biLevel'] = None
+            out_rp_paths[path[0]['path_id']]['number_of_interventions'] = None
             for step in path:
                 out_rp_paths[step['path_id']]['path'][step['step']] = {}
-                out_rp_paths[step['path_id']]['path'][step['step']]['step'] = {}
+                out_rp_paths[step['path_id']]['path'][step['step']]['steps'] = {}
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG'] = None
                 out_rp_paths[step['path_id']]['path'][step['step']]['dG_uncertainty'] = None
                 out_rp_paths[step['path_id']]['path'][step['step']]['origin_reaction'] = step['rule_id'].split('_')[0]
                 out_rp_paths[step['path_id']]['path'][step['step']]['origin_substrate'] = step['rule_id'].split('_')[1]
+                out_rp_paths[step['path_id']]['path'][step['step']]['flux_biomass'] = None
+                out_rp_paths[step['path_id']]['path'][step['step']]['flux_target'] = None
+                out_rp_paths[step['path_id']]['path'][step['step']]['flux_splitObj'] = None
+                out_rp_paths[step['path_id']]['path'][step['step']]['flux_biLevel'] = None
                 try: 
-                    out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = rp_transformation[step['transformation_id']]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['reaction_smiles'] = rp_transformation[step['transformation_id']]
                 except KeyError:
-                    out_rp_paths[step['path_id']]['path'][step['step']]['smiles'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['reaction_smiles'] = None
                 for compound in step['left']:
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = -step['left'][compound]
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound] = {}
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['stoichiometry'] = -step['left'][compound]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['dG'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['dG_uncertainty'] = None
+                    ####### SMILES ######
                     try:
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = rp_smiles[compound]
+                        out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = rp_smiles[compound]
                     except KeyError:
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = None 
+                        try:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = smiles_inchi[compound]['smiles']
+                        except KeyError:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = None 
+                    ####### InChI #######
+                    try:
+                        out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = smiles_inchi[rp_smiles[compound]]
+                    except KeyError:
+                        try:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = smiles_inchi[compound]['inchi']
+                        except KeyError:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = None
                 for compound in step['right']:
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound] = {}
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['stochio'] = step['right'][compound]
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG'] = None
-                    out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['dG_uncertainty'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound] = {}
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['stoichiometry'] = step['right'][compound]
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['dG'] = None
+                    out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['dG_uncertainty'] = None
+                    ######### SMILES #####
                     try: 
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = rp_smiles[compound]
+                        out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = rp_smiles[compound]
                     except KeyError:
-                        out_rp_paths[step['path_id']]['path'][step['step']]['step'][compound]['smiles'] = None
+                        try:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = smiles_inchi[compound]['smiles']
+                        except KeyError:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['smiles'] = None
+                    ######## InChI #######
+                    try:
+                        out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = rp_smiles_inchi[rp_smiles[compound]]
+                    except KeyError:
+                        try:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = smiles_inchi[compound]['inchi']
+                        except KeyError:
+                            out_rp_paths[step['path_id']]['path'][step['step']]['steps'][compound]['inchi'] = None
         return out_rp_paths
 
 

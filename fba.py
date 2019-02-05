@@ -19,18 +19,10 @@ class FBA:
 
     ############################### PRIVATE FUNCTIONS ############################
 
-    def _switchToCPLEX(self, models):
-        """ 
-        All the models are swiched to using the CPLEX solver
-        """
-        #TODO: have a check to see if you can access the CPLEX solver before assigning it to each model
-        for model_id in models:
-            models[model_id].solver = 'cplex'
-
 
     #TODO: export the models into SBML, controlling the versions
     #TODO: export the heterologous reactions into SBML format
-    def _exportSBML(self, type_name, models, inputType, path=None):
+    def _exportSBML(self, type_name, model, model_id, inputType, path=None):
         """
         Function to export models generated in libSBML or cobraPy to SBML
         cobra.io.write_legacy_sbml(models[model_id], 
@@ -57,6 +49,7 @@ class FBA:
         if not os.path.exists(p):
             os.makedirs(p)
         ########## export ###################
+        """
         for model_id in models:
             if inputType=='cobrapy':
                 cobra.io.write_sbml_model(models[model_id],
@@ -68,6 +61,17 @@ class FBA:
             else:
                 logging.error('Cannot recognise input type')
                 return False
+        """
+        if inputType=='cobrapy':
+            cobra.io.write_sbml_model(model,
+                                        p+'/'+str(model_id)+'.sbml', 
+                                        use_fbc_package=False)
+        elif inputType=='libsbml':
+            libsbml.writeSBMLToFile(model,
+                            p+'/'+str(model_id)+'.sbml')
+        else:
+            logging.error('Cannot recognise input type')
+            return False
         return True
 
 
@@ -113,25 +117,26 @@ class FBA:
 
     ############################### PUBLIC FUNCTIONS ############################# 
 
+
     #function that takes the location of the database, the model of interest, and the RetroPath2.0 output
     #and constructs models including the heterologous pathway
-    def runAll(self, cofactors_rp_paths, rr_reactions, model_compartments, cobra_model, rp_smiles, isCPLEX=False):
+    #def runAll(self, cofactors_rp_paths, rr_reactions, model_compartments, cobra_model, rp_smiles, isCPLEX=False, isExport=False):
+    def runAll(self, cofactors_rp_paths, model_compartments, cobra_model, isCPLEX=False, isExport=False):
         """run all the FBA models
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
         #self.rp_sbml_paths = self.constructPaths_libSBML(cofactors_rp_paths, True)
         #self.rp_sbml_paths = self.constructPaths(cofactors_rp_paths, model_compartments, rp_smiles, True)
-        self.rp_sbml_models = self.constructModels_cobraPy(cofactors_rp_paths, model_compartments, cobra_model, True)
-        if isCPLEX:
-            self._switchToCPLEX(self.rp_sbml_models)
+        #self.rp_sbml_models = self.constructModels_cobraPy(cofactors_rp_paths, model_compartments, cobra_model, True)
+        #if isCPLEX:
+        #    self._switchToCPLEX(self.rp_sbml_models) 
+        """
         self.results = {}
         self.results['biomass'] =  self.simulateBiomass(self.rp_sbml_models)
         self.results['target'] = self.simulateTarget(self.rp_sbml_models)
         self.results['biLevel'] = self.simulateBiLevel(self.rp_sbml_models)
         self.results['splitObjective'] = self.simulateSplitObjective(self.rp_sbml_models)
-
-
         self.results['biomass'] = {}
         self.results['biomass']['cameo'], self.results['biomass']['sorted'] = self.simulateBiomass(self.rp_sbml_models)
         self.results['target'] = {}
@@ -140,14 +145,32 @@ class FBA:
         self.results['splitObjective']['cameo'], self.results['splitObjective']['sorted'] = self.simulateSplitObjective(self.rp_sbml_models)
         self.results['biLevel'] = {}
         self.results['biLevel']['cameo'], self.results['biLevel']['sorted'] = self.simulateBiLevel(self.rp_sbml_models)
+        """
+        ############# Changig it so that the functions take a single path and
+        # fills the results in the cofactors_rp_paths
+        for path_id in cofactors_rp_paths:
+            logging.info('################## FBA Analysis for path '+str(path_id)+'  #####################')
+            tmp_model = self.constructModel_cobraPy(cofactors_rp_paths[path_id], 
+                                                    path_id, 
+                                                    model_compartments, 
+                                                    cobra_model, 
+                                                    isExport)
+            if isCPLEX:
+                tmp_model.solver = 'cplex'
+            self.simulateBiomass(cofactors_rp_paths[path_id], tmp_model)
+            self.simulateTarget(cofactors_rp_paths[path_id], tmp_model)
+            self.simulateBiLevel(cofactors_rp_paths[path_id], tmp_model)
+            self.simulateSplitObjective(cofactors_rp_paths[path_id], tmp_model)
         return True 
+
 
     #TODO: write the function
     def constructModels_liSBML(self):
         return False
 
+
     #TODO: rewrite it to match with other functions
-    def constructModels_cobraPy(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
+    def OLD_constructModels_cobraPy(self, cofactors_rp_paths, ori_model_compartments, ori_model, isExport=False, inPath=None):
         """
             Returns a dictionnary of models with the keys the path from RP2paths out_paths.csv
             and the instructions to plot the heterologous pathway (as well as the metabolic sink and the source)
@@ -166,7 +189,7 @@ class FBA:
             model = ori_model.copy()
             #enumerate all the different compounds from the path
             #new_meta = list(set([y for i in path for y in itertools.chain(i['right'], i['left'])]))
-            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
+            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['steps'].keys()])
             all_meta = {}
             for meta in new_meta:
                 #remove the ones that already exist in the model
@@ -186,8 +209,8 @@ class FBA:
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
                 reaction.gene_reaction_rule = 'rpGene_'+str(step_id)
                 reac_meta = {}
-                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
-                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
+                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['steps']:
+                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][mnxm]['stoichiometry'])
                 reaction.add_metabolites(reac_meta)
                 model.add_reactions([reaction])
             ################# Extracellular transport of target
@@ -228,6 +251,86 @@ class FBA:
 
 
 
+    #TODO: rewrite it to match with other functions
+    def constructModel_cobraPy(self, cofactors_rp_path, model_id, ori_model_compartments, ori_model, isExport=False, inPath=None):
+        """
+            Returns a dictionnary of models with the keys the path from RP2paths out_paths.csv
+            and the instructions to plot the heterologous pathway (as well as the metabolic sink and the source)
+            to generate a plot in networkx
+        """
+        cytoplasm_compartment = [i for i in ori_model_compartments if ori_model_compartments[i]['short_name']=='c'][0] # this assuming that there is always only one result
+        extracellular_compartment = [i for i in ori_model_compartments if ori_model_compartments[i]['short_name']=='e'][0] # this assuming that there is always only one result
+        #list all the metabolites in the model. WARNING: works only for MNXM models
+        #all_inputModel_metabo = [i.id.split('__')[0] for i in ori_model.metabolites]
+        #NOTE: we assume that the metabolites are all in the cytoplasm (apart from the last transport step)
+        #TODO: need to flag that the metabolites (sink) first step in the reaction is contained in the model - to validate the rp_path
+        ########### METABOLITES #########################
+        #create a new model where we will add this path to it
+        model = ori_model.copy()
+        #enumerate all the different compounds from the path
+        #new_meta = list(set([y for i in path for y in itertools.chain(i['right'], i['left'])]))
+        new_meta = set([i for step_id in cofactors_rp_path['path'] for i in cofactors_rp_path['path'][step_id]['steps'].keys()])
+        all_meta = {}
+        for meta in new_meta:
+            #remove the ones that already exist in the model
+            if not meta in all_meta:
+                try:
+                    #NOTE: we assume that all the metabolites that we add here are in the cytoplasm
+                    #return the metaolite if already in the model
+                    all_meta[meta] = model.metabolites.get_by_id(meta+'__64__'+cytoplasm_compartment)
+                except KeyError:
+                    #if not in the model create a new one
+                    all_meta[meta] = cobra.Metabolite(meta, name=meta, compartment=cytoplasm_compartment)
+        ############## REACTIONS ##########################
+        for step_id in cofactors_rp_path['path']:
+            reaction = cobra.Reaction('rpReaction_'+str(step_id))
+            #reaction.name = 
+            reaction.lower_bound = 0.0 # assume that all the reactions are irreversible
+            reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
+            reaction.gene_reaction_rule = 'rpGene_'+str(step_id)
+            reac_meta = {}
+            for mnxm in cofactors_rp_path['path'][step_id]['steps']:
+                reac_meta[all_meta[mnxm]] = float(cofactors_rp_path['path'][step_id]['steps'][mnxm]['stoichiometry'])
+            reaction.add_metabolites(reac_meta)
+            model.add_reactions([reaction])
+        ################# Extracellular transport of target
+        #NOTE: some molecules cannot be exported and thus this step should not be added
+        #identify the target molecule
+        target_name = [i for i in new_meta if i[:6]=='TARGET'][0]
+        #create the metabolite for the extracellular version of the target metabolite
+        extracell_target = cobra.Metabolite(target_name+'_e', name=target_name, compartment=extracellular_compartment)
+        #Add the export from the cytoplasm to the extracellular matrix ######
+        #exportReaction = cobra.Reaction('exportTarget')
+        #exportReaction.name = 'ExportTarget'
+        exportReaction = cobra.Reaction('targetSink')
+        exportReaction.name = 'targetSink'
+        exportReaction.lower_bound = 0.0 #default = 0.0
+        exportReaction.upper_bound = 999999.0 #default = 1000 TODO: see if changing this changes something
+        #these are the bounds for the yeast bigg model
+        #TODO: check .reversibility of the reaction after setting these bounds
+        #add that metabolite to the 
+        #exportReaction.add_metabolites({extracell_target: 1.0, all_meta[target_name]: -1.0})
+        exportReaction.add_metabolites({all_meta[target_name]: -1.0})
+        #print(exportReaction.data_frame())  
+        model.add_reactions([exportReaction])
+        ################### Add the sink reaction
+        '''
+        sinkReaction = cobra.Reaction('targetSink')
+        sinkReaction.name = 'TargetSink'
+        sinkReaction.lower_bound = 0.0 # we assume that all the reactions are irreversible
+        sinkReaction.upper_bound = 999999.0 # this is dependent on the fluxes of the other reactions
+        sinkReaction.add_metabolites(
+            {extracell_target: -1.0})
+        model.add_reactions([sinkReaction])
+        '''
+        if isExport:
+            self._exportSBML('sbml_models', model, model_id, 'cobrapy', inPath)
+        return model
+
+
+
+
+
     def constructPaths_libSBML(self, cofactors_rp_paths, isExport=False, inPath=None, compartment='MNXC3'):
         """
         Function to construct a series of libSBML objects for using FBC (constraint based) 
@@ -254,13 +357,13 @@ class FBA:
             self._checklibSBML(cytoplasm.setSize(1), 'set compartment "size"')
             self._checklibSBML(cytoplasm.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
             #Species
-            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
+            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['steps']])
             ##### TODO replace with list comprehension
             meta_smiles = {}
             for step_id in cofactors_rp_paths[path_id]['path']:
-                for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']:
-                    meta_smiles[meta] = cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['smiles']
-            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['step']])
+                for meta in cofactors_rp_paths[path_id]['path'][step_id]['steps']:
+                    meta_smiles[meta] = cofactors_rp_paths[path_id]['path'][step_id]['steps'][meta]['smiles']
+            new_meta = set([species for step_id in cofactors_rp_paths[path_id]['path'] for species in cofactors_rp_paths[path_id]['path'][step_id]['steps']])
             for meta in new_meta:
                 spe = model.createSpecies()
                 self._checklibSBML(spe, 'create species') 
@@ -297,25 +400,25 @@ class FBA:
                 self._checklibSBML(reac.setFast(False), 'set reaction "fast" attribute')
                 #TODO: different files with the same step_id and path_id would have the same metaid --> check that its not a problem
                 self._checklibSBML(reac.setMetaId(self._nameToSbmlId('_'+md5(str(str(path_id)+'_'+str(step_id)).encode('utf-8')).hexdigest())), 'setting species metaID')
-                for meta in cofactors_rp_paths[path_id]['path'][step_id]['step']: 
+                for meta in cofactors_rp_paths[path_id]['path'][step_id]['steps']: 
                     #### reactants ###
-                    if float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])<0:
+                    if float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][meta]['stoichiometry'])<0:
                         spe_r = reac.createReactant()
                         self._checklibSBML(spe_r, 'create reactant')
                         self._checklibSBML(spe_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign reactant species')
                         #self._checklibSBML(spe_r.setName(str(meta)+'_'+str(compartment)), 'assign reactant species')
                         self._checklibSBML(spe_r.setConstant(True), 'set "constant" on species '+str(meta))
-                        self._checklibSBML(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio']))), 'set stoichiometry')
+                        self._checklibSBML(spe_r.setStoichiometry(abs(float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][meta]['stoichiometry']))), 'set stoichiometry')
                     #### products ###
-                    elif float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])>0:
+                    elif float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][meta]['stoichiometry'])>0:
                         pro_r = reac.createProduct()
                         self._checklibSBML(pro_r, 'create product')
                         self._checklibSBML(pro_r.setSpecies(str(meta)+'__64__'+str(compartment)), 'assign product species')
                         #self._checklibSBML(pro_r.setName(str(meta)+'_'+str(compartment)), 'assign product species')
                         self._checklibSBML(pro_r.setConstant(True), 'set "constant" on species '+str(meta))
-                        self._checklibSBML(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['step'][meta]['stochio'])), 'set the stoichiometry')
+                        self._checklibSBML(pro_r.setStoichiometry(float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][meta]['stoichiometry'])), 'set the stoichiometry')
                     else:
-                        logging.error('The stochiometry is 0 for path_id: '+str(path_id)+', step_id: '+str(step_id))
+                        logging.error('The stoichiometry is 0 for path_id: '+str(path_id)+', step_id: '+str(step_id))
                 #add the SMILES to the notes
                 self._checklibSBML(reac.setNotes("<body xmlns='http://www.w3.org/1999/xhtml'><p>SMILES: "+str(cofactors_rp_paths[path_id]['path'][step_id]['smiles'])+"</p></body>"), 'appending the SMILES notes for the reaction')
             all_rp_models[path_id] = sbmlDoc
@@ -340,7 +443,7 @@ class FBA:
             #create a new model where we will add this path to it
             model = cobra.Model(str(path_id))
             #new_meta=list(set([y for i in cofactors_rp_paths[path] for y in itertools.chain(i['right'], i['left'])]))
-            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['step'].keys()])
+            new_meta = set([i for path_id in cofactors_rp_paths for step_id in cofactors_rp_paths[path_id]['path'] for i in cofactors_rp_paths[path_id]['path'][step_id]['steps'].keys()])
             all_meta = {}
             #enumerate all the unique compounds from a path
             for meta in new_meta:
@@ -357,8 +460,8 @@ class FBA:
                 reaction.upper_bound = 999999.0 #this is dependent on the fluxes of the others reactions
                 reaction.gene_reaction_rule = 'RPGene_'+str(step_id)
                 reac_meta = {}
-                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['step']:
-                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['step'][mnxm]['stochio'])
+                for mnxm in cofactors_rp_paths[path_id]['path'][step_id]['steps']:
+                    reac_meta[all_meta[mnxm]] = float(cofactors_rp_paths[path_id]['path'][step_id]['steps'][mnxm]['stoichiometry'])
                 reaction.add_metabolites(reac_meta)
                 model.add_reactions([reaction])
             ################# Extracellular transport of target
@@ -389,14 +492,16 @@ class FBA:
             self._exportSBML('sbml_paths', rp_sbml_paths, 'cobrapy', inPath)
         return rp_sbml_paths
 
-
+    ########################################################################
     ############################### FBA pathway ranking ####################
+    ########################################################################
 
     #1) Number of interventions
+    # need to calculate the number of steps that are not native to know the number of interventions
 
     #2) Maximal growth rate
 
-    def simulateBiomass(self, all_rp_models):
+    def OLD_simulateBiomass(self, all_rp_models):
         biomass = {}
         for model_id in all_rp_models:
             biomass[model_id] = {}
@@ -406,6 +511,14 @@ class FBA:
         #TODO: return a sorted list of the best performing pathways
 
 
+    def simulateBiomass(self, cofactors_rp_path, model):
+        #TODO: update the objective function here
+        res = model.optimize()
+        cofactors_rp_path['flux_biomass'] = res.fluxes['targetSink']
+        for step_id in cofactors_rp_path['path']:
+            cofactors_rp_path['path'][step_id]['flux_biomass'] = res.fluxes['rpReaction_'+str(step_id)]
+        return True
+
     #3) Minimum product yeild at maximal growth rate
 
     #4) Minimum product yeild
@@ -413,6 +526,8 @@ class FBA:
     #5) Anaerobic condition
 
     #6) Number of potentially disruptive products
+
+        #Toxicity?
 
     #7) Number of accessible metabolites (avoid intermediate accumulation)
 
@@ -426,7 +541,7 @@ class FBA:
     #TODO: all simulations are done with cobrapy and as such, if the model is created with libSBML, needs to
     #be passed to cobraPy
 
-    def simulateTarget(self, all_rp_models):
+    def OLD_simulateTarget(self, all_rp_models):
         target = {}
         for model_id in all_rp_models:
             target[model_id] = {}
@@ -436,8 +551,18 @@ class FBA:
         return target, sorted([(target[i].fluxes['targetSink'], i) for i in target.keys()], reverse=True)
         #TODO: return a sorted list of the best performing pathways
 
+    def simulateTarget(self, cofactors_rp_path, model):
+        model.objective = 'targetSink'
+        res = model.optimize()
+        cofactors_rp_path['flux_target'] = res.fluxes['targetSink']
+        for step_id in cofactors_rp_path['path']:
+            cofactors_rp_path['path'][step_id]['flux_target'] = res.fluxes['rpReaction_'+str(step_id)]
+        return True
 
-    def simulateSplitObjective(self, all_rp_models, biomass=0.5):
+
+
+
+    def OLD_simulateSplitObjective(self, all_rp_models, biomass=0.5):
         if not 0.0<biomass<1.0:
             logging.error('The proportion of the objective that is given to BIOMASS must be 0.0< and 1.0>')
             return {}
@@ -451,8 +576,21 @@ class FBA:
         return splitObj, sorted([(splitObj[i].fluxes['targetSink'], i) for i in splitObj.keys()], reverse=True)
         #TODO: return a sorted list of the best performing pathways
 
+    def simulateSplitObjective(self, cofactors_rp_path, model, ratio_biomass=0.5):
+        if not 0.0<ratio_biomass<1.0:
+            logging.error('The proportion of the objective that is given to BIOMASS must be 0.0< and 1.0>')
+            return False
+        model.objective = {model.reactions.R48E37591: ratio_biomass, 
+                            model.reactions.targetSink: 1.0-ratio_biomass}
+        res = model.optimize()
+        cofactors_rp_path['flux_splitObj'] = res.fluxes['targetSink']
+        for step_id in cofactors_rp_path['path']:
+            cofactors_rp_path['path'][step_id]['flux_splitObj'] = res.fluxes['rpReaction_'+str(step_id)] 
+        return True
 
-    def simulateBiLevel(self, all_rp_models):
+
+
+    def OLD_simulateBiLevel(self, all_rp_models):
         sim_res = {}
         for model_id in all_rp_models:
             sim_res[model_id] = {}
@@ -467,4 +605,15 @@ class FBA:
         #return sim_res, sorted(sim_res.items(), key=lambda x: x[1], reverse=True)
         return sim_res, sorted([(sim_res[i].fluxes[0]['targetSink'], i) for i in sim_res.keys()], reverse=True)
 
+    def simulateBiLevel(self, cofactors_rp_path, model):
+        try:
+            optknock = OptKnock(model, exclude_non_gene_reactions=False, remove_blocked=False)
+            sim_res = optknock.run(max_knockouts=0, target='targetSink', biomass=self.biomassID)
+            cofactors_rp_path['flux_biLevel'] = sim_res.fluxes[0]['targetSink']
+        except KeyError:
+            logging.error('KeyError with targetSink.... Not sure why that is')
+            return False
+        for step_id in cofactors_rp_path['path']:
+            cofactors_rp_path['path'][step_id]['flux_biLevel'] = sim_res.fluxes[0]['rpReaction_'+str(step_id)]
+        return True
 

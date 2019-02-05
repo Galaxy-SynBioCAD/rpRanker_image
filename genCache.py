@@ -7,6 +7,8 @@ import pickle
 import sqlite3
 from ast import literal_eval
 
+import gzip
+
 class Cache:
     def __init__(self, inputPath=None):
         if inputPath and inputPath[-1:]=='/':
@@ -76,6 +78,10 @@ class Cache:
         #rr_reactions
         logging.info('Generating rr_reactions')
         pickle.dump(self.rr_reactions(), open('cache/rr_reactions.pickle', 'wb'))
+        #smiles_inchi --> use gzip since it is a large file
+        logging.info('Parsing the SMILES and InChI')
+        #pickle.dump(self.smiles_inchi(), open('cache/smiles_inchi.pickle', 'wb'))
+        pickle.dump(self.smiles_inchi(), gzip.open('cache/smiles_inchi.pickle.gz','wb'))
 
 
     #TODO: save the deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
@@ -93,6 +99,17 @@ class Cache:
             a.update(self.convertMNXM)
             a['MNXM01'] = 'MNXM1'
         return a
+
+
+    def smiles_inchi(self, chem_prop_path=None):
+        #TODO: need to reduce the size of this file. As it stands its 250MB
+        smiles_inchi = {}
+        with open(self._checkFilePath(chem_prop_path, 'chem_prop.tsv')) as f:
+            c = csv.reader(f, delimiter='\t')
+            for row in c:
+                if not row[0][0]=='#':
+                    smiles_inchi[row[0]] = {'smiles': row[6], 'inchi': row[5]}
+        return smiles_inchi
 
 
     def mnxm_dG(self,
