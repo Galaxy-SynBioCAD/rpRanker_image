@@ -107,12 +107,6 @@ class InputReader:
         except FileNotFoundError:
             logging.error('The file '+str(path+'/mnxm_dG.pickle')+' does not seem to exist')
             return False
-        """
-        try:
-            self.smiles_inchi = pickle.load(open(self._checkFilePath(path, 'smiles_inchi.pickle'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/smiles_inchi.pickle')+' does not seem to exists')
-        """
         try:
             self.smiles_inchi = pickle.load(gzip.open(self._checkFilePath(path, 'smiles_inchi.pickle.gz'), 'rb'))
         except FileNotFoundError:
@@ -152,7 +146,6 @@ class InputReader:
 
     def compounds(self, path=None):
         """ Method to parse all the RP output compounds.
-        TODO: remove
         """
         rp_compounds = {}
         try:
@@ -278,93 +271,6 @@ class InputReader:
             return {}
 
 
-    def OLD_outPaths(self, path=None):
-        """RP2path Metabolic pathways form out_paths.csv
-        create all the different values for heterologous paths from the RP2path out_paths.csv file
-        Note that path_step are in reverse order here
-        """
-        ########## open either the global path or the local defined path ############
-        #### (with priority with the local path)
-        try:
-            rp_paths = {}
-            with open(self._checkFilePath(path, 'out_paths.csv')) as f:
-                reader = csv.reader(f)
-                next(reader)
-                current_path_id = 0
-                path_step = 0
-                for row in reader:
-                    if not int(row[0])==current_path_id:
-                        path_step = 0
-                    else:
-                        path_step += 1
-                    current_path_id = int(row[0])
-                    for singleRule in row[2].split(','):
-                        tmpReac = {'rule_id': singleRule,
-                                'right': {},
-                                'left': {},
-                                'step': path_step,
-                                'path_id': int(row[0]),
-                                'transformation_id': row[1][:-2]}
-                        for l in row[3].split(':'):
-                            tmp_l = l.split('.')
-                            try:
-                                #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
-                                mnxm = ''
-                                if tmp_l[1] in self.deprecatedMNXM_mnxm:
-                                    mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
-                                else:
-                                    mnxm = tmp_l[1]
-                                tmpReac['left'][mnxm] = int(tmp_l[0])
-                            except ValueError:
-                                logging.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
-                                return {}
-                        for r in row[4].split(':'):
-                            tmp_r = r.split('.')
-                            try:
-                                #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
-                                mnxm = ''
-                                if tmp_r[1] in self.deprecatedMNXM_mnxm:
-                                    mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]
-                                else:
-                                    mnxm = tmp_r[1]
-                                tmpReac['right'][mnxm] = int(tmp_r[0])
-                            except ValueError:
-                                logging.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
-                                return {}
-                        try:
-                            if not int(row[0]) in rp_paths:
-                                rp_paths[int(row[0])] = []
-                            rp_paths[int(row[0])].insert(0, tmpReac)
-                        except ValueError:
-                            logging.error('Cannot convert path_id to int ('+str(row[0])+')')
-                            return {}
-            ####### now check where are the duplicates path_steps in each path and duplicate if yes ###
-            toRet_rp_paths = [] # we make this into a list instead of a dict 
-            #to find index positions in an array: usage find([1,3,4,5],[2,3])
-            find = lambda searchList, elem: [[i for i, x in enumerate(searchList) if x == e] for e in elem]
-            #loop through all path metabolic steps in order
-            for path in rp_paths:
-                dupli_items = [item for item, count in collections.Counter([i['step'] for i in rp_paths[path]]).items() if count>1]
-                dupli_index = find([i['step'] for i in rp_paths[path]], dupli_items)
-                flat_dupli_index = [item for sublist in dupli_index for item in sublist]
-                if not dupli_items:
-                    toRet_rp_paths.append(rp_paths[path])
-                else:
-                    keep_always_index = [i for i in [y for y in range(len(rp_paths[path]))] if i not in flat_dupli_index]
-                    for dupli_include in list(itertools.product(*dupli_index)):
-                        toAdd_index = list(keep_always_index+list(dupli_include))
-                        new_path = []
-                        for ta_i in toAdd_index:
-                            new_path.append(rp_paths[path][ta_i])
-                        new_path = sorted(new_path, key=lambda k: k['step'], reverse=True)
-                        toRet_rp_paths.append(new_path)
-            #self.rp_paths = toRet_rp_paths
-            return toRet_rp_paths
-        except (TypeError, FileNotFoundError) as e:
-            logging.error('Could not read the out_paths file ('+str(path)+')')
-            return {}
-
-
     def addCofactors(self, in_rp_paths, rr_reactions, rp_smiles, rp_transformation, smiles_inchi, rp_smiles_inchi):
         """Adds the cofactors to the retropath reactions
         """
@@ -414,6 +320,8 @@ class InputReader:
                 #are not the same as the ones from MNX. Determine if that is valid
                 #step['cmp_mnx'] = step_iden_CMP
         ##### change the format of rp_paths from lists to dictionnaries #####
+        #This is where we define the structure of the JSON output that is passed between different nodes
+        #of the pathway ranker
         out_rp_paths = {}
         for path in rp_paths:
             out_rp_paths[path[0]['path_id']] = {}

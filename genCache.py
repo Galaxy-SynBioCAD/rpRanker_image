@@ -150,6 +150,8 @@ class Cache:
                             mnxm = mnx[1]
                         kegg_mnxm[mnxm] = row[1]
         ####################### cc_compounds ############
+        #TODO: seems like the new version of equilibrator got rid of this file... need to update the function
+        #to take as input the new file --> i.e. the JSON input
         notFound_cc = []
         gz_file = gzip.open(self._checkFilePath(cc_compounds_path, 'cc_compounds.json.gz'), 'rb')
         f_c = gz_file.read()
@@ -215,7 +217,7 @@ class Cache:
         return cc_alberty
 
 
-    #implement parsing a MNX flat file for the generation of the rr_reactions flat file
+    #implement parsing a MNX flat file for the generation of the rr_reactions flat file instead of parsing the database file
     #TODO: change the name of the parameter to generate the correct one
     def reactions_mnx(self):
         return False
