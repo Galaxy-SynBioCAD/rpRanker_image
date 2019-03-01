@@ -11,7 +11,11 @@ class Annotate():
         self.path = path
         self.model = None
 
-    ####### helper 
+
+    ##########################################
+    ####### Private functions ################ 
+    ##########################################
+
 
     def _exportSBML(self, type_name, model, model_id, path=None):
         """Export the libSBML model to an SBML file
@@ -42,11 +46,16 @@ class Annotate():
         return True
 
 
-    def _openSBML(self, ):
+    def _openSBML(self, filename):
         """Situation where an SBML is passed to add the heterologous pathway
         """
-    
-
+        document = libSBML.readSBML(filename)
+        model = document.model
+        errors = document.getNumErrors()
+        if errors>0:
+            logger.warning('Reading the document has returned some errors ('+str(errors)+')')
+            return False
+        return model
 
     def _checklibSBML(self, value, message):
         """Check that the libSBML python calls do not return error INT and if so, display the error
@@ -67,6 +76,7 @@ class Annotate():
         else:
             logging.info(message)
             return
+
 
     def _nameToSbmlId(self, name):
         """Function to rewrite a string to libSBML metaid valid format
@@ -95,6 +105,9 @@ class Annotate():
         return nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())        
 
 
+    ############# WRITE ##################
+
+
     def createModel(self, name, model_id):
         """Function that creates a new libSBML model instance and initiates it with the appropriate
         packages. Creates a cytosol compartment
@@ -117,6 +130,7 @@ class Annotate():
         checklibSBML(self.model.setSubstanceUnits('mole'), 'setting model substance unit')
         return True
 
+
     def createCompartment(self, model, size, name, compartment_id):
         ## cytoplasm compartment TODO: consider seperating it in another function 
         # if another compartment is to be created
@@ -129,6 +143,7 @@ class Annotate():
         checklibSBML(comp.setName(name), 'set the name for the cytoplam')
         return True
 
+
     def createUnitDefinition(self, model, unit_id):
         """Function that creates a unit definition (composed of one or more units)
         """
@@ -137,6 +152,7 @@ class Annotate():
         checklibSBML(unitDef.setId(unit_id), 'setting flux id')
         checklibSBML(unitDef.setMetaId(genMetaID(unit_id)), 'Setting flux metaID')
         return True
+
 
     def createUnit(self, unitDef, libsbmlunit, exponent, scale, multiplier):
         """Function that created a unit
@@ -148,6 +164,7 @@ class Annotate():
         checklibSBML(unit.setScale(scale), 'setting the scale of the mole unit')
         checklibSBML(unit.setMultiplier(multiplier), 'setting the multiplier of the mole unit')
         return True
+
 
     def createParameter(self, parameter_id, value, unit):
         """Parameters, in our case, used for the bounds for FBA analysis.
@@ -163,24 +180,14 @@ class Annotate():
         checklibSBML(infParam.setMetaId(genMetaID(parameter_id), 'setting INF meta ID')
         return True
 
-    def createReaction(self, model, reaction_id, name, fluxBounds, reactants, products, reaction_smiles):
+
+    def createReaction(self, model, reaction_id, name, reactants, products, reaction_smiles):
         """Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the 
         first position that is the upper bound and the second is the lower bound. reactants_dict and 
         reactants_dict are dictionnaries that hold the following parameters: name, compartments, stoichiometry 
         """
         reac = model.createReaction()
         checklibSBML(reac, 'create reaction')
-        ################ FBC ####################
-        reac_fbc = reac.getPlugin('fbc')
-        checklibSBML(reac_fbc, 'extending reaction for FBC')
-        #bounds
-        if len(fluxBunds)==2 and isinstance(fluxBounds, list):
-            checklibSBML(reac_fbc.setUpperFluxBound(fluxBounds[0]), 'setting '+name+' upper flux bound')
-            checklibSBML(reac_fbc.setLowerFluxBound(fluxBounds[1]), 'setting '+name+' lower flux bound')
-        else:
-            logging.error('fluxBounds is either not len()==2 or is not a list')
-            return False
-        #########################################
         #reactions
         checklibSBML(reac.setId(reaction_id), 'set reaction id') #same convention as cobrapy
         checklibSBML(reac.setName(name), 'set name') #same convention as cobrapy
@@ -225,8 +232,9 @@ class Annotate():
         return True
 
 
-    def createSpecies(self, model, compartment, name):
-        """Create a libSBML species with FBC parameters and custom IBISBA annotations 
+    def createSpecies(self, model, compartment, name, group=None, smiles=None, inchi=None, inchikey=None):
+        """Create a libSBML species with FBC parameters and custom IBISBA annotations. Note that this
+        assumes that the species is newly created
         """
         spe = model.createSpecies()
         checklibSBML(spe, 'create species')
@@ -256,60 +264,162 @@ class Annotate():
   xmlns:bqmodel="http://biomodels.net/model-qualifiers/"
   xmlns:ibisba="http://ibisba.eu/qualifiers">'''
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
-        if meta[:3]=='MNX':
+        if name[:3]=='MNX':
             annotation += '''
-  <rdf:Description rdf:about="#'''+str(metaID)+'''">
-    <bqbiol:is>
-      <rdf:Bag>
-        <rdf:li rdf:resource="http://identifiers.org/metanetx.chemical/'''+str(meta)+'''"/>
-      </rdf:Bag>
-    </bqbiol:is>
-  </rdf:Description>'''   
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <bqbiol:is>
+        <rdf:Bag>
+          <rdf:li rdf:resource="http://identifiers.org/metanetx.chemical/'''+str(name)+'''"/>
+        </rdf:Bag>
+      </bqbiol:is>
+    </rdf:Description>'''   
         #add IBISBA additional information
-        if meta_smiles[meta]:
+        ##########SMILES#############
+        if smiles:
             annotation += '''
-  <rdf:Description rdf:about="#'''+str(metaID)+'''">
-    <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-      <ibisba:smiles>'''+str(meta_smiles[meta])+'''</ibisba:smiles>'''
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
+        <ibisba:smiles>'''+str(smiles)+'''</ibisba:smiles>'''
         else:
             annotation += '''
-            <rdf:Description rdf:about="#'''+str(metaID)+'''">
-              <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-                <ibisba:smiles></ibisba:smiles>'''
-        if meta_inchi[meta]:
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
+        <ibisba:smiles></ibisba:smiles>'''
+        ################INCHI############
+        if inchi:
             annotation += '''
-            <ibisba:inchi>'''+str(meta_inchi[meta])+'''</ibisba:inchi>
-            <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(meta_inchi[meta]))+'''</ibisba:inchikey>'''
+        <ibisba:inchi>'''+str(inchi)+'''</ibisba:inchi>'''
         else:
             annotation += '''
-            <ibisba:inchi></ibisba:inchi>
-            <ibisba:inchikey></ibisba:inchikey>'''
+        <ibisba:inchi></ibisba:inchi>'''
+        ###############INCHIKEY###########
+        if inchikey:
+            annotation += '''
+        <ibisba:inchikey>'''+str(inchikey)+'''</ibisba:inchikey>'''
+        elif inchi and not inchikey:
+            annotation += '''
+        <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(meta_inchi[meta]))+'''</ibisba:inchikey>'''
+        else:
+            annotation += '''
+        <ibisba:inchikey></ibisba:inchikey>'''
         annotation += '''
-            <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
-            <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
-          </ibisba:ibisba>
-        </rdf:Description>'''
+        <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
+        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
+      </ibisba:ibisba>
+    </rdf:Description>'''
         annotation += '''
-      </rdf:RDF>
-    </annotation>'''
+  </rdf:RDF>
+</annotation>'''
         checklibSBML(spe.setAnnotation(annotation), 'setting the annotation for new species')
-    
+        return True    
 
 
-    def createPathway(self, ):
+    def createPathway(self, model, pathway_id, name, reaction_refIDs):
         """Create the collection of reactions that constitute the pathway using the Groups
         package and create the custom IBIBSA annotations
+        The metaID_list is a list of strings corresponding to the metaID of the reactions that
+        are to be added to the 
         """
-        
+        groups_plugin = model.getPlugin("groups")
+        hetero_group = groups_plugin.createGroup()
+        checklibSBML(hetero_group, 'creating a groups parameter')
+        checklibSBML(hetero_group.setId(pathway_id), 'setting pathway id')
+        metaID = _genMetaID(pathway_id)
+        checklibSBML(hetero_group.setMetaId(metaID), 'setting pathway metaID')
+        checklibSBML(hetero_group.setName(name), 'setting pathway name')
+        #we should always need to define this group as a COLLECTION
+        checklibSBML(hetero_group.setKind(libsbml.GROUP_KIND_COLLECTION), 'setting the groups as a collection')
+        annotation = '''<annotation>
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
+  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
+        <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
+        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
+      </ibisba:ibisba>
+    </rdf:Description>
+  </rdf:RDF>
+</annotation>'''
+        hetero_group.setAnnotation(annotation)
+        for r in reaction_refIDs:
+            newMember = group.createMember()
+            checklibSBML(newMember, 'creating a new groups member')
+            checklibSBML(newMember.setIdRef(r))
+        return True
 
-    def createGene(self, ):
+
+    def createGene(self, model, name, gene_id, label, associated_reaction):
         """Create the list of genes in the model including its custom IBISBA annotatons 
         """
+        fbc_plugin = model.getPlugin('fbc')
+        gp = fbc_plugin.createGeneProduct()
+        checklibSBML(gp, 'creating gene product')
+        checklibSBML(gp.setId(name), 'setting gene name')
+        metaID = _genMetaID(gene_id)
+        checklibSBML(gp.setMetaId(metaID), 'setting gene metaID')
+        checklibSBML(gp.setLabel(label), 'setting gene label')
+        checklibSBML(gp.setAssociatedSpecies(associated_reaction), 'setting gene associated reaction')
+        annotation = '''<annotation>
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
+  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
+        <ibisba:fasta></ibisba:fasta>
+      </ibisba:ibisba>
+    </rdf:Description>
+  </rdf:RDF>
+</annotation>'''
+        checklibSBML(gp.setAnnotation(annotation), 'setting gene annotation')
+        return True
 
-    
-    def createFluxObj(self, ):
-    
+
+    #note that this might need to be on a case by case basis, since we have the ability
+    #to define multiple objectives
+    def createFluxObj(self, model, name, fluxObj_id, obj_type, associated_reaction)
+        """Create the flux objective for the model
+        """
+        fbc_plugin = model.getPlugin("fbc")
+        target_obj = fbc_plugin.createObjective()
+        target_obj.setId(fluxObj_id)
+        target_obj.setMetaId(_genMetaID(fluxObj_id))
+        if obj_type=='maximize' or obj_type=='minimize':
+            target_obj.setType(obj_type)
+        else:
+            logger.error('the input flux objective must be either maximize or minimize')
+            return False
+        fbc_plugin.setActiveObjectiveId('target_obj') # this ensures that we are using this objective when multiple
+        target_flux_obj = target_obj.createFluxObjective()
+        target_flux_obj.setReaction(associated_reaction)
+        target_flux_obj.setCoefficient(1)
+        return True
+
 
     #TODO: write the function but seems like an overkill since it makes more sense to define the boundaries
     #at the creation of the reactions
-    def createFluxBounds(self, ):
+    def createFluxBounds(self, model, name, reaction_id, upperBound, lowerBound):
+        """Create the flux bounds for an input reaction (reaction_id)
+        """
+        #TODO: wrap it with try/catch in case the reaction does not exist
+        reac = model.getReaction(reaction_id)
+        reac_fbc = reac.getPlugin('fbc')
+        checklibSBML(reac_fbc, 'extending reaction for FBC')
+        #bounds
+        checklibSBML(reac_fbc.setUpperFluxBound(upperBound), 'setting '+name+' upper flux bound')
+        checklibSBML(reac_fbc.setLowerFluxBound(lowerBound), 'setting '+name+' lower flux bound')
+        return True 
+
+    ################ READ ###################
+
+    #Need to define the datatype that can be passed to the other readers
+    #t
+    def readGenes(self, model):
+        toRet = []
+        
+            gene = {'metaid': , 'fbc_id': , 'fbc_label': , 'fbc_type': , 'flux_obj': []}
+
+
+
+
+
+
+
