@@ -50,12 +50,12 @@ class Annotate():
         """Situation where an SBML is passed to add the heterologous pathway
         """
         document = libSBML.readSBML(filename)
-        model = document.model
         errors = document.getNumErrors()
         if errors>0:
             logger.warning('Reading the document has returned some errors ('+str(errors)+')')
             return False
-        return model
+        return document.model
+
 
     def _checklibSBML(self, value, message):
         """Check that the libSBML python calls do not return error INT and if so, display the error
@@ -105,7 +105,9 @@ class Annotate():
         return nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())        
 
 
+    ######################################
     ############# WRITE ##################
+    ######################################
 
 
     def createModel(self, name, model_id):
@@ -222,8 +224,8 @@ class Annotate():
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:smiles>'''+str(reaction_smiles)+'''</ibisba:smiles>
-        <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
-        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
+        <ibisba:ddG units="kj_per_mol" value="None"/>
+        <ibisba:ddG_uncert units="kj_per_mol" value="None"/>
       </ibisba:ibisba>
     </rdf:Description>
   </rdf:RDF>
@@ -279,32 +281,32 @@ class Annotate():
             annotation += '''
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-        <ibisba:smiles>'''+str(smiles)+'''</ibisba:smiles>'''
+        <ibisba:smiles> value="'''+str(smiles)+'''" />'''
         else:
             annotation += '''
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-        <ibisba:smiles></ibisba:smiles>'''
+        <ibisba:smiles value="" />'''
         ################INCHI############
         if inchi:
             annotation += '''
-        <ibisba:inchi>'''+str(inchi)+'''</ibisba:inchi>'''
+        <ibisba:inchi> value="'''+str(inchi)+'''" />'''
         else:
             annotation += '''
-        <ibisba:inchi></ibisba:inchi>'''
+        <ibisba:inchi value="" />'''
         ###############INCHIKEY###########
         if inchikey:
             annotation += '''
-        <ibisba:inchikey>'''+str(inchikey)+'''</ibisba:inchikey>'''
+        <ibisba:inchikey value="'''+str(inchikey)+'''" />'''
         elif inchi and not inchikey:
             annotation += '''
-        <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(meta_inchi[meta]))+'''</ibisba:inchikey>'''
+        <ibisba:inchikey value="'''+str(Chem.rdinchi.InchiToInchiKey(meta_inchi[meta]))+'''" />'''
         else:
             annotation += '''
-        <ibisba:inchikey></ibisba:inchikey>'''
+        <ibisba:inchikey value="" />'''
         annotation += '''
-        <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
-        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
+        <ibisba:ddG units="kj_per_mol" value="None"/>
+        <ibisba:ddG_uncert units="kj_per_mol" value="None"/>
       </ibisba:ibisba>
     </rdf:Description>'''
         annotation += '''
@@ -334,8 +336,8 @@ class Annotate():
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
-        <ibisba:parameter type="ddG" units="kj_per_mol" value="None"/>
-        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="None"/>
+        <ibisba:ddG units="kj_per_mol" value="None"/>
+        <ibisba:ddG_uncert units="kj_per_mol" value="None"/>
       </ibisba:ibisba>
     </rdf:Description>
   </rdf:RDF>
@@ -349,7 +351,8 @@ class Annotate():
 
 
     def createGene(self, model, name, gene_id, label, associated_reaction):
-        """Create the list of genes in the model including its custom IBISBA annotatons 
+        """Create the list of genes in the model including its custom IBISBA annotatons. Note that
+        this assumes the creation of a gene that does not exist and will overwrite an existing one
         """
         fbc_plugin = model.getPlugin('fbc')
         gp = fbc_plugin.createGeneProduct()
@@ -364,7 +367,7 @@ class Annotate():
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
-        <ibisba:fasta></ibisba:fasta>
+        <ibisba:fasta value="" />
       </ibisba:ibisba>
     </rdf:Description>
   </rdf:RDF>
@@ -408,18 +411,63 @@ class Annotate():
         checklibSBML(reac_fbc.setLowerFluxBound(lowerBound), 'setting '+name+' lower flux bound')
         return True 
 
+    #########################################
     ################ READ ###################
+    #########################################
 
-    #Need to define the datatype that can be passed to the other readers
-    #t
+
+    #NOTE: these are helper functions, and the native libsbml functions should be used preferably
+    
+    def readAnnotation(self, annotation):
+        """Read the annotations of a reaction or a species etc... Structure should be the same, for each. That is:
+        level 1: annotation
+        level 2: rdf:RDF
+        level 3: rdf:Description
+        level 4: bqbiol:is/ibisba:ibisba --> former is the MIRIAM species and the other are the 
+        nest levels are the same
+        """
+        annotation = sbase.getAnnotation()
+        toRet_annot = {'miriam': {}, 'ibisba': {}}
+        if annotation.hasChild('RDF') and annotation.getChild('RDF').hasChild('Description'):
+            #test that there is at least one
+            #must consider the case that the first IBIBSA and MIRIAM annotations are "swapped"
+            for i in annotation.getChild('RDF').getNumChildren():
+                if annotation.getChild('RDF').getChild(i).hasChild('is'):
+                    for i in annotation.getChild('RDF').getChild(0).getChild('is').getChild('Bag').getNumChildren():
+                        m_a = toRet_annot.getChild('RDF').getChild(0).getChild('is').getChild('Bag').getChild(i).getAttrValue().split('/')
+                        #should we be splitting this here?
+                        if not toRet_annot['miriam'][m_a[-2].split('.')[0]]:
+                            toRet_annot['miriam'][m_a[-2].split('.')[0]] = []
+                        toRet_annot['miriam'][m_a[-2].split('.')[0]].append(m_a[-1].splt(':')[1])
+                elif annotation.getChild('RDF').getChild(i).hasChild('ibibsa'):
+                    i_a = toRet_annot.getChild('RDF').getChild(0).getChild('ibisba')
+                    #WARNING: cannot check that they exist using the 
+                    #TODO: wrap this around try/catch in case some don't have some of these
+                    toRet_annot['ibisba']['smiles'] = i_a.getChild('smiles').getAttrValue('value')
+                    toRet_annot['ibisba']['inchi'] = i_a.getChild('inchi').getAttrValue('value')
+                    toRet_annot['ibisba']['inchikey'] = i_a.getChild('inchikey').getAttrValue('value')
+                    toRet_annot['ibisba']['ddG'] = i_a.getChild('ddG').getAttrValue('value')
+                    toRet_annot['ibisba']['ddG_uncert'] = i_a.getChild('ddG_uncert').getAttrValue('value')
+        else:
+            logging.error('Either the structure is wrong or the annoation for the passed SBase is empty')
+
+
+
+    #Need to define the datatype that can be passed between the different reader functions
     def readGenes(self, model):
         toRet = []
         
             gene = {'metaid': , 'fbc_id': , 'fbc_label': , 'fbc_type': , 'flux_obj': []}
 
 
-
-
+    def readPathway(self, model):
+        """Helper function to read the pathway. Note that these are not required and one is advised to use
+        native libsbml functions to read the required information directly from the model object
+        """
+        groups_plugin = model.getPlugin('groups')
+        rp_pathway = groups_plugin.getGroup('rp_pathway')
+        annotation = rp_pathway.getAnnotation()
+        return readAnnotation(annotation)['ibisba']
 
 
 
