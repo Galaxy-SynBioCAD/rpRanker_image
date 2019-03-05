@@ -416,7 +416,9 @@ class Annotate():
     #########################################
 
 
-    #NOTE: these are helper functions, and the native libsbml functions should be used preferably
+    #NOTE: these are helper functions, and the native libsbml functions should be used preferably to
+    #access the model parameters. It is perhaps better to see these functions as examples to return the IBISBA
+    #and MIRIAM annotations
     
     def readAnnotation(self, annotation):
         """Read the annotations of a reaction or a species etc... Structure should be the same, for each. That is:
@@ -433,31 +435,40 @@ class Annotate():
             #must consider the case that the first IBIBSA and MIRIAM annotations are "swapped"
             for i in annotation.getChild('RDF').getNumChildren():
                 if annotation.getChild('RDF').getChild(i).hasChild('is'):
-                    for i in annotation.getChild('RDF').getChild(0).getChild('is').getChild('Bag').getNumChildren():
-                        m_a = toRet_annot.getChild('RDF').getChild(0).getChild('is').getChild('Bag').getChild(i).getAttrValue().split('/')
+                    for i in annotation.getChild('RDF').getChild(i).getChild('is').getChild('Bag').getNumChildren():
+                        m_a = toRet_annot.getChild('RDF').getChild(i).getChild('is').getChild('Bag').getChild(i).getAttrValue().split('/')
                         #should we be splitting this here?
                         if not toRet_annot['miriam'][m_a[-2].split('.')[0]]:
                             toRet_annot['miriam'][m_a[-2].split('.')[0]] = []
                         toRet_annot['miriam'][m_a[-2].split('.')[0]].append(m_a[-1].splt(':')[1])
                 elif annotation.getChild('RDF').getChild(i).hasChild('ibibsa'):
-                    i_a = toRet_annot.getChild('RDF').getChild(0).getChild('ibisba')
+                    i_a = toRet_annot.getChild('RDF').getChild(i).getChild('ibisba')
                     #WARNING: cannot check that they exist using the 
                     #TODO: wrap this around try/catch in case some don't have some of these
-                    toRet_annot['ibisba']['smiles'] = i_a.getChild('smiles').getAttrValue('value')
-                    toRet_annot['ibisba']['inchi'] = i_a.getChild('inchi').getAttrValue('value')
-                    toRet_annot['ibisba']['inchikey'] = i_a.getChild('inchikey').getAttrValue('value')
-                    toRet_annot['ibisba']['ddG'] = i_a.getChild('ddG').getAttrValue('value')
-                    toRet_annot['ibisba']['ddG_uncert'] = i_a.getChild('ddG_uncert').getAttrValue('value')
+                    if i_a.hasChild('smiles'):
+                        toRet_annot['ibisba']['smiles'] = i_a.getChild('smiles').getAttrValue('value')
+                    if i_a.hasChild('inchi'):
+                        toRet_annot['ibisba']['inchi'] = i_a.getChild('inchi').getAttrValue('value')
+                    if i_a.hasChild('inchikey'):
+                        toRet_annot['ibisba']['inchikey'] = i_a.getChild('inchikey').getAttrValue('value')
+                    if i_a.hasChild('ddG'):
+                        toRet_annot['ibisba']['ddG'] = i_a.getChild('ddG').getAttrValue('value')
+                    if i_a.hasChild('ddG_uncert'):
+                        toRet_annot['ibisba']['ddG_uncert'] = i_a.getChild('ddG_uncert').getAttrValue('value')
+                    if i_a.hasChild('fasta'):
+                        toRet_annot['ibisba']['fasta'] = i_a.getChild('fasta').getAttrValue('value')
         else:
             logging.error('Either the structure is wrong or the annoation for the passed SBase is empty')
-
+        return toRet_annot
 
 
     #Need to define the datatype that can be passed between the different reader functions
     def readGenes(self, model):
-        toRet = []
-        
-            gene = {'metaid': , 'fbc_id': , 'fbc_label': , 'fbc_type': , 'flux_obj': []}
+        fbc_plugin = model.getPlugin('fbc')
+        toRet = {}
+        for gp in fbc_plugin.getListOfGeneProducts():
+            toRet[gp.getId()].readAnnotation(gp.getAnnotation())
+        return toRet
 
 
     def readPathway(self, model):
@@ -466,8 +477,7 @@ class Annotate():
         """
         groups_plugin = model.getPlugin('groups')
         rp_pathway = groups_plugin.getGroup('rp_pathway')
-        annotation = rp_pathway.getAnnotation()
-        return readAnnotation(annotation)['ibisba']
+        return readAnnotation(rp_pathway.getAnnotation())
 
 
 
