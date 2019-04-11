@@ -126,7 +126,7 @@ class FBA:
             Adds the cofactors to the heterologous pathways and then to the models 
             and runs the models using different objectives
         """
-        ############# Changig it so that the functions take a single path and
+        ############# Changing it so that the functions takes a single path and
         # fills the results in the cofactors_rp_paths
         for path_id in cofactors_rp_paths:
             logging.info('################## FBA Analysis for path '+str(path_id)+'  #####################')
