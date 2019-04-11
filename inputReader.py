@@ -615,19 +615,20 @@ class InputReader:
                             smiles_r = scope_smiles[0]
                             adding_left = toAdd_left
                             adding_right = toAdd_right
-                        print(adding_right)
                         for toAdd in adding_left:
                             try:
                                 tmp = self.convert_depiction(idepic=rp_smiles_inchi[rp_smiles[toAdd]['smiles']], itype='inchi', otype={'smiles'})
                                 i = 0
                                 while i < int(adding_left[toAdd]):
                                     tmp_smiles_l += tmp['smiles']+'.'
+                                    i += 1
                             except KeyError:
                                 try:
                                     tmp = self.convert_depiction(idepic=smiles_inchi[toAdd]['inchi'], itype='inchi', otype={'smiles'})
                                     i = 0
                                     while i < int(adding_left[toAdd]):
                                         tmp_smiles_l += tmp['smiles']+'.'
+                                        i += 1
                                 except KeyError:
                                     tmp_smiles_l=''
                         tmp_smiles_l += smiles_l
@@ -637,12 +638,14 @@ class InputReader:
                                 i = 0
                                 while i < int(adding_right[toAdd]):
                                     tmp_smiles_r += tmp['smiles']+'.'
+                                    i += 1
                             except KeyError:
                                 try:
                                     tmp = self.convert_depiction(idepic=smiles_inchi[toAdd]['inchi'], itype='inchi', otype={'smiles'})
                                     i = 0
                                     while i < int(adding_right[toAdd]):
                                         tmp_smiles_r += tmp['smiles']+'.'
+                                        i += 1
                                 except KeyError:
                                     tmp_smiles_r=''
                         tmp_smiles_r += smiles_r
