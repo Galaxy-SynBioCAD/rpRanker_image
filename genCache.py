@@ -172,53 +172,24 @@ class Cache:
         with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
-                if not row[0][0]=='#' and len(row[0].split(':'))==2 and not row[0].split(':')[0]=='deprecated':
+                if not row[0][0]=='#':
                     mnx = row[1]
-                    dbName = row[0].split(':')[0]
-                    dbID = row[0].split(':')[1]
+                    if len(row[0].split(':'))==1:
+                        dbName = 'mnx'
+                        dbId = row[0]
+                    else:
+                        dbName = row[0].split(':')[0]
+                        dbId = ''.join(row[0].split(':')[1:])
+                        if dbName=='deprecated':
+                            dbName = 'mnx'
                     if not mnx in chemXref:
                         chemXref[mnx] = {}
                     if not dbName in chemXref[mnx]:
                         chemXref[mnx][dbName] = []
-                    chemXref[mnx][dbName].append(dbID)
+                    if not dbId in chemXref[mnx][dbName]:
+                        chemXref[mnx][dbName].append(dbId)
         return chemXref
-        '''
-        possCID = ['mnxm', 'bigg', 'chebi', 'hmdb', 'kegg', 'metacyc', 'reactome', 'sabiork', 'seed']
-        pub_mnx_xref = {}
-        for c in possCID:
-            pub_mnx_xref[c] = {}
-        mnx_pub_xref = {}
-        try:
-            with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
-                c = csv.reader(f, delimiter='\t')
-                not_recognised = []
-                for row in c:
-                    cid = row[0].split(':')
-                    if not row[0][0]=='#' and not cid[0] == 'deprecated':
-                        #check that the CID is a valid one as per possCID
-                        if not cid[0] in not_recognised:
-                            if not cid[0] in possCID and not 'MNXM' in cid[0][:4]:
-                                logging.warning('The following cid is not recognised: '+str(cid[0]))
-                                not_recognised.append(str(cid[0]))
-                                continue
-                            ##### mnx_pub_xref #####
-                            #if the MNX exntry does not exist then create it
-                            if not row[1] in mnx_pub_xref:
-                                mnx_pub_xref[row[1]] = {}
-                                for c in possCID:
-                                    mnx_pub_xref[row[1]][c] = []
-                            if 'MNXM' in cid[0][:4]:
-                                mnx_pub_xref[row[1]]['mnxm'].append(cid[0])
-                                pub_mnx_xref['mnxm'][cid[0]] = row[1]
-                            else:
-                                mnx_pub_xref[row[1]][cid[0]].append(cid[1])
-                                ##### pub_mnx_xref ####
-                                pub_mnx_xref[cid[0]][cid[1]] = row[1]
-        except FileNotFoundError:
-            logging.error('chem_xref file not found')
-            return{}
-        return pub_mnx_xref, mnx_pub_xref
-        '''
+
 
     ## Function to parse the reac_xref.tsv file of MetanetX
     #
@@ -235,51 +206,22 @@ class Cache:
             for row in c:
                 if not row[0][0]=='#' and len(row[0].split(':'))==2:
                     mnx = row[1]
-                    dbName = row[0].split(':')[0]
-                    dbID = row[0].split(':')[1]
+                    if len(row[0].split(':'))==1:
+                        dbName = 'mnx'
+                        dbId = row[0]
+                    else:
+                        dbName = row[0].split(':')[0]
+                        dbId = ''.join(row[0].split(':')[1:])
+                        if dbName=='deprecated':
+                            dbName = 'mnx'
                     if not mnx in reacXref:
                         reacXref[mnx] = {}
                     if not dbName in reacXref[mnx]:
                         reacXref[mnx][dbName] = []
-                    reacXref[mnx][dbName].append(dbID)
+                    if not dbId in reacXref[mnx][dbName]:
+                        reacXref[mnx][dbName].append(dbId)
         return reacXref
-        '''
-        possCID = ['mnxr', 'bigg', 'chebi', 'hmdb', 'kegg', 'metacyc', 'reactome', 'sabiork', 'seed', 'rhea']
-        pub_mnx_xref = {}
-        for c in possCID:
-            pub_mnx_xref[c] = {}
-        mnx_pub_xref = {}
-        try:
-            with open(self._checkFilePath(reac_xref_path, 'reac_xref.tsv')) as f:
-                c = csv.reader(f, delimiter='\t')
-                not_recognised = []
-                for row in c:
-                    cid = row[0].split(':')
-                    if not row[0][0]=='#' and not cid[0] == 'deprecated':
-                        #check that the CID is a valid one as per possCID
-                        if not cid[0] in not_recognised:
-                            if not cid[0] in possCID and not 'MNXR' in cid[0][:4]:
-                                logging.warning('The following cid is not recognised: '+str(cid[0]))
-                                not_recognised.append(str(cid[0]))
-                                continue
-                            ##### mnx_pub_xref #####
-                            #if the MNX exntry does not exist then create it
-                            if not row[1] in mnx_pub_xref:
-                                mnx_pub_xref[row[1]] = {}
-                                for c in possCID:
-                                    mnx_pub_xref[row[1]][c] = []
-                            if 'MNXR' in cid[0][:4]:
-                                mnx_pub_xref[row[1]]['mnxr'].append(cid[0])
-                                pub_mnx_xref['mnxr'][cid[0]] = row[1]
-                            else:
-                                mnx_pub_xref[row[1]][cid[0]].append(cid[1])
-                                ##### pub_mnx_xref ####
-                                pub_mnx_xref[cid[0]][cid[1]] = row[1]
-        except FileNotFoundError:
-            logging.error('reac_xref file not found')
-            return{}
-        return pub_mnx_xref, mnx_pub_xref
-        '''
+
 
     ## Function to parse the comp_xref.tsv file of MetanetX
     #
@@ -299,8 +241,8 @@ class Cache:
                         mnxc_name[row[0]] = row[1]
         #Mel --> not a fan of the hardcoding, if the file changes then one would need to add new entries
         #possCID = ['mnxc', 'bigg', 'cco', 'go', 'seed', 'name']
-        pubDB_name_xref = {}
-        #name_pubDB_xref = {}
+        #pubDB_name_xref = {}
+        name_pubDB_xref = {}
         try:
             with open(self._checkFilePath(comp_xref_path, 'comp_xref.tsv')) as f:
                 c = csv.reader(f, delimiter='\t')
@@ -314,12 +256,9 @@ class Cache:
                         if len(row[0].split(':'))==1:
                             dbName = 'mnx'
                             dbCompId = row[0]
-                        elif len(row[0].split(':'))==2:
-                            dbName = row[0].split(':')[0]
-                            dbCompId = row[0].split(':')[1]
                         else:
-                            logging.warning('Should not happen: '+str(row))
-                            continue
+                            dbName = row[0].split(':')[0]
+                            dbCompId = ''.join(row[0].split(':')[1:])
                         #create the dicts
                         if not name in name_pubDB_xref:
                             name_pubDB_xref[name] = {}
@@ -329,8 +268,8 @@ class Cache:
                             name_pubDB_xref[name][dbName].append(dbCompId)
         except FileNotFoundError:
             logging.error('comp_xref file not found')
-            return{}
-        return pubDB_name_xref
+            return {}
+        return name_pubDB_xref
 
     ## Function to parse the chemp_prop.tsv file from MetanetX
     #

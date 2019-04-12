@@ -4,6 +4,7 @@ import logging
 import os
 from rdkit import Chem
 import pickle
+import gzip
 
 ## @package RetroPath SBML writer
 # Documentation for SBML representation of the different model
@@ -58,9 +59,9 @@ class rpSBML:
         if self.model==None:
             logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
         #open the xref for the species, reactions, compartments
-        self.chemXref = pickle.load(open('cache/chemXref.pickle', 'rb'))
-        self.compXref = pickle.load(open('cache/compXref.pickle', 'rb'))
-        self.reacXref = pickle.load(open('cache/reacXref.pickle', 'rb'))
+        self.chemXref = pickle.load(gzip.open('cache/chemXref.pickle.gz', 'rb'))
+        self.compXref = pickle.load(gzip.open('cache/compXref.pickle.gz', 'rb'))
+        self.reacXref = pickle.load(gzip.open('cache/reacXref.pickle.gz', 'rb'))
     
 
     #######################################################################
@@ -129,7 +130,6 @@ class rpSBML:
     #
     # Check that the libSBML python calls do not return error INT and if so, display the error. Taken from: http://sbml.org/Software/libSBML/docs/python-api/create_simple_model_8py-example.html
     #
-    # @param self Object pointer
     # @param value The SBML call
     # @param message The string that describes the call
     def _checklibSBML(self, value, message):
@@ -154,7 +154,6 @@ class rpSBML:
     #
     # Convert any String to one that is compatible with the SBML metaID formatting requirements
     #
-    # @param self Object pointer
     # @param name The input string
     def _nameToSbmlId(self, name):
         IdStream = []
@@ -179,7 +178,6 @@ class rpSBML:
     #
     # Hash an input string and then pass it to _nameToSbmlId()
     #
-    # @param self Object pointer
     # @param input string
     def _genMetaID(self, name):
         return self._nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())        
@@ -198,11 +196,30 @@ class rpSBML:
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
-                logging.error('This contains no attributes')
+                logging.error('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
+                continue
             if not str_annot.split('/')[-2] in toRet:
                 toRet[str_annot.split('/')[-2]] = []
             #check if the MNXM and if so check against depreceated
             toRet[str_annot.split('/')[-2]].append(str_annot.split('/')[-1])
+        return toRet
+
+
+    def readIBISBAAnnotation(self, annot):
+        toRet = {}
+        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
+        for i in range(bag.getNumChildren()):
+            ann = bag.getChild(i)
+            if ann=='':
+                logging.error('This contains no attributes: '+str(ann.toXMLString()))
+                continue
+            if not ann.getName() in toRet:
+                if ann.getName()=='ddG' or ann.getName()=='ddG_uncert':
+                    toRet[ann.getName()] = {
+                            'units': ann.getAttrValue('units'), 
+                            'value': ann.getAttrValue('value')}
+                else:
+                    toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet
 
 
@@ -560,7 +577,6 @@ class rpSBML:
     #
     # Function that creates a new libSBML model instance and initiates it with the appropriate packages. Creates a cytosol compartment
     #
-    # @param self Object pointer
     # @param name The name of the model
     # @param modelID The id of the mode
     # @param metaID metaID of the model. Default None means that we will generate a hash from the modelID
@@ -594,7 +610,6 @@ class rpSBML:
     #
     # cytoplasm compartment TODO: consider seperating it in another function if another compartment is to be created
     #
-    # @param self Object pointer
     # @param model libSBML model object to add the compartment
     # @param size Set the compartement size
     # @return boolean Execution success
@@ -622,23 +637,24 @@ class rpSBML:
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
         #TODO: need to add all known xref from different databases (not just MetaNetX)
         annotation += '''
-  <rdf:Description rdf:about="#'''+str(metaID)+'''">
-    <bqbiol:is>
-      <rdf:Bag>'''
-        #BILAL: for yout to complete
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <bqbiol:is>
+        <rdf:Bag>'''
+        #TODO: for yout to complete
         id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
         #WARNING: compartmentID as of now, needs to be a MNX ID
-        for databaseId in self.compXref[name]:
-            for compartmentId in self.compXref[name][databaseId]:
-                try:
-                    annotation += '''
-        <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
-                except KeyError:
-                    continue
+        if name in self.compXref: 
+            for databaseId in self.compXref[name]:
+                for compartmentId in self.compXref[name][databaseId]:
+                    try:
+                        annotation += '''
+          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
+                    except KeyError:
+                        continue
         annotation += '''
-      </rdf:Bag>
-    </bqbiol:is>
-  </rdf:Description> 
+        </rdf:Bag>
+      </bqbiol:is>
+    </rdf:Description> 
   </rdf:RDF>
 </annotation>'''
         self._checklibSBML(comp.setAnnotation(annotation), 'setting annotation for reaction '+str(name))
@@ -647,7 +663,6 @@ class rpSBML:
     #
     # Function that creates a unit definition (composed of one or more units)
     #
-    # @param self Object pointer
     # @param model libSBML model to add the unit definition
     # @param unit_id ID for the unit definition
     # @param metaID metaID for the unit definition. If None creates a hash from unit_id
@@ -667,7 +682,6 @@ class rpSBML:
     #
     # Function that created a unit
     #
-    # @param self Object pointer
     # @param unitDef libSBML unit definition
     # @param libsmlunit libSBML unit parameter
     # @param exponent Value for the exponent (ex 10^5 mol/sec)
@@ -687,7 +701,6 @@ class rpSBML:
     #
     # Parameters, in our case, are used for the bounds for FBA analysis. Unit parameter must be an instance of unitDefinition
     #
-    # @param self Object pointer
     # @param parameter_id SBML id
     # @param value Float value for this parameter
     # @param unit libSBML unit parameter
@@ -712,7 +725,6 @@ class rpSBML:
     #
     # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartments, stoichiometry
     #
-    # @param self Object pointer
     # @param name Name for the reaction
     # @param reaction_id Reaction ID
     # @param fluxUpperBounds FBC id for the upper flux bound for this reaction
@@ -779,15 +791,37 @@ class rpSBML:
                 'set the stoichiometry ('+str(float(step['right'][product]))+')')
         #annotation
         annotation = '''<annotation>
-  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+  <rdf:RDF 
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
+  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/" 
+  xmlns:bqmodel="http://biomodels.net/model-qualifiers/">'''
+        # if the name of the species is MNX then we annotate it using MIRIAM compliance
+        #TODO: need to add all known xref from different databases (not just MetaNetX)
+        annotation += '''
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <bqbiol:is>
+        <rdf:Bag>'''
+        id_ident = {'mnx': 'metanetx.reaction/', 'rhea': 'rhea/', 'reactome': 'reactome/', 'bigg': 'bigg.reaction/', 'sabiork': 'sabiork.reaction/', 'ec-code': 'ec-code/', 'biocyc': 'biocyc/'}
+        if reacId in self.reacXref: 
+            for dbId in self.reacXref[reacId]:
+                for cid in self.reacXref[reacId][dbId]: 
+                    try:
+                        annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
+                    except KeyError:
+                        continue
+        annotation += '''
+        </rdf:Bag>
+      </bqbiol:is>
+    </rdf:Description>'''   
+        annotation += '''    
+    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:smiles>'''+str(reaction_smiles)+'''</ibisba:smiles>
-        <ibisba:parameter type="ddG" units="kj_per_mol" value=""/>
-        <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value=""/>
+        <ibisba:ddG units="kj_per_mol" value=""/>
+        <ibisba:ddG_uncert units="kj_per_mol" value=""/>
       </ibisba:ibisba>
-    </rdf:Description>
+    </rdf:Ibisba>
   </rdf:RDF>
 </annotation>'''
         self._checklibSBML(reac.setAnnotation(annotation), 'setting annotation for reaction '+str(reacId))
@@ -808,9 +842,7 @@ class rpSBML:
     #
     # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartments, stoichiometry
     #
-    # @param self Object pointer
-    # @param name Species name
-    # @param xref Dictionnary of lists with all the associated ID's {'MNX': [], 'CHEBI': [], ...}
+    # @param chemId Species name (as of now, can only handle MNX ids)
     # @param metaID Name for the reaction
     # @param inchi String Inchi associated with this species
     # @param smiles String SMILES associated with this species
@@ -858,64 +890,63 @@ class rpSBML:
   <rdf:RDF 
   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/" 
-  xmlns:bqmodel="http://biomodels.net/model-qualifiers/"
-  xmlns:ibisba="http://ibisba.eu/qualifiers">'''
+  xmlns:bqmodel="http://biomodels.net/model-qualifiers/">'''
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
         #TODO: need to add all known xref from different databases (not just MetaNetX)
         annotation += '''
-  <rdf:Description rdf:about="#'''+str(metaID)+'''">
-    <bqbiol:is>
-      <rdf:Bag>'''
-        #BILAL: for yout to complete
+    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+      <bqbiol:is>
+        <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg': 'kegg.compound/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/'}
-        for cid_id in self.chemXref:
-            for cid in self.chemXref[cid_id]:
-                try:
-                    annotation += '''        
-        <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[cid_id])+str(cid)+'''"/>'''
-                except KeyError:
-                    continue
+        if chemId in self.chemXref: 
+            for dbId in self.chemXref[chemId]:
+                for cid in self.chemXref[chemId][dbId]: 
+                    try:
+                        annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
+                    except KeyError:
+                        continue
         annotation += '''
-      </rdf:Bag>
-    </bqbiol:is>
-  </rdf:Description>'''   
+        </rdf:Bag>
+      </bqbiol:is>
+    </rdf:Description>'''   
         ###### IBISBA additional information ########
         if smiles:
             annotation += '''
-  <rdf:Description rdf:about="#'''+str(metaID)+'''">
-    <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-      <ibisba:smiles>'''+str(smiles)+'''</ibisba:smiles>'''
+    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
+        <ibisba:smiles>'''+str(smiles)+'''</ibisba:smiles>'''
         else:
             annotation += '''
-            <rdf:Description rdf:about="#'''+str(metaID)+'''">
-              <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-                <ibisba:smiles></ibisba:smiles>'''
+    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
+        <ibisba:smiles></ibisba:smiles>'''
         if inchi:
             annotation += '''
-            <ibisba:inchi>'''+str(inchi)+'''</ibisba:inchi>
-            <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(inchi))+'''</ibisba:inchikey>'''
+        <ibisba:inchi>'''+str(inchi)+'''</ibisba:inchi>
+        <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(inchi))+'''</ibisba:inchikey>'''
         else:
             annotation += '''
-            <ibisba:inchi></ibisba:inchi>
-            <ibisba:inchikey></ibisba:inchikey>'''
+        <ibisba:inchi></ibisba:inchi>
+        <ibisba:inchikey></ibisba:inchikey>'''
         if ddG:
             annotation += '''
-            <ibisba:parameter type="ddG" units="kj_per_mol" value="'''+str(ddG)+'''"/>'''
+        <ibisba:ddG units="kj_per_mol" value="'''+str(ddG)+'''"/>'''
         else:
             annotation += '''
-            <ibisba:parameter type="ddG" units="kj_per_mol" value=""/>'''
+        <ibisba:ddG units="kj_per_mol" value=""/>'''
         if ddG_uncert:
             annotation += '''
-            <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value="'''+str(ddG_uncert)+'''"/>'''
+        <ibisba:ddG_uncert units="kj_per_mol" value="'''+str(ddG_uncert)+'''"/>'''
         else:
             annotation += '''
-            <ibisba:parameter type="ddG_uncert" units="kj_per_mol" value=""/>'''
+        <ibisba:ddG_uncert units="kj_per_mol" value=""/>'''
         annotation += '''
-          </ibisba:ibisba>
-        </rdf:Description>'''
+      </ibisba:ibisba>
+    </rdf:Ibisba>'''
         annotation += '''
-      </rdf:RDF>
-    </annotation>'''
+  </rdf:RDF>
+</annotation>'''
         self._checklibSBML(spe.setAnnotation(annotation), 'setting the annotation for new species')
 
 
@@ -923,7 +954,6 @@ class rpSBML:
     #
     # Create the collection of reactions that constitute the pathway using the Groups package and create the custom IBIBSA annotations
     #
-    # @param self Object pointer
     # @param model libSBML model to add the unit definition
     # @param reaction_id Reaction ID
     # @param name Name for the reaction
@@ -943,7 +973,7 @@ class rpSBML:
         annotation = '''<annotation>
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
-    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">'''
         if ddG:
             annotation += '''
@@ -959,7 +989,7 @@ class rpSBML:
         <ibisba:ddG_uncert units="kj_per_mol" value=""/>'''
         annotation += '''
       </ibisba:ibisba>
-    </rdf:Description>
+    </rdf:Ibisba>
   </rdf:RDF>
 </annotation>'''
         self.hetero_group.setAnnotation(annotation)
@@ -969,7 +999,6 @@ class rpSBML:
     #
     # Create the list of genes in the model including its custom IBISBA annotatons
     #
-    # @param self Object pointer
     # @param model libSBML model to add the unit definition
     # @param reac libSBML reaction object
     # @param step_id The step for the number of 
@@ -990,11 +1019,11 @@ class rpSBML:
         annotation = '''<annotation>
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
         xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
-    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:fasta value="" />
       </ibisba:ibisba>
-    </rdf:Description>
+    </rdf:Ibisba>
   </rdf:RDF>
 </annotation>'''
         gp.setAnnotation(annotation)
@@ -1004,7 +1033,6 @@ class rpSBML:
     #
     # Using the FBC package one can add the FBA flux objective directly to the model. This function sets a particular reaction as objective with maximization or minimization objectives
     #
-    # @param self Object pointer
     # @param model libSBML model to add the unit definition
     # @param fluxObjID The id given to this particular objective
     # @param reactionName The name or id of the reaction that we are setting a flux objective
@@ -1081,14 +1109,6 @@ class rpSBML:
         return None
 
 
-    ## Test the reader of an SBML model
-    #
-    #
-    # @param 
-    def _testReader(self):
-        return None
-
-
     ## Main function for testing
     #
     # Generate a dummy heterologous pathway file and open an SBML to write the same heterologous pathway
@@ -1142,3 +1162,4 @@ class rpSBML:
         #self.createFluxObj(model, 'rpFBA_obj', 'rpReaction_0', 1, True)
         self._writeSBML('test_out', '/home/mdulac/Documents/rpFBA/sbml_models/')
         return None
+
