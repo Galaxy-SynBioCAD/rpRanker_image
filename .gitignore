@@ -1,3 +1,5 @@
 component_contribution/
 tests.ipynb
 cache/
+*.swp
+*.swo

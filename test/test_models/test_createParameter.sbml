@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level3/version1/core" xmlns:groups="http://www.sbml.org/sbml/level3/version1/groups/version1" xmlns:fbc="http://www.sbml.org/sbml/level3/version1/fbc/version2" level="3" version="1" groups:required="false" fbc:required="false">
+  <model metaid="_81bcdb4f4f90440a19855f20c14ac474" id="rp_model" name="RetroPath_heterologous_pathway" substanceUnits="mole" timeUnits="second" extentUnits="mole" fbc:strict="true">
+    <listOfParameters>
+      <parameter metaid="bdc8f6b389997dd8c94563245322e89c" sboTerm="SBO:0000625" id="B_INF" value="INF" units="kj_per_mol" constant="true"/>
+    </listOfParameters>
+  </model>
+</sbml>

@@ -40,7 +40,7 @@ class rpSBML:
     # @param model libSBML model object
     # @param docModel libSBML Document object
     # @param nameSpaceModel libSBML name space (not required)
-    def __init__(self, model=None, document=None, sbmlns=None, path=None):
+    def __init__(self, model=None, document=None, sbmlns=None, path=None, cache_path=None):
         self.model = model
         self.document = document
         self.sbmlns = sbmlns #we allow this to be None
@@ -58,10 +58,16 @@ class rpSBML:
         #TODO: seems like the wrong strategy
         if self.model==None:
             logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
-        #open the xref for the species, reactions, compartments
-        self.chemXref = pickle.load(gzip.open('cache/chemXref.pickle.gz', 'rb'))
-        self.compXref = pickle.load(gzip.open('cache/compXref.pickle.gz', 'rb'))
-        self.reacXref = pickle.load(gzip.open('cache/reacXref.pickle.gz', 'rb'))
+        if cache_path==None:
+            #open the xref for the species, reactions, compartments
+            self.chemXref = pickle.load(gzip.open('cache/chemXref.pickle.gz', 'rb'))
+            self.compXref = pickle.load(gzip.open('cache/compXref.pickle.gz', 'rb'))
+            self.reacXref = pickle.load(gzip.open('cache/reacXref.pickle.gz', 'rb'))
+        else:
+            self.chemXref = pickle.load(gzip.open(cache_path+'/chemXref.pickle.gz', 'rb'))
+            self.compXref = pickle.load(gzip.open(cache_path+'/compXref.pickle.gz', 'rb'))
+            self.reacXref = pickle.load(gzip.open(cache_path+'/reacXref.pickle.gz', 'rb'))
+
     
 
     #######################################################################
@@ -79,7 +85,7 @@ class rpSBML:
             logging.error('Invalid input file')
             raise FileNotFoundError
         document = libsbml.readSBML(inFile)
-        self._checklibSBML(document)
+        self._checklibSBML(document, 'readinf input file')
         errors = document.getNumErrors()
         #display the errors in the log accordning to the severity
         for err in [document.getError(i) for i in range(document.getNumErrors())]:
@@ -205,6 +211,9 @@ class rpSBML:
         return toRet
 
 
+    ## Takes for input a libSBML annotatio object and returns a dictionnary of the annotations
+    #
+    #
     def readIBISBAAnnotation(self, annot):
         toRet = {}
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
@@ -597,6 +606,8 @@ class rpSBML:
         self.model = self.document.createModel()
         self._checklibSBML(self.model, 'generating the model')
         self._checklibSBML(self.model.setId(modelID), 'setting the model ID')
+        model_fbc = self.model.getPlugin('fbc')
+        model_fbc.setStrict(True)
         if metaID==None:
             metaID = self._genMetaID(modelID)
         self._checklibSBML(self.model.setMetaId(metaID), 'setting model metaID')
@@ -829,7 +840,7 @@ class rpSBML:
         if not hetero_group==None:
             newM = hetero_group.createMember()
             self._checklibSBML(newM, 'Creating a new groups member')
-            self._checklibSBML(newM.setIdRef(name), 'Setting name to the groups member')
+            self._checklibSBML(newM.setIdRef(reacId), 'Setting name to the groups member')
         elif not self.hetero_group==None:
             newM = self.hetero_group.createMember()
             self._checklibSBML(newM, 'Creating a new groups member')
@@ -967,7 +978,7 @@ class rpSBML:
         self.hetero_group = groups_plugin.createGroup()
         self.hetero_group.setId('rp_pathway')
         if metaID==None:
-            metaID = self._genMetaID('rp_pathway_'+str(path_id))
+            metaID = self._genMetaID('rp_pathway')
         self.hetero_group.setMetaId(metaID)
         self.hetero_group.setKind(libsbml.GROUP_KIND_COLLECTION)
         annotation = '''<annotation>
