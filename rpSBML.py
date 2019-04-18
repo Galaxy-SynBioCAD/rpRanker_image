@@ -190,10 +190,115 @@ class rpSBML:
 
 
     #####################################################################
-    ############################# ANNOTATIONS READING ###################
+    ############################ UPDATE #################################
     #####################################################################
 
+
+    def updateThermoSpecies(self):
+        toRet = {}
+        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
+        for i in range(bag.getNumChildren()):
+            ann = bag.getChild(i)
+            if ann=='':
+                logging.error('This contains no attributes: '+str(ann.toXMLString()))
+                continue
+            if not ann.getName() in toRet:
+                if ann.getName()=='ddG' or ann.getName()=='ddG_uncert':
+                    toRet[ann.getName()] = {
+                            'units': ann.getAttrValue('units'), 
+                            'value': ann.getAttrValue('value')}
+                else:
+                    toRet[ann.getName()] = ann.getChild(0).toXMLString()
+        return toRet
+        
+
+    def updateAnnotThermo(self, annot, ddG, ddG_uncert):
+        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG')
+        bag.addAttr('value', str(ddG))
+        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert')
+        bag.addAttr('value', str(ddG_uncert))
+        
+
     
+
+
+    '''
+    def updateThermoPathway(self, ddG, ddG_uncert, pathId='rp_pathway'):
+        groups = self.model.getPlugin('groups')
+        rp_pathway = groups.getGroup(pathId)
+        annot = rp_pathway.annotation
+        
+
+    def updateThermoReaction(self, reacId, ddG, ddG_uncert):
+                
+
+
+    def updateThermoSpecies(self, specId, ddG, ddG_uncert):
+    '''
+
+
+    
+
+    
+    #####################################################################
+    ############################ READ ###################################
+    #####################################################################
+
+
+
+    ## Return the reaction ID's and the pathway annotation
+    #
+    #
+    def readRPpathway(self, pathId='rp_pathway'):
+        groups = self.model.getPlugin('groups')
+        rp_pathway = groups.getGroup(pathId)
+        toRet = {}
+        toRet['annotation'] = rp_pathway.getAnnotation()
+        toRet['members'] = []
+        for member in rp_pathway.getListOfMembers():
+            toRet['members'].append(member.getIdRef())
+        return reacIds
+
+
+    ## 
+    #
+    #
+    def readRPspeciesAnnotation(self, reacIds=None):
+        reacMembers = {'reactants': {}, 'products': {}}
+        if not reacIds:
+            reacIds = self.readPathwayMembers()
+        for reacId in reacIds:
+            reacMembers[reacId] = {}
+            reac = self.model.getReaction(reacId)
+            for pro in reac.getListOfProducts():
+                reacMembers['products'][pro.getSpecies()] = pro.getStoichiometry()
+            for rea in reac.getListOfReactants():
+                reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry() 
+        return reacMembers
+    
+
+    def readMIRIAMSpeciesAnnotation(self, annot, cid):
+        id_annotId = {'bigg': 'bigg.metabolite', 
+                'mnx': 'metanetx.chemical', 
+                'chebi': 'chebi', 
+                'hmdb': 'hmdb', 
+                'kegg': 'kegg.compound',
+                'seed': 'seed.compound'}
+        toRet = []
+        if not cid in id_annotId:
+            logging.warning('Cannnot find '+str(cid)+' in id_annotId')
+            return toRet
+        bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
+        for i in range(bag.getNumChildren()):
+            str_annot = bag.getChild(i).getAttrValue(0)
+            if str_annot=='':
+                logging.error('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
+                continue
+            if str_annot.split('/')[-2]==id_annotId[cid]:
+                toRet.append(str_annot.split('/')[-1])
+        return toRet
+
+
     ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
     #
     def readAnnotation(self, annot):
@@ -206,7 +311,7 @@ class rpSBML:
                 continue
             if not str_annot.split('/')[-2] in toRet:
                 toRet[str_annot.split('/')[-2]] = []
-            #check if the MNXM and if so check against depreceated
+            #TODO: check if the MNXM and if so check against depreceated
             toRet[str_annot.split('/')[-2]].append(str_annot.split('/')[-1])
         return toRet
 
@@ -669,6 +774,7 @@ class rpSBML:
   </rdf:RDF>
 </annotation>'''
         self._checklibSBML(comp.setAnnotation(annotation), 'setting annotation for reaction '+str(name))
+
 
     ## Create libSBML unit definition
     #

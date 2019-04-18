@@ -37,7 +37,6 @@ class Cache:
                 'MNXM57425': 'MNXM9',
                 'MNXM137': 'MNXM588022'}
         #personally looked at the KEGG to MNXM conversion for the thermodynamics 
-        self.curated_kegg_mnxm = {'C80055': 'MNXM1029', 'C80033': 'MNXM4958', 'C80027': 'MNXM14271', 'C80026': 'MNXM37357', 'C80024': 'MNXM37357', 'C80021' :'MNXM34393', 'C18385': 'MNXM155504','C02747': 'MNXM3752', 'C00281': 'MNXM271', 'C00660': 'MNXM7242', 'C02229': 'MNXM493', 'C02799': 'MNXM148650', 'C03009': 'MNXM64052', 'C03293': 'MNXM4718', 'C03543': 'MNXM5043', 'C03857': 'MNXM48439', 'C03914': 'MNXM165365', 'C04427': 'MNXM169368', 'C04451': 'MNXM90601', 'C04721': 'MNXM94248', 'C05241': 'MNXM722784', 'C05997': 'MNXM36492', 'C07433': 'MNXM159617', 'C07970': 'MNXM58486', 'C08228': 'MNXM157170', 'C10528': 'MNXM1455', 'C11294': 'MNXM126764', 'C11458': 'MNXM724515', 'C11459': 'MNXM16413', 'C12995': 'MNXM527885', 'C13594': 'MNXM152253', 'C13595': 'MNXM157984', 'C14122': 'MNXM95692', 'C15870': 'MNXM1338', 'C18227': 'MNXM4582', 'C19718': 'MNXM1252', 'C80001': 'MNXM92466', 'C80002': 'MNXM4523', 'C80003': 'MNXM13824', 'C80004': 'MNXM13824', 'C80005': 'MNXM4219', 'C80006': 'MNXM13819', 'C80007': 'MNXM4214', 'C80008': 'MNXM32237', 'C80009': 'MNXM9521', 'C80010': 'MNXM9521', 'C80011': 'MNXM13821', 'C80012': 'MNXM73137', 'C80013': 'MNXM56307', 'C80014': 'MNXM4328', 'C80015': 'MNXM9763', 'C80016': 'MNXM14140', 'C80017': 'MNXM34598', 'C80018': 'MNXM14472', 'C80019': 'MNXM723734', 'C80020': 'MNXM34393', 'C80022': 'MNXM37357', 'C80025': 'MNXM14271', 'C80028': 'MNXM37315', 'C80029': 'MNXM14854', 'C80030': 'MNXM1801', 'C80031': 'MNXM6682', 'C80032': 'MNXM164200', 'C80034': 'MNXM2600', 'C80035': 'MNXM36033', 'C80036': 'MNXM6682', 'C80037': 'MNXM8046', 'C80038': 'MNXM107214', 'C80039': 'MNXM468570', 'C80040': 'MNXM468572', 'C80041': 'MNXM3800', 'C80042': 'MNXM2853', 'C80043': 'MNXM5084', 'C80045': 'MNXM11523', 'C80046': 'MNXM32005', 'C80047': 'MNXM78182', 'C80048': 'MNXM165478', 'C80049': 'MNXM165425', 'C80050': 'MNXM44968', 'C80051': 'MNXM165476', 'C80052': 'MNXM46488', 'C80053': 'MNXM73202', 'C80056': 'MNXM39260', 'C80057': 'MNXM14510', 'C80058': 'MNXM491041', 'C80061': 'MNXM5189', 'C80066': 'MNXM275', 'C80067': 'MNXM88927', 'C90010': 'MNXM31306', 'C90029': 'MNXM31741', 'C90040': 'MNXM31741', 'C90041': 'MNXM5401', 'C90073': 'MNXM1099', 'C90091': 'MNXM35167', 'C90092': 'MNXM164143', 'C90094': 'MNXM5476', 'C90096': 'MNXM35277', 'C90126': 'MNXM36486', 'C90131': 'MNXM162568', 'C90132': 'MNXM146349', 'C90134': 'MNXM36558', 'C90138': 'MNXM36756', 'C90139': 'MNXM36758', 'C90140': 'MNXM36762', 'C90144': 'MNXM36773', 'C90151': 'MNXM484827', 'C90162': 'MNXM37435', 'C90181': 'MNXM487477', 'C90205': 'MNXM38670', 'C90273': 'MNXM46158', 'C90316': 'MNXM411', 'C90323': 'MNXM411', 'C90325': 'MNXM507621', 'C90335': 'MNXM51449', 'C90336': 'MNXM11433', 'C90347': 'MNXM52367', 'C90348': 'MNXM52369', 'C90350': 'MNXM5738', 'C90352': 'MNXM52465', 'C90354': 'MNXM52466', 'C90366': 'MNXM53170', 'C90388': 'MNXM747', 'C90389': 'MNXM2377', 'C90390': 'MNXM1111', 'C90391': 'MNXM1112', 'C90411': 'MNXM56060', 'C90412': 'MNXM56121', 'C90413': 'MNXM724800', 'C90414': 'MNXM1190', 'C90418': 'MNXM56347', 'C90419': 'MNXM1067', 'C90427': 'MNXM57076 ', 'C90437': 'MNXM57486', 'C90438': 'MNXM527415', 'C90439': 'MNXM105743', 'C90444': 'MNXM57835', 'C90445': 'MNXM5189', 'C90497': 'MNXM59726', 'C90498': 'MNXM59727', 'C90534': 'MNXM63081', 'C90535': 'MNXM63174', 'C90536': 'MNXM63175', 'C90537': 'MNXM63157', 'C90538': 'MNXM63156', 'C90548': 'MNXM63755', 'C90549': 'MNXM63797', 'C90550': 'MNXM63798', 'C90552': 'MNXM64019', 'C90553': 'MNXM64020', 'C90563': 'MNXM64863', 'C90565': 'MNXM968', 'C90575': 'MNXM65303', 'C90579': 'MNXM811', 'C90590': 'MNXM66180', 'C90598': 'MNXM73155', 'C90599': 'MNXM7283', 'C90616': 'MNXM3337', 'C90640': 'MNXM81220', 'C90678': 'MNXM83846', 'C90694': 'MNXM114303', 'C90697': 'MNXM725810', 'C90703': 'MNXM5319 ', 'C90724': 'MNXM89469', 'C90725': 'MNXM89470', 'C90726': 'MNXM89471', 'C90727': 'MNXM2876', 'C90728': 'MNXM89472'}
         self.deprecatedMNXM_mnxm = None
 
     #######################################################################
@@ -105,7 +104,7 @@ class Cache:
         pickle.dump(self.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
         #mnxm_dG
         logging.info('Generating mnxm_dG')
-        pickle.dump(self.mnxm_dG(), open('cache/mnxm_dG.pickle', 'wb'))
+        pickle.dump(self.kegg_dG(), open('cache/kegg_dG.pickle', 'wb'))
         #rr_reactions
         logging.info('Generating rr_reactions')
         rr_reactions = self.retro_reactions()
@@ -298,8 +297,7 @@ class Cache:
     #  @param cc_compounds_path cc_compounds.json.gz file path
     #  @param alberty_path alberty.json file path
     #  @param compounds_path compounds.csv file path
-    def mnxm_dG(self,
-                chem_xref_path=None,
+    def kegg_dG(self,
                 cc_compounds_path=None,
                 alberty_path=None,
                 compounds_path=None):
@@ -317,6 +315,7 @@ class Cache:
                 cid_comp[row[-1].split(':')[1]]['major_ms'] = int(literal_eval(row[6]))
                 cid_comp[row[-1].split(':')[1]]['number_of_protons'] = literal_eval(row[7]) 
                 cid_comp[row[-1].split(':')[1]]['charges'] = literal_eval(row[8])
+        '''
         ###################### mnxm_kegg ################
         kegg_mnxm = {}
         with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
@@ -334,14 +333,16 @@ class Cache:
                         except KeyError:
                             mnxm = mnx[1]
                         kegg_mnxm[mnxm] = row[1]
+        '''
         ####################### cc_compounds ############
         #TODO: seems like the new version of equilibrator got rid of this file... need to update the function
         #to take as input the new file --> i.e. the JSON input
-        notFound_cc = []
+        #notFound_cc = []
         gz_file = gzip.open(self._checkFilePath(cc_compounds_path, 'cc_compounds.json.gz'), 'rb')
         f_c = gz_file.read()
         c = json.loads(f_c)
         for cd in c:
+            '''
             #find MNXM from CID
             try:
                 mnxm = kegg_mnxm[cd['CID']]
@@ -356,23 +357,25 @@ class Cache:
                     logging.warning('Cannot find: '+str(cd))
                     notFound_cc.append(cd['CID'])
                     continue
+            '''
             #find the compound descriptions
             try:
                 cd.update(cid_comp[cd['CID']])
             except KeyError:
                 pass
             #add the CID
-            if not mnxm in cc_alberty:
-                cc_alberty[mnxm] = {}
-            if not 'component_contribution' in cc_alberty[mnxm]:
-                cc_alberty[mnxm]['component_contribution'] = [cd]
+            #if not mnxm in cc_alberty:
+            if not cd['CID'] in cc_alberty:
+                cc_alberty[cd['CID']] = {}
+            if not 'component_contribution' in cc_alberty[cd['CID']]:
+                cc_alberty[cd['CID']]['component_contribution'] = [cd]
             else:
-                cc_alberty[mnxm]['component_contribution'].append(cd)
+                cc_alberty[cd['CID']]['component_contribution'].append(cd)
         ######################## alberty ################
-        notFound_alberty = []
         with open(self._checkFilePath(alberty_path, 'alberty.json')) as json_data:
             d = json.loads(json_data.read())
             for cd in d:
+                '''
                 #find the MNXM from CID
                 try:
                     mnxm = kegg_mnxm[cd['cid']]
@@ -387,18 +390,20 @@ class Cache:
                         logging.warning('Cannot find: '+str(cd))
                         notFound_alberty.append(cd['cid'])
                         continue
+                '''
                 #find the compound description
                 try:
                     cd.update(cid_comp[cd['CID']])
                 except KeyError:
                     pass
                 #add the CID
-                if not mnxm in cc_alberty:
-                    cc_alberty[mnxm] = {}
-                if not 'alberty' in cc_alberty[mnxm]:
-                    cc_alberty[mnxm]['alberty'] = [cd]
+                #if not mnxm in cc_alberty:
+                if not cd['CID'] in cc_alberty:
+                    cc_alberty[cd['CID']] = {}
+                if not 'alberty' in cc_alberty[cd['CID']]:
+                    cc_alberty[cd['CID']]['alberty'] = [cd]
                 else:
-                    cc_alberty[mnxm]['alberty'].append(cd)
+                    cc_alberty[cd['CID']]['alberty'].append(cd)
         return cc_alberty
 
 

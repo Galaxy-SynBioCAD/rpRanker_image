@@ -4,24 +4,28 @@ import pybel
 import json
 from scipy.special import logsumexp
 import copy
+import pickle
 
 #local package
 import component_contribution
 
 
-class Thermodynamics:
+class rpThermo:
     """Combination of equilibrator and group_contribution analysis to calculate the thermodymaics of the individual
     metabolic pathways output from RP2paths and thus RetroPath2.0
     """
-    def __init__(self, mnxm_dG, cc_preprocess, deprecatedMNXM_mnxm, pH=7.0, pMg=14.0, I=0.1, temperature=298.15):
+    def __init__(self, 
+            pH=7.0, 
+            pMg=14.0, 
+            ionic_strength=0.1, 
+            temperature=298.15):
         #self.compound_dict = compound_dict
-        self.mnxm_dG = mnxm_dG
-        self.cc_preprocess = cc_preprocess
-        self.deprecatedMNXM_mnxm = deprecatedMNXM_mnxm
+        self.cc_preprocess = np.load('cache/cc_preprocess.npz')
+        self.kegg_dG = pickle.load(open('cache/kegg_dG.pickle', 'rb'))
         #### set the physiological parameters
         self.pH = pH
         self.pMg = pMg
-        self.I = I
+        self.ionic_strength = ionic_strength
         #Constants
         self.R = 8.31e-3   # kJ/(K*mol)
         self.temperature = temperature  # K
@@ -45,35 +49,36 @@ class Thermodynamics:
         self.DH_alpha = 1e-3*(9.20483*self.temperature) - 1e-5*(1.284668 * self.temperature**2) + 1e-8*(4.95199 * self.temperature**3)
         self.DH_beta = 1.6
         # Debye-Huckel
-        self.debye_huckel = self.DH_alpha * self.I **(0.5) / (1.0 + self.DH_beta * self.I**(0.5))
+        self.debye_huckel = self.DH_alpha*self.ionic_strength**(0.5)/(1.0+self.DH_beta*self.ionic_strength**(0.5))
         #temporarely save the calculated dG's
         self.calculated_dG = {}
+
 
     ################ PRIVATE FUNCTIONS ###################
 
 
-    def _select_mnxm_dG(self, mnxm):
+    def _select_dG(self, cid):
         """Given that there can be multiple precalculated dG for a given molecule (MNXM)
         this function gives the priority to a particular order for a given MNXM ID
         alberty>smallest(KEGG_ID)>other(KEGG_ID)
         """
-        if mnxm in self.mnxm_dG:
-            if 'component_contribution' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['component_contribution']:
+        if cid in self.kegg_dG:
+            if 'component_contribution' in self.kegg_dG[cid] and self.kegg_dG[cid]['component_contribution']:
                 ####### select the smallest one
                 '''
-                if len(self.mnxm_dG[mnxm]['component_contribution'])==1:
-                    return self.mnxm_dG[mnxm]['component_contribution'][0]['compound_index'], self.mnxm_dG[mnxm]['component_contribution'][0]['group_vector'], self.mnxm_dG[mnxm]['component_contribution'][0]['pmap']['species']
+                if len(self.kegg_dG[cid]['component_contribution'])==1:
+                    return self.kegg_dG[cid]['component_contribution'][0]['compound_index'], self.kegg_dG[cid]['component_contribution'][0]['group_vector'], self.kegg_dG[cid]['component_contribution'][0]['pmap']['species']
                 else:
                     #select the lowest CID and make sure that there
                     toRet = {'CID': 'C99999'}
-                    for cmp_dict in self.mnxm_dG[mnxm]['component_contribution']:
+                    for cmp_dict in self.kegg_dG[cid]['component_contribution']:
                         if int(cmp_dict['CID'][1:])<int(toRet['CID'][1:]):
                             toRet = cmp_dict
                     return toRet['compound_index'], toRet['group_vector'], toRet['pmap']['species']
                 '''
                 ###### select the one with the most information
                 #return the smallest one that has all the information required
-                for cmp_d in sorted(self.mnxm_dG[mnxm]['component_contribution'], key=lambda k: int(k['CID'][1:])):
+                for cmp_d in sorted(self.kegg_dG[cid]['component_contribution'], key=lambda k: int(k['CID'][1:])):
                     if 'compound_index' in cmp_d and 'group_vector' in cmp_d and 'pmap' in cmp_d and 'species' in cmp_d['pmap']:
                         return cmp_d['compound_index'], cmp_d['group_vector'], cmp_d['pmap']['species']
                 #if cannot find return the smallest one and return the info that you can
@@ -81,45 +86,53 @@ class Thermodynamics:
                 group_vector = None
                 pmap_species = None
                 try:
-                    compound_index = self.mnxm_dG[mnxm]['component_contribution'][0]['compound_index'] 
+                    compound_index = self.kegg_dG[cid]['component_contribution'][0]['compound_index'] 
                 except KeyError:
                     pass
                 try:
-                    group_vector = self.mnxm_dG[mnxm]['component_contribution'][0]['group_vector']
+                    group_vector = self.kegg_dG[cid]['component_contribution'][0]['group_vector']
                 except KeyError:
                     pass
                 try:
-                    pmap_species = self.mnxm_dG[mnxm]['component_contribution'][0]['pmap']['species']
+                    pmap_species = self.kegg_dG[cid]['component_contribution'][0]['pmap']['species']
                 except KeyError:
+                    logging.warning('Component_contribution cannot find any species')
                     raise KeyError
                 #if compound_index==None and group_vector==None and pmap_species==None:
                     #exit the component_conribution condition if all are none
                 #    continue
                 return compound_index, group_vector, pmap_species
             #if you cannot find the component in the component_contribution then select the alberty dataset
-            elif 'alberty' in self.mnxm_dG[mnxm] and self.mnxm_dG[mnxm]['alberty']:
-                if len(self.mnxm_dG[mnxm]['alberty'])==1:
-                    return None, None, self.mnxm_dG[mnxm]['alberty'][0]['species']
+            elif 'alberty' in self.kegg_dG[cid] and self.kegg_dG[cid]['alberty']:
+                if len(self.kegg_dG[cid]['alberty'])==1:
+                    return None, None, self.kegg_dG[cid]['alberty'][0]['species']
                 else:
-                    return False
+                    logging.warning('Alberty and component_contribution species are empty')
+                    raise KeyError
             else:
-                logging.warning('There are no valid dictionnary of precalculated dG for '+str(mnxm))
+                logging.warning('There are no valid dictionnary of precalculated dG for '+str(cid))
                 raise KeyError
         else:
-            logging.warning('There are no '+str(mnxm)+' in self.mnxm_dG')
+            logging.warning('There are no '+str(cid)+' in self.kegg_dG')
             raise KeyError
 
 
-    #######################################################
-    ################ PUBLIC FUNCTIONS #####################
-    #######################################################
-
+    ####################################################
     ################# ON THE FLY #######################
+    ####################################################
+
 
     #must make sure that there is no KEGG id and that there is a SMILES description
     #TODO export the matrices
     #TODO add the option of accepting InChI strings as well as SMILES
-    def scrt_dG0(self, srct_type, srct_string, stoichio):
+
+
+    ## Calculate the formation energy of a compound
+    #
+    # Script adapted from the Noor et al.'s component contribution project. Seperates a compound into groups
+    # and calculates the its formation energy from the individual contribution of each sub-compound.
+    #
+    def scrt_dfG_prime_m(self, srct_type, srct_string, stoichio):
         """ Decompose a SMILES string
         #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
         calculate pKas of the target and intermediates using cxcalc
@@ -164,8 +177,8 @@ class Thermodynamics:
             #return None, None, None
             raise LookupError
         ### using equilibrator training data
-        X = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)), ndmin=2)
-        G = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)), ndmin=2)
+        X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+        G = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
         ############################### calculate dG0_r
         G[:len(self.group_names), 0] = g #WARNING: inspired from component_contribution, here using equilibrator data
         dG0_cc = X.T @ self.cc_preprocess['v_r'] + \
@@ -184,7 +197,7 @@ class Thermodynamics:
         ddG = None
         if 0==major_microspecies:
             ddG = 0
-        elif 0<self.I:
+        elif 0<self.ionic_strength:
             ddG = sum(p_kas[0:major_microspecies]) * self.R * self.temperature * np.log(10)
         else:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
@@ -193,102 +206,312 @@ class Thermodynamics:
         toRet = stoichio*dG0
         if type(toRet)==np.ndarray:
             toRet = toRet[0].astype(float)
-        return toRet, X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
+        return toRet-self.concentrationCorrection(stoichio), X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
 
 
+    ##########################################################
     ################### PRECALCULATED ########################
+    ##########################################################
 
 
-    def compound_dG0(self, species_list, compound_index, group_vector, stoichio):
-        """Get a detla-deltaG estimate for this group of species.
-            i.e., this is the difference between the dG0 and the dG'0, which
-            only depends on the pKa of the pseudoisomers, but not on their
-            formation energies.
-        """
-        # Compute per-species transforms, scaled down by R*T.
-        dG0_vec = []
-        for cmp_spe in species_list:
-            try:
-                #Transform this individual estimate to difference conditions.
-                sqrt_I = np.sqrt(self.I)
-                ddG_prime = 0
-                # add the potential related to the pH
-                if cmp_spe['nH']>0:
-                    ddG_prime += cmp_spe['nH']*self.RTlog10*self.pH
-                # add the potential related to the ionic strength
-                ddG_prime -= self.debye_hueckle_a*(cmp_spe['z']**2-cmp_spe['nH'])*sqrt_I/(1.0+self.debye_hueckle_b*sqrt_I)
-                # add the potential related to the Mg ions
-                if cmp_spe['nMg']>0:
-                    ddG_prime += cmp_spe['nMg']*(self.RTlog10*self.pMg-self.mg_formation_energy)
-                dG0_vec.append(cmp_spe['dG0_f']+ddG_prime)
-            except KeyError:
-                #TODO: choose wether to continue the calculation although some of the species_list is missing parameters
-                #I think continue is fine ---> check against equilibrator
-                logging.warning('Some species_list parameters are missing')
-                continue
-                #raise KeyError
-        dG0_vec = np.array(dG0_vec)
-        # Numerical issues: taking a sum of exp(v) for |v| quite large.
-        # Use the fact that we take a log later to offset all values by a
-        # constant (the minimum value).
-        if len(dG0_vec)>0:
-            dG0 = -self.RT*np.logaddexp.reduce((-1.0/self.RT)*dG0_vec)
+    ##
+    #from the formation energy of the compound calculate its prime
+    #ie. taking into account the pH and the ionic strength of the environment
+    def dG0_dG0prime(self, nMg, z, nH, dG0_f):
+        sqrt_I = np.sqrt(self.ionic_strength)
+        dG0_prime = dG0_f
+        # add the potential related to the pH
+        if nH > 0:
+            dG0_prime += nH*self.RTlog10*self.pH
+        # add the potential related to the ionic strength
+        dG0_prime -= self.debye_hueckle_a*(z**2-nH)*sqrt_I/(1+self.debye_hueckle_b*sqrt_I)
+        # add the potential related to the Mg ions
+        if nMg > 0:
+            dG0_prime += nMg*(self.RTlog10*nMg-self.mg_formation_energy)
+        #print('nH = %d, z = %d, dG0 = %.1f --> dG0\' = %.1f' %
+        #              (nH, z, dG0_f, dG0_prime))
+        return dG0_prime
+
+
+
+    #to implment for uncertainty
+    # sparse_gv == group_vector
+    # index == compound_index
+    '''
+        @staticmethod
+    def GetCompoundVectors(compound):
+        # x is the stoichiometric vector of the reaction, only for the
+        # compounds that appeared in the original training set for CC
+        x = zeros((Preprocessing.Nc, 1))
+
+        # g is the group incidence vector of all the other compounds
+        g = zeros((Preprocessing.Ng, 1))
+        logging.debug(compound.compound.kegg_id)
+        i = compound.compound.index
+        gv = compound.compound.sparse_gv
+        if i is not None:
+            logging.debug('index = %d' % i)
+            x[i, 0] = compound.coeff
+        elif gv is not None:
+            logging.debug('len(gv) = %d' % len(gv))
+            for g_ind, g_count in gv:
+                g[g_ind, 0] += compound.coeff * g_count
         else:
-            logging.warning('Compounds with unspecific structure')
+            raise Exception('could not find index nor group vector for %s'
+                            % compound.compound.kegg_id)
+        return x, g
+    '''
+
+
+    ##
+    #
+    #
+    def cmp_dfG_prime_m(self, kegg_cid, stoichio):
+        ########### dG0_f ###########
+        try:
+            compound_index, group_vector, species_list = self._select_dG(kegg_cid)
+        except KeyError:
+            logging.warning('Cannot find precalculated cmp_dfG_prime_m')
             raise KeyError
-        #all that is required with this return is a sum
-        ###### compute X and G
-        x = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 1)))
-        g = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 1)))
-        if not compound_index==None and not group_vector==None:
+
+        
+
+        scaled_transforms = [-self.dG0_dG0prime(i['nMg'], 
+                                       i['z'], 
+                                       i['nH'], 
+                                       i['dG0_f'])/self.RT for i in species_list if not i['phase']=='gas']
+        total = scaled_transforms[0]
+        for i in range(1, len(scaled_transforms)):
+            total = np.logaddexp(total, scaled_transforms[i])
+        ############ uncertainty #############
+        X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+        G = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
+        if compound_index is not None:
+            X[compound_index, 0] = stoichio
+        elif group_vector is not None:
             for g_ind, g_count in group_vector:
-                g[g_ind, 0] += g_count
-            x[compound_index, 0] = 1
-        #return dG0, x, g
-        return dG0*stoichio, x*stoichio, g*stoichio
-
-    #i_to --> major_ms
-    #i_from --> 0
-    #TODO: make this work--- right now too many errors
-    def compound_dG0_prime(self, dG0, p_kas, number_of_protons, charges, stoichio, i_to, i_from=0):
-        ## _dG0_prime_vector ## 
-        #Calculates the difference in kJ/mol between dG'0 and dG0 of the MS with the least hydrogens (dG0[0])
-        #if not self.inchi:
-        #    return 0
-        if not p_kas:
-            dG0s = np.zeros((1, 1))
+                G[g_ind, 0] += stoichio*g_count
         else:
-            dG0s = -np.cumsum([0]+p_kas)*self.R*self.temperature*np.log(10)
-            dG0s = dG0s
-        pseudoisomers = np.vstack([dG0s, np.array(number_of_protons), np.array(charges)]).T
-        dG0_prime_vector = pseudoisomers[:, 0] + \
-            pseudoisomers[:, 1]*(self.R*self.temperature*np.log(10)*self.pH+self.debye_huckel) - \
-            pseudoisomers[:, 2]**2*self.debye_huckel
-        ## _ddG ##
-        #Calculate the difference in kJ/mol between two MSs
-        ddG = 0
-        if not (0 <= i_from <= len(p_kas)):
-            raise ValueError('MS index is out of bounds: 0 <= %d <= %d' % (
-                i_from, len(p_kas)))
-        if not (0 <= i_to <= len(p_kas)):
-            raise ValueError('MS index is out of bounds: 0 <= %d <= %d' % (
-                i_to, len(p_kas)))
-        if i_from == i_to:
-            ddG = 0
-        elif i_from < i_to:
-            ddG = sum(p_kas[i_from:i_to])*self.R*self.temperature*np.log(10)
-        else:
-            ddG = -sum(p_kas[i_to:i_from])*self.R*self.temperature*np.log(10)
-        ##### transform
-        #-self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature))
-        #return dG0_prime_vector
-        dG0_prime_vector = -self.R*self.temperature*logsumexp(dG0_prime_vector/(-self.R*self.temperature)) 
-        return dG0+stoichio*(dG0_prime_vector+ddG)
+            logging.warning('Cannot generate uncerstainty for '+str(kegg_cid))
+        dG0_prime = -self.RT*total
+        print(kegg_cid)
+        print(dG0_prime+self.concentrationCorrection(stoichio))
+        print(dG0_prime)
+        print(self.dG0_uncertainty(X, G))
+        print('########################')
+        return dG0_prime+self.concentrationCorrection(stoichio), X, G
 
+
+    ##########################################################
+    ################## BOTH ##################################
+    ##########################################################
+    
+
+    def dG0_uncertainty(self, X, G):
+        return 1.92*float(np.sqrt(X.T @ self.cc_preprocess['C1'] @X +
+                             X.T @ self.cc_preprocess['C2'] @G +
+                             G.T @ self.cc_preprocess['C3'] @G ))
+        '''
+        U = X.T @ self.cc_preprocess['C1'] @ X + \
+            X.T @ self.cc_preprocess['C2'] @ G + \
+            G.T @ self.cc_preprocess['C2'].T @ X + \
+            G.T @ self.cc_preprocess['C3'] @ G
+        #Below is terrible score, if we want to calculate the dG0 using the matrix
+        #dG0_cc = X.T @ self.cc_preprocess['v_r'] + G.T @ self.cc_preprocess['v_g']
+        return 1.92*np.sqrt(U[0, 0])#, dG0_cc
+        '''
+
+
+    
+    def concentrationCorrection(self, stoichio, conc=1e-3):
+        return self.R * self.temperature * abs(stoichio) * np.log(conc)
+
+
+    ###########################################################
+    ################# RPmodel update ##########################
+    ###########################################################
+
+
+    ## Calculate a  species dG0_prime_m and its uncertainty
+    #
+    #
+    def species_dfG_prime_m(self, species_annot, stoichio):
+        #check to see if there are mutliple, non-deprecated, MNX ids in annotations
+        X = None
+        G = None
+        dfG_prime_m = None
+        #Try to find your species in the already calculated species
+        smiles = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('smiles').getChild(0).toXMLString()
+        inchi = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('inchi').getChild(0).toXMLString()
+        if inchi in self.calculated_dG:
+            X = self.calculated_dG[inchi]['X']
+            G = self.calculated_dG[inchi]['G']
+            dfG_prime_m = self.calculated_dG[inchi]['dfG_prime_m']
+        elif smiles in self.calculated_dG:
+            X = self.calculated_dG[smiles]['X']
+            G = self.calculated_dG[smiles]['G']
+            dfG_prime_m = self.calculated_dG[smiles]['dfG_prime_m']
+        else:
+            #if not try to find it in cc_preprocess
+            try:
+                #return the KEGG CID
+                cids = []
+                bag = species_annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
+                for i in range(bag.getNumChildren()):
+                    str_annot = bag.getChild(i).getAttrValue(0)
+                    if str_annot.split('/')[-2]=='kegg.compound':
+                        cids.append(str_annot.split('/')[-1])
+                cid = [i for i in cids if i[0]=='C']
+                if len(cid)==1:
+                    cid = cid[0]
+                elif len(cid)>1:
+                    logging.warning('There are more than one results, using the first one '+str(cid))
+                    cid = cid[0]
+                else:
+                    logging.warning('There are no results')
+                    raise KeyError
+                if cid=='C00080':
+                    return None, None, None
+                #calculate using the CID from KEGG
+                dfG_prime_m, X, G = self.cmp_dfG_prime_m(
+                        cid, 
+                        stoichio)
+            except KeyError:
+                #at last, if all fails use its structure to calculate dfG_prime_m
+                #try for inchi
+                if inchi:
+                    dfG_prime_m, X, G, additional_info = self.scrt_dfG_prime_m(
+                            'inchi', 
+                            inchi, 
+                            stoichio)
+                    self.calculated_dG[inchi] = {}
+                    self.calculated_dG[inchi]['dfG_prime_m'] = dfG_prime_m
+                    self.calculated_dG[inchi]['X'] = X
+                    self.calculated_dG[inchi]['G'] = G
+                else:
+                    #try for smiles
+                    if smiles:
+                        dfG_prime_m, X, G, additional_info = self.scrt_dfG_prime_m(
+                                'smiles',
+                                smiles,
+                                stoichio)
+                        self.calculated_dG[smiles] = {}
+                        self.calculated_dG[smiles]['dfG_prime_m'] = dfG_prime_m
+                        self.calculated_dG[smiles]['X'] = X
+                        self.calculated_dG[smiles]['G'] = G
+                    else:
+                        logging.warning('Cannot find either inchi or smiles in the annotation')
+        #update the species dfG information
+        if not dfG_prime_m==None:
+            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr(
+                    'value', 
+                    str(dfG_prime_m))
+            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr(
+                    'value',
+                    str(self.dG0_uncertainty(X, G)))
+        return dfG_prime_m, X, G 
+
+
+    ## Calculate the pathway and reactions dG0_prime_m and its uncertainty
+    #
+    #
+    # TODO: change this to KEGG id's instead of MNX
+    def pathway_drG_prime_m(self, rpsbml, pathId='rp_pathway'):
+        #calculate the number of species that are involded in the pathway 
+        #for each species calculate the ddG_prime_m and its uncertainty
+        #test to see if there are mutliple MNX and remove all deprecated ones
+        groups = rpsbml.model.getPlugin('groups')
+        rp_pathway = groups.getGroup(pathId)
+        #get the number of species, reactions and pathways ###
+        '''
+        numReactions = rp_pathway.getNumMembers()
+        numSpecies = sum([rpsbml.model.getReaction(member.getIdRef()).getNumProducts() + 
+                rpsbml.model.getReaction(member.getIdRef()).getNumReactants() 
+                for member in rp_pathway.getListOfMembers()])
+        #generate the matrices for the pathways and the reactions
+        X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], numSpecies)), ndmin=2)
+        G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], numSpecies)), ndmin=2)
+        '''
+        X_path = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+        G_path = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
+        pathway_dfG_prime_m = 0.0
+        species_count = 0
+        #path
+        for member in rp_pathway.getListOfMembers():
+            reaction_dfG_prime_m = 0.0
+            '''
+            X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
+                rpsbml.model.getReaction(member.getIdRef()).getNumProducts() +  
+                rpsbml.model.getReaction(member.getIdRef()).getNumReactants())), ndmin=2)
+            G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
+                rpsbml.model.getReaction(member.getIdRef()).getNumProducts() + 
+                rpsbml.model.getReaction(member.getIdRef()).getNumReactants())), ndmin=2)
+            '''
+            X_reaction = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+            G_reaction = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
+            reaction = rpsbml.model.getReaction(member.getIdRef())
+            #react
+            for pro in reaction.getListOfProducts():
+                rpsbml.model.getSpecies(pro.species).getAnnotation()
+                dfG_prime_m, X, G = self.species_dfG_prime_m(
+                        rpsbml.model.getSpecies(pro.species).getAnnotation(), 
+                        pro.stoichiometry) 
+                if not dfG_prime_m==None:
+                    reaction_dfG_prime_m += dfG_prime_m*pro.stoichiometry
+                    pathway_dfG_prime_m += dfG_prime_m*pro.stoichiometry
+                if type(X)==np.array and type(G)==np.array:
+                    '''
+                    X_reaction[:, species_count:species_count+1] = X
+                    G_reaction[:, species_count:species_count+1] = G
+                    X_path[:, species_count:species_count+1] = X
+                    G_path[:, species_count:species_count+1] = G
+                    '''
+                    X_reaction += X
+                    G_reaction += G
+                    X_path += X
+                    G_path += G
+                species_count += 1
+            for rea in reaction.getListOfReactants():
+                #need to return the MNX and find the  
+                dfG_prime_m, X, G = self.species_dfG_prime_m(
+                        rpsbml.model.getSpecies(rea.species).getAnnotation(),
+                        -rea.stoichiometry) 
+                if not dfG_prime_m==None:
+                    reaction_dfG_prime_m += dfG_prime_m*(-rea.stoichiometry)
+                    pathway_dfG_prime_m += dfG_prime_m*(-rea.stoichiometry)
+                if type(X)==np.array and type(G)==np.array:
+                    '''
+                    X_reaction[:, species_count:species_count+1] = X
+                    G_reaction[:, species_count:species_count+1] = G
+                    X_path[:, species_count:species_count+1] = X
+                    G_path[:, species_count:species_count+1] = G
+                    '''
+                    X_reaction += X
+                    G_reaction += G
+                    X_path += X
+                    G_path += G
+                species_count += 1
+            #add the reaction thermo to the sbml
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr('value', str(reaction_dfG_prime_m))
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr('value', str(self.dG0_uncertainty(X_reaction, G_reaction)))
+        #add the pathway thermo to the sbml
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr('value', str(pathway_dfG_prime_m))
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr('value', str(self.dG0_uncertainty(X_path, G_path)))
+        
+            
+    '''
+    def dG_uncertainty(self, X, G):
+        return 1.92*float(np.sqrt(X.T@self.cc_preprocess['C1']@X + 
+            X.T@self.cc_preprocess['C2']@G + 
+            G.T@self.cc_preprocess['C3']@G))
 
     def sigma_matrix(self, X, G):
         """Calculate the uncertainty  of a precalculated compound using matrices X and G
         """
+        ### new method says:
+        #        return float(sqrt(x.T @ Preprocessing.C1 @ x +
+        #                  x.T @ Preprocessing.C2 @ g +
+        #                  g.T @ Preprocessing.C3 @ g))
         #Calculate the uncertainty of a precalculated compound or group of compounds 
         U = X.T @ self.cc_preprocess['C1'] @ X + \
             X.T @ self.cc_preprocess['C2'] @ G + \
@@ -297,179 +520,17 @@ class Thermodynamics:
         #Below is terrible score, if we want to calculate the dG0 using the matrix
         #dG0_cc = X.T @ self.cc_preprocess['v_r'] + G.T @ self.cc_preprocess['v_g']
         return np.sqrt(U[0, 0])#, dG0_cc
-
-
-    #### select either precalculated or structure dG for the calculation of dG for a pathway ####
-
-    #TODO: change to update the JSON object instead
-    def rp_paths_dG0(self, rp_paths, rp_smiles):
-        """Return the paths dG from precalculated and on-the-fly
-        """
-        #TODO: save the caluclated MNXM and save them to the cache to speed up future calculations
-        for path_id in rp_paths:
-            path_dG = 0.0
-            path_count = 0
-            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['steps']) for step_id in rp_paths[path_id]['path']])
-            X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
-            G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
-            for step_id in rp_paths[path_id]['path']:
-                reaction_dG = 0.0
-                react_count = 0
-                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
-                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
-                for cmp_id in rp_paths[path_id]['path'][step_id]['steps']:
-                    X = None
-                    G = None
-                    compound_dG = None
-                    #check that the deprecated mnxm is not used
-                    try:
-                        mnxm = self.deprecatedMNXM_mnxm[cmp_id]
-                    except KeyError:
-                        mnxm = cmp_id
-                    try:
-                        logging.info('######### '+str(mnxm)+' ##############')
-                        compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
-                        compound_dG, X, G = self.compound_dG0(species_list,
-                                                              compound_index,
-                                                              group_vector,
-                                                              rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
-                    except KeyError:
-                        logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                        try:
-                            if cmp_id in self.calculated_dG:
-                                compound_dG = self.calculated_dG[cmp_id]['compound_dG']
-                                X = self.calculated_dG[cmp_id]['X']
-                                G = self.calculated_dG[cmp_id]['G']
-                                cmp_info = self.calculated_dG[cmp_id]['cmp_info']
-                            else:
-                                compound_dG, X, G, cmp_info = self.scrt_dG0('smiles', rp_smiles[cmp_id], rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
-                                #save it for the next iteractions to avoid duplicates
-                                self.calculated_dG[cmp_id] = {'compound_dG': compound_dG, 'X': X, 'G': G, 'cmp_info': cmp_info}
-                        except KeyError:
-                            logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                        except LookupError:
-                            logging.warning(str(cmp_id)+' cannot calculate dG using component contribution ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                    if type(X)==np.ndarray and type(G)==np.ndarray:
-                        X_reaction[:, react_count:react_count+1] = X
-                        G_reaction[:, react_count:react_count+1] = G
-                        X_path[:, path_count:path_count+1] = X
-                        G_path[:, path_count:path_count+1] = G
-                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
-                    if not compound_dG==None:
-                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG'] = compound_dG
-                        reaction_dG += compound_dG
-                        path_dG += compound_dG
-                    react_count += 1
-                    path_count += 1
-                    logging.info('############################')
-                rp_paths[path_id]['path'][step_id]['dG'] = reaction_dG
-                rp_paths[path_id]['path'][step_id]['dG_uncertainty'] = self.sigma_matrix(X_reaction, G_reaction)
-            rp_paths[path_id]['dG'] = path_dG
-            rp_paths[path_id]['dG_uncertainty'] = self.sigma_matrix(X_path, G_path)
-
-
-
-    #TODO: save the calculated InChI dG and uncertainty to be used once again 
-    def rp_paths_dG0_dGPrime(self, rp_paths, rp_smiles):
-        """Return the paths dG from precalculated and on-the-fly
-        """
-        #TODO: save the caluclated MNXM and save them to the cache to speed up future calculations
-        for path_id in rp_paths:
-            path_dG = 0.0
-            path_dG_prime = 0.0
-            path_count = 0
-            path_num_reactions = sum([len(rp_paths[path_id]['path'][step_id]['steps']) for step_id in rp_paths[path_id]['path']])
-            X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], path_num_reactions)), ndmin=2)
-            G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], path_num_reactions)), ndmin=2)
-            for step_id in rp_paths[path_id]['path']:
-                reaction_dG = 0.0
-                reaction_dG_prime = 0.0
-                react_count = 0
-                X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
-                    len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
-                G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
-                    len(rp_paths[path_id]['path'][step_id]['steps']))), ndmin=2)
-                for cmp_id in rp_paths[path_id]['path'][step_id]['steps']:
-                    X = None
-                    G = None
-                    cmp_dG = None
-                    cmp_dG_prime = None
-                    #check that the deprecated mnxm is not used
-                    try:
-                        mnxm = self.deprecatedMNXM_mnxm[cmp_id]
-                    except KeyError:
-                        mnxm = cmp_id
-                    try:
-                        logging.info('######### '+str(mnxm)+' ##############')
-                        compound_index, group_vector, species_list = self._select_mnxm_dG(mnxm)
-                        logging.info('compound_index: '+str(compound_index))
-                        logging.info('group_vector: '+str(group_vector))
-                        logging.info('species_list: '+str(species_list))
-                        cmp_dG, X, G = self.compound_dG0(species_list,
-                                        compound_index,
-                                        group_vector,
-                                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
-                        try:
-                            cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
-                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['p_kas'], 
-                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['number_of_protons'],
-                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['charges'],
-                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'],
-                                            rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['major_ms'])
-                        except KeyError:
-                            pass
-                    except KeyError:
-                        logging.warning(str(cmp_id)+' cannot be found in the precalculated mnxm_dG ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                        try:
-                            cmp_dG, X, G, cmp_info = self.scrt_dG0('smiles', 
-                                                rp_smiles[cmp_id], 
-                                                rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'])
-                            cmp_dG_prime = self.compound_dG0_prime(cmp_dG, 
-                                                cmp_info['p_kas'], 
-                                                cmp_info['number_of_protons'],
-                                                cmp_info['charges'],
-                                                rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['stoichiometry'],
-                                                cmp_info['major_ms'])
-                        except KeyError:
-                            logging.warning(str(cmp_id)+' cannot be found in the RP2paths compounds.txt ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                        except LookupError:
-                            logging.warning(str(cmp_id)+' cannot calculate dG using component contribution ('+str(path_id)+', '+str(step_id)+', '+str(cmp_id)+')')
-                    if type(X)==np.ndarray and type(G)==np.ndarray:
-                        X_reaction[:, react_count:react_count+1] = X
-                        G_reaction[:, react_count:react_count+1] = G
-                        X_path[:, path_count:path_count+1] = X
-                        G_path[:, path_count:path_count+1] = G
-                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG_uncertainty'] = self.sigma_matrix(X, G)
-                    if not cmp_dG==None and not cmp_dG_prime==None:
-                        rp_paths[path_id]['path'][step_id]['steps'][cmp_id]['dG'] = cmp_dG
-                        reaction_dG += cmp_dG
-                        reaction_dG_prime += cmp_dG_prime
-                        path_dG += cmp_dG
-                        path_dG_prime += cmp_dG_prime
-                    react_count += 1
-                    path_count += 1
-                    logging.info('############################')
-                rp_paths[path_id]['path'][step_id]['dG'] = reaction_dG
-                rp_paths[path_id]['path'][step_id]['dG_prime'] = reaction_dG_prime
-                rp_paths[path_id]['path'][step_id]['dG_uncertainty'] = self.sigma_matrix(X_reaction, G_reaction)
-            rp_paths[path_id]['dG'] = path_dG
-            rp_paths[path_id]['dG_prime'] = path_dG_prime
-            rp_paths[path_id]['dG_uncertainty'] = self.sigma_matrix(X_path, G_path)
-
+    '''
 
     def isBalanced():
         """Function borrowed from the component contribution that checks is the per-atom
         difference in a reaction is balanced
         """
         #TODO: check the difference between equilibrator and component_contribution
+
         return False
 
     def reversibilityIndex():
         """Quantitative measure for the reversibility of a reaction by taking into consideration the concentration of the substrate and products
         """
         return False
-
-    """
-        IDEA: run a small scale kinetic model of the heterologous pathway by estimating from the FBA analysis the concentration of the sink molecules. We can estimate the steady state concentration and then calculate other features such as the reversibility index of the reactions within the pathway.
-        Would this not be the same as deriving the concentration from the flux
-    """

@@ -47,7 +47,7 @@ class InputReader:
         self.rr_reactions = None
         self.full_reactions = None
         self.deprecatedMNXM_mnxm = None
-        self.mnxm_dG = None
+        #self.mnxm_dG = None
         #input files
         self.database = Database
         self.rp_paths = None
@@ -138,11 +138,13 @@ class InputReader:
         except FileNotFoundError:
             logging.error('The file '+str(path+'/deprecatedMNXM_mnxm.pickle')+' does not seem to exist')
             return False
+        '''
         try:
             self.mnxm_dG = pickle.load(open(self._checkFilePath(path, 'mnxm_dG.pickle'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/mnxm_dG.pickle')+' does not seem to exist')
             return False
+        '''
         try:
             self.smiles_inchi = pickle.load(gzip.open(self._checkFilePath(path, 'smiles_inchi.pickle.gz'), 'rb'))
         except FileNotFoundError:
