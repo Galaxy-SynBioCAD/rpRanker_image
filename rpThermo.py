@@ -132,7 +132,7 @@ class rpThermo:
     # Script adapted from the Noor et al.'s component contribution project. Seperates a compound into groups
     # and calculates the its formation energy from the individual contribution of each sub-compound.
     #
-    def scrt_dfG_prime_m(self, srct_type, srct_string, stoichio):
+    def scrt_dfG_prime_o(self, srct_type, srct_string, stoichio):
         """ Decompose a SMILES string
         #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
         calculate pKas of the target and intermediates using cxcalc
@@ -203,10 +203,10 @@ class rpThermo:
             ddG = -sum(p_kas[major_microspecies:0]) * self.R * self.temperature * np.log(10)
         ddG0_forward = trans+ddG
         dG0 = dG0_cc+ddG0_forward
-        toRet = stoichio*dG0
-        if type(toRet)==np.ndarray:
-            toRet = toRet[0].astype(float)
-        return toRet-self.concentrationCorrection(stoichio), X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
+        dG0_prime = stoichio*dG0
+        if type(dG0_prime)==np.ndarray:
+            dG0_prime = dG0_prime[0].astype(float)
+        return dG0_prime, X, G, {'atom_bag': atom_bag, 'p_kas': p_kas, 'major_ms': major_microspecies, 'number_of_protons': number_of_protons, 'charges': charges}
 
 
     ##########################################################
@@ -217,7 +217,7 @@ class rpThermo:
     ##
     #from the formation energy of the compound calculate its prime
     #ie. taking into account the pH and the ionic strength of the environment
-    def dG0_dG0prime(self, nMg, z, nH, dG0_f):
+    def dG_dGprime(self, nMg, z, nH, dG0_f):
         sqrt_I = np.sqrt(self.ionic_strength)
         dG0_prime = dG0_f
         # add the potential related to the pH
@@ -233,53 +233,28 @@ class rpThermo:
         return dG0_prime
 
 
-
-    #to implment for uncertainty
-    # sparse_gv == group_vector
-    # index == compound_index
-    '''
-        @staticmethod
-    def GetCompoundVectors(compound):
-        # x is the stoichiometric vector of the reaction, only for the
-        # compounds that appeared in the original training set for CC
-        x = zeros((Preprocessing.Nc, 1))
-
-        # g is the group incidence vector of all the other compounds
-        g = zeros((Preprocessing.Ng, 1))
-        logging.debug(compound.compound.kegg_id)
-        i = compound.compound.index
-        gv = compound.compound.sparse_gv
-        if i is not None:
-            logging.debug('index = %d' % i)
-            x[i, 0] = compound.coeff
-        elif gv is not None:
-            logging.debug('len(gv) = %d' % len(gv))
-            for g_ind, g_count in gv:
-                g[g_ind, 0] += compound.coeff * g_count
-        else:
-            raise Exception('could not find index nor group vector for %s'
-                            % compound.compound.kegg_id)
-        return x, g
-    '''
-
-
     ##
     #
     #
-    def cmp_dfG_prime_m(self, kegg_cid, stoichio):
+    def cmp_dfG_prime_o(self, kegg_cid, stoichio):
         ########### dG0_f ###########
+        #WARNING: we are ignoring gas phase even if it would be valid in some cases (O2 for example)
+        physioParameter = None #determine the phase for the concentration adjustement 
         try:
             compound_index, group_vector, species_list = self._select_dG(kegg_cid)
+            scaled_transforms = [-self.dG_dGprime(i['nMg'], 
+                                           i['z'], 
+                                           i['nH'], 
+                                           i['dG0_f'])/self.RT for i in species_list if not i['phase']=='gas']
+            #note that this should change if a user wants to input his own values....
+            #WARNING: we are taking the first one only
+            if species_list[0]['phase']=='aqueous':
+                physioParameter = 1e-3
+            else:
+                physioParameter = 1.0
         except KeyError:
-            logging.warning('Cannot find precalculated cmp_dfG_prime_m')
+            logging.warning('Cannot find precalculated cmp_dfG_prime_o')
             raise KeyError
-
-        
-
-        scaled_transforms = [-self.dG0_dG0prime(i['nMg'], 
-                                       i['z'], 
-                                       i['nH'], 
-                                       i['dG0_f'])/self.RT for i in species_list if not i['phase']=='gas']
         total = scaled_transforms[0]
         for i in range(1, len(scaled_transforms)):
             total = np.logaddexp(total, scaled_transforms[i])
@@ -294,12 +269,7 @@ class rpThermo:
         else:
             logging.warning('Cannot generate uncerstainty for '+str(kegg_cid))
         dG0_prime = -self.RT*total
-        print(kegg_cid)
-        print(dG0_prime+self.concentrationCorrection(stoichio))
-        print(dG0_prime)
-        print(self.dG0_uncertainty(X, G))
-        print('########################')
-        return dG0_prime+self.concentrationCorrection(stoichio), X, G
+        return dG0_prime, X, G, physioParameter
 
 
     ##########################################################
@@ -311,20 +281,17 @@ class rpThermo:
         return 1.92*float(np.sqrt(X.T @ self.cc_preprocess['C1'] @X +
                              X.T @ self.cc_preprocess['C2'] @G +
                              G.T @ self.cc_preprocess['C3'] @G ))
-        '''
-        U = X.T @ self.cc_preprocess['C1'] @ X + \
-            X.T @ self.cc_preprocess['C2'] @ G + \
-            G.T @ self.cc_preprocess['C2'].T @ X + \
-            G.T @ self.cc_preprocess['C3'] @ G
-        #Below is terrible score, if we want to calculate the dG0 using the matrix
-        #dG0_cc = X.T @ self.cc_preprocess['v_r'] + G.T @ self.cc_preprocess['v_g']
-        return 1.92*np.sqrt(U[0, 0])#, dG0_cc
-        '''
 
-
-    
-    def concentrationCorrection(self, stoichio, conc=1e-3):
-        return self.R * self.temperature * abs(stoichio) * np.log(conc)
+   
+    ## takes a list of SBase libsbml objects and extracts the stochiometry from it
+    #
+    #TODO: extract the concentration (if defined) instead of using the milliMolar concentration adjustment
+    def concentrationCorrection(self, stoichio, conc=None):
+        #if no concentrations are specified then we assume millimolar adjustment
+        #return self.R*self.temperature*(stoichio*np.log(conc))
+        if conc==None:
+            conc = [1e-3]*len(stochio)
+        return self.R*self.temperature*sum([sto*np.log(co) for sto, co in zip(stoichio, conc)])
 
 
     ###########################################################
@@ -332,30 +299,33 @@ class rpThermo:
     ###########################################################
 
 
-    ## Calculate a  species dG0_prime_m and its uncertainty
+    ## Calculate a  species dG0_prime_o and its uncertainty
     #
     #
-    def species_dfG_prime_m(self, species_annot, stoichio):
+    def species_dfG_prime_o(self, species_annot, stoichio):
         #check to see if there are mutliple, non-deprecated, MNX ids in annotations
         X = None
         G = None
-        dfG_prime_m = None
+        dfG_prime_o = None
+        cid = None
+        physioParameter = None #this paraemter determines the concentration of the copound for the adjustemet, (dG_prime_m). It assumes physiological conditions ie 1e-3 for aquaeus and 1 for gas, solid etc.... Next step is to have the user input his own
         #Try to find your species in the already calculated species
         smiles = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('smiles').getChild(0).toXMLString()
         inchi = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('inchi').getChild(0).toXMLString()
         if inchi in self.calculated_dG:
             X = self.calculated_dG[inchi]['X']
             G = self.calculated_dG[inchi]['G']
-            dfG_prime_m = self.calculated_dG[inchi]['dfG_prime_m']
+            dfG_prime_o = self.calculated_dG[inchi]['dfG_prime_o']
         elif smiles in self.calculated_dG:
             X = self.calculated_dG[smiles]['X']
             G = self.calculated_dG[smiles]['G']
-            dfG_prime_m = self.calculated_dG[smiles]['dfG_prime_m']
+            dfG_prime_o = self.calculated_dG[smiles]['dfG_prime_o']
         else:
             #if not try to find it in cc_preprocess
             try:
                 #return the KEGG CID
                 cids = []
+                #TODO: replace this by reading the SBML model directly
                 bag = species_annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
                 for i in range(bag.getNumChildren()):
                     str_annot = bag.getChild(i).getAttrValue(0)
@@ -368,51 +338,62 @@ class rpThermo:
                     logging.warning('There are more than one results, using the first one '+str(cid))
                     cid = cid[0]
                 else:
-                    logging.warning('There are no results')
                     raise KeyError
-                if cid=='C00080':
-                    return None, None, None
-                #calculate using the CID from KEGG
-                dfG_prime_m, X, G = self.cmp_dfG_prime_m(
+                dfG_prime_o, X, G, physioParameter = self.cmp_dfG_prime_o(
                         cid, 
                         stoichio)
             except KeyError:
-                #at last, if all fails use its structure to calculate dfG_prime_m
+                #at last, if all fails use its structure to calculate dfG_prime_o
                 #try for inchi
                 if inchi:
-                    dfG_prime_m, X, G, additional_info = self.scrt_dfG_prime_m(
+                    dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
                             'inchi', 
                             inchi, 
                             stoichio)
                     self.calculated_dG[inchi] = {}
-                    self.calculated_dG[inchi]['dfG_prime_m'] = dfG_prime_m
+                    self.calculated_dG[inchi]['dfG_prime_o'] = dfG_prime_o
                     self.calculated_dG[inchi]['X'] = X
                     self.calculated_dG[inchi]['G'] = G
                 else:
                     #try for smiles
                     if smiles:
-                        dfG_prime_m, X, G, additional_info = self.scrt_dfG_prime_m(
+                        dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
                                 'smiles',
                                 smiles,
                                 stoichio)
                         self.calculated_dG[smiles] = {}
-                        self.calculated_dG[smiles]['dfG_prime_m'] = dfG_prime_m
+                        self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
                         self.calculated_dG[smiles]['X'] = X
                         self.calculated_dG[smiles]['G'] = G
                     else:
                         logging.warning('Cannot find either inchi or smiles in the annotation')
         #update the species dfG information
-        if not dfG_prime_m==None:
-            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr(
+        dfG_prime_m = None
+        if not dfG_prime_o==None:
+            if physioParameter==None:
+                physioParameter = 1e-3
+            dfG_prime_m = dfG_prime_o+self.concentrationCorrection([abs(stoichio)], [physioParameter]) 
+            #BUG or overlooked? overwrite H+ and H2O dfG_prime_m
+            if not cid==None:
+                if cid=='C00080':
+                    dfG_prime_m = -17.1
+                    dfG_prime_o = 0.0
+                    #dfG_prime_m = 0.0
+                    X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+                    G = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
+            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr(
+                    'value', 
+                    str(dfG_prime_o))
+            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr(
                     'value', 
                     str(dfG_prime_m))
-            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr(
+            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr(
                     'value',
                     str(self.dG0_uncertainty(X, G)))
-        return dfG_prime_m, X, G 
+        return dfG_prime_o, X, G, physioParameter #we call physioParameter concentration later 
 
 
-    ## Calculate the pathway and reactions dG0_prime_m and its uncertainty
+    ## Calculate the pathway and reactions dG0_prime_o and its uncertainty
     #
     #
     # TODO: change this to KEGG id's instead of MNX
@@ -423,80 +404,61 @@ class rpThermo:
         groups = rpsbml.model.getPlugin('groups')
         rp_pathway = groups.getGroup(pathId)
         #get the number of species, reactions and pathways ###
-        '''
-        numReactions = rp_pathway.getNumMembers()
-        numSpecies = sum([rpsbml.model.getReaction(member.getIdRef()).getNumProducts() + 
-                rpsbml.model.getReaction(member.getIdRef()).getNumReactants() 
-                for member in rp_pathway.getListOfMembers()])
-        #generate the matrices for the pathways and the reactions
-        X_path = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], numSpecies)), ndmin=2)
-        G_path = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], numSpecies)), ndmin=2)
-        '''
+        pathway_dfG_prime_o = 0.0
         X_path = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
         G_path = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
-        pathway_dfG_prime_m = 0.0
-        species_count = 0
+        pathway_stoichio = []
+        pathway_concentration = []
         #path
         for member in rp_pathway.getListOfMembers():
-            reaction_dfG_prime_m = 0.0
-            '''
-            X_reaction = np.array(np.zeros((self.cc_preprocess['C1'].shape[0], 
-                rpsbml.model.getReaction(member.getIdRef()).getNumProducts() +  
-                rpsbml.model.getReaction(member.getIdRef()).getNumReactants())), ndmin=2)
-            G_reaction = np.array(np.zeros((self.cc_preprocess['C3'].shape[0], 
-                rpsbml.model.getReaction(member.getIdRef()).getNumProducts() + 
-                rpsbml.model.getReaction(member.getIdRef()).getNumReactants())), ndmin=2)
-            '''
+            reaction_dfG_prime_o = 0.0
             X_reaction = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
             G_reaction = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
+            reaction_stoichio = []
+            reaction_concentration = []
             reaction = rpsbml.model.getReaction(member.getIdRef())
             #react
             for pro in reaction.getListOfProducts():
                 rpsbml.model.getSpecies(pro.species).getAnnotation()
-                dfG_prime_m, X, G = self.species_dfG_prime_m(
+                dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
                         rpsbml.model.getSpecies(pro.species).getAnnotation(), 
-                        pro.stoichiometry) 
-                if not dfG_prime_m==None:
-                    reaction_dfG_prime_m += dfG_prime_m*pro.stoichiometry
-                    pathway_dfG_prime_m += dfG_prime_m*pro.stoichiometry
-                if type(X)==np.array and type(G)==np.array:
-                    '''
-                    X_reaction[:, species_count:species_count+1] = X
-                    G_reaction[:, species_count:species_count+1] = G
-                    X_path[:, species_count:species_count+1] = X
-                    G_path[:, species_count:species_count+1] = G
-                    '''
+                        float(pro.stoichiometry))
+                reaction_stoichio.append(float(pro.stoichiometry))
+                pathway_stoichio.append(float(pro.stoichiometry))
+                reaction_concentration.append(float(concentration))
+                pathway_concentration.append(float(concentration))
+                if not dfG_prime_o==None:
+                    reaction_dfG_prime_o += dfG_prime_o*pro.stoichiometry
+                    pathway_dfG_prime_o += dfG_prime_o*pro.stoichiometry
                     X_reaction += X
                     G_reaction += G
                     X_path += X
                     G_path += G
-                species_count += 1
             for rea in reaction.getListOfReactants():
-                #need to return the MNX and find the  
-                dfG_prime_m, X, G = self.species_dfG_prime_m(
+                dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
                         rpsbml.model.getSpecies(rea.species).getAnnotation(),
-                        -rea.stoichiometry) 
-                if not dfG_prime_m==None:
-                    reaction_dfG_prime_m += dfG_prime_m*(-rea.stoichiometry)
-                    pathway_dfG_prime_m += dfG_prime_m*(-rea.stoichiometry)
-                if type(X)==np.array and type(G)==np.array:
-                    '''
-                    X_reaction[:, species_count:species_count+1] = X
-                    G_reaction[:, species_count:species_count+1] = G
-                    X_path[:, species_count:species_count+1] = X
-                    G_path[:, species_count:species_count+1] = G
-                    '''
+                        -float(rea.stoichiometry))
+                reaction_stoichio.append(-float(rea.stoichiometry))
+                pathway_stoichio.append(-float(rea.stoichiometry))
+                reaction_concentration.append(float(concentration))
+                pathway_concentration.append(float(concentration))
+                if not dfG_prime_o==None:
+                    reaction_dfG_prime_o += dfG_prime_o*(-rea.stoichiometry)
+                    pathway_dfG_prime_o += dfG_prime_o*(-rea.stoichiometry)
                     X_reaction += X
                     G_reaction += G
                     X_path += X
                     G_path += G
-                species_count += 1
             #add the reaction thermo to the sbml
-            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr('value', str(reaction_dfG_prime_m))
-            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr('value', str(self.dG0_uncertainty(X_reaction, G_reaction)))
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr('value', str(reaction_dfG_prime_o))
+            #rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(reaction_dfG_prime_m))
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(reaction_dfG_prime_o+self.concentrationCorrection(reaction_stoichio, reaction_concentration)))
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr('value', str(self.dG0_uncertainty(X_reaction, G_reaction)))
         #add the pathway thermo to the sbml
-        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG').addAttr('value', str(pathway_dfG_prime_m))
-        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert').addAttr('value', str(self.dG0_uncertainty(X_path, G_path)))
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr('value', str(pathway_dfG_prime_o))
+        #rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(pathway_dfG_prime_m))
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(pathway_dfG_prime_o+self.concentrationCorrection(pathway_stoichio, reaction_concentration)))
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr('value', str(self.dG0_uncertainty(X_path, G_path)))
         
             
     '''

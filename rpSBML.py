@@ -194,6 +194,7 @@ class rpSBML:
     #####################################################################
 
 
+    ''' Do not Use
     def updateThermoSpecies(self):
         toRet = {}
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
@@ -210,7 +211,6 @@ class rpSBML:
                 else:
                     toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet
-        
 
     def updateAnnotThermo(self, annot, ddG, ddG_uncert):
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG')
@@ -218,6 +218,7 @@ class rpSBML:
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert')
         bag.addAttr('value', str(ddG_uncert))
         
+    '''  
 
     
 
@@ -328,7 +329,7 @@ class rpSBML:
                 logging.error('This contains no attributes: '+str(ann.toXMLString()))
                 continue
             if not ann.getName() in toRet:
-                if ann.getName()=='ddG' or ann.getName()=='ddG_uncert':
+                if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o':
                     toRet[ann.getName()] = {
                             'units': ann.getAttrValue('units'), 
                             'value': ann.getAttrValue('value')}
@@ -935,8 +936,9 @@ class rpSBML:
     <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:smiles>'''+str(reaction_smiles)+'''</ibisba:smiles>
-        <ibisba:ddG units="kj_per_mol" value=""/>
-        <ibisba:ddG_uncert units="kj_per_mol" value=""/>
+        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
+        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
+        <ibisba:dG_uncert units="kj_per_mol" value=""/>
       </ibisba:ibisba>
     </rdf:Ibisba>
   </rdf:RDF>
@@ -966,8 +968,8 @@ class rpSBML:
     # @param compartment String Set this species to belong to another compartment than the one globally set by self.compartment
     # @param charge Optional parameter describing the charge of the molecule of interest
     # @param chemForm Optional chemical formulae of the substrate (not SMILES or InChI)
-    # @param ddG Optinal Thermodynamics constant for this species
-    # @param ddG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
+    # @param dG Optinal Thermodynamics constant for this species
+    # @param dG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
     def createSpecies(self, 
             chemId, 
             metaID=None, 
@@ -976,8 +978,9 @@ class rpSBML:
             compartment=None, 
             charge=0,
             chemForm='',
-            ddG=None, 
-            ddG_uncert=None):
+            dG_prime_o=None, 
+            dG_prime_m=None, 
+            dG_uncert=None):
         spe = self.model.createSpecies()
         self._checklibSBML(spe, 'create species')
         ##### FBC #####
@@ -1046,18 +1049,24 @@ class rpSBML:
             annotation += '''
         <ibisba:inchi></ibisba:inchi>
         <ibisba:inchikey></ibisba:inchikey>'''
-        if ddG:
+        if dG_prime_o:
             annotation += '''
-        <ibisba:ddG units="kj_per_mol" value="'''+str(ddG)+'''"/>'''
+        <ibisba:dG_prime_o units="kj_per_mol" value="'''+str(dG_prime_o)+'''"/>'''
         else:
             annotation += '''
-        <ibisba:ddG units="kj_per_mol" value=""/>'''
-        if ddG_uncert:
+        <ibisba:dG_prime_o units="kj_per_mol" value=""/>'''
+        if dG_prime_m:
             annotation += '''
-        <ibisba:ddG_uncert units="kj_per_mol" value="'''+str(ddG_uncert)+'''"/>'''
+        <ibisba:dG_prime_m units="kj_per_mol" value="'''+str(dG_prime_m)+'''"/>'''
         else:
             annotation += '''
-        <ibisba:ddG_uncert units="kj_per_mol" value=""/>'''
+        <ibisba:dG_prime_m units="kj_per_mol" value=""/>'''
+        if dG_uncert:
+            annotation += '''
+        <ibisba:dG_uncert units="kj_per_mol" value="'''+str(dG_uncert)+'''"/>'''
+        else:
+            annotation += '''
+        <ibisba:dG_uncert units="kj_per_mol" value=""/>'''
         annotation += '''
       </ibisba:ibisba>
     </rdf:Ibisba>'''
@@ -1079,7 +1088,7 @@ class rpSBML:
     # @param products list of species that are the products of this reaction
     # @param reaction_smiles String smiles description of this reaction (added in IBISBA annotation)
     # @return hetero_group The number libSBML groups object to pass to createReaction to categorise the new reactions
-    def createPathway(self, path_id, metaID=None, ddG=None, ddG_uncert=None):
+    def createPathway(self, path_id, metaID=None, dG_prime_o=None, dG_prime_m=None, dG_uncert=None):
         groups_plugin = self.model.getPlugin('groups')
         self.hetero_group = groups_plugin.createGroup()
         self.hetero_group.setId('rp_pathway')
@@ -1092,18 +1101,24 @@ class rpSBML:
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
     <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">'''
-        if ddG:
+        if dG_prime_o:
             annotation += '''
-        <ibisba:ddG units="kj_per_mol" value="'''+str(ddG)+'''"/>'''
+        <ibisba:dG_prime_o units="kj_per_mol" value="'''+str(dG_prime_o)+'''"/>'''
         else:
             annotation += '''
-        <ibisba:ddG units="kj_per_mol" value=""/>'''
-        if ddG_uncert:
+        <ibisba:dG_prime_o units="kj_per_mol" value=""/>'''
+        if dG_prime_m:
             annotation += '''
-        <ibisba:ddG_uncert units="kj_per_mol" value="'''+str(ddG_uncert)+'''"/>'''
+        <ibisba:dG_prime_m units="kj_per_mol" value="'''+str(dG_prime_m)+'''"/>'''
         else:
             annotation += '''
-        <ibisba:ddG_uncert units="kj_per_mol" value=""/>'''
+        <ibisba:dG_prime_m units="kj_per_mol" value=""/>'''
+        if dG_uncert:
+            annotation += '''
+        <ibisba:dG_uncert units="kj_per_mol" value="'''+str(dG_uncert)+'''"/>'''
+        else:
+            annotation += '''
+        <ibisba:dG_uncert units="kj_per_mol" value=""/>'''
         annotation += '''
       </ibisba:ibisba>
     </rdf:Ibisba>
