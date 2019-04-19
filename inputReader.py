@@ -38,16 +38,19 @@ class InputReader:
     #  @param self The object pointer
     #  @param inputPath The path to the folder that contains all the input/output files required
     #  @param Database The database name of the user's xref
-    def __init__(self, inputPath=None, Database=None):
+    def __init__(self, inputPath=None, outputPath=None, Database=None):
         if inputPath and inputPath[-1:]=='/':
             inputPath = inputPath[:-1]
-        #cache files
+            if outputPath and outputPath[-1:]=='/':
+                outputPath = outputPath[:-1]
         self.globalPath = inputPath
+        self.outputPath = outputPath
+        #cache files
         self.cc_preprocess = None
         self.rr_reactions = None
         self.full_reactions = None
         self.deprecatedMNXM_mnxm = None
-        #self.mnxm_dG = None
+        self.mnxm_dG = None
         #input files
         self.database = Database
         self.rp_paths = None
@@ -63,8 +66,6 @@ class InputReader:
         self.in_inchi = None
         self.convertid_inchi = {}
         self.convertid_xref = {}
-        self.pub_mnx_chem_xref = None
-        self.mnx_pub_chem_xref = None
         if not self._loadCache(os.getcwd()+'/cache'):
             raise ValueError
 
@@ -138,19 +139,17 @@ class InputReader:
         except FileNotFoundError:
             logging.error('The file '+str(path+'/deprecatedMNXM_mnxm.pickle')+' does not seem to exist')
             return False
-        '''
         try:
             self.mnxm_dG = pickle.load(open(self._checkFilePath(path, 'mnxm_dG.pickle'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/mnxm_dG.pickle')+' does not seem to exist')
             return False
-        '''
         try:
             self.smiles_inchi = pickle.load(gzip.open(self._checkFilePath(path, 'smiles_inchi.pickle.gz'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/smiles_inchi.pickle')+' does not seem to exists')
             return False
-        try:
+        '''try:
             self.pub_mnx_chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'pub_mnx_chem_xref.gz'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/pub_mnx_chem_xref.pickle')+' does not seem to exists')
@@ -159,6 +158,21 @@ class InputReader:
             self.mnx_pub_chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'mnx_pub_chem_xref.gz'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/mnx_pub_chem_xref.pickle')+' does not seem to exists')
+            return False'''
+        try:
+        	self.chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'chemXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/chemXref.pickle.gz')+' does not seem to exists')
+            return False
+        try:
+        	self.reac_xref = pickle.load(gzip.open(self._checkFilePath(path, 'reacXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/reacXref.pickle.gz')+' does not seem to exists')
+            return False
+        try:
+        	self.comp_xref = pickle.load(gzip.open(self._checkFilePath(path, 'compXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/compXref.pickle.gz')+' does not seem to exists')
             return False
         return True
 
@@ -276,14 +290,17 @@ class InputReader:
     #  @param db The user database containing a cross reference
     #  @return finalID 
     def cmpd_identification_xref(self, compound, db):
-        tmp_id = []
-        for i in self.pub_mnx_chem_xref[db]:
-            if compound == self.pub_mnx_chem_xref[db][i]:
-                tmp_id.append(i)
-        for i in self.in_xref:
-            for n in tmp_id:
-                if n == self.in_xref[i][db]:
-                    final_id = i
+        if not 'MNXM' in compound[:4]:
+            if compound in self.in_xref:
+                db_cid = self.in_xref[compound][db]
+                if db_cid in self.chem_xref[db]:  #for i in self.chem_xref if db in self.chem_xref[i]: for n in self.chem_xref[i][db]: if db_cid == n:
+                    final_id = self.chem_xref[db][db_cid]
+        else:
+            tmp_id = self.chem_xref[compound][db]
+            for i in self.in_xref:
+                for n in tmp_id:
+                    if n == self.in_xref[i][db]:
+                        final_id = i
         return final_id
     
     ## Function to extract the inchi for each compound in he model of the user
@@ -381,7 +398,91 @@ class InputReader:
             logging.error('Could not read the compounds file ('+str(path)+')')
             return {}
         return rp_transformation, smiles_inchi
-    
+
+    ## Function to parse the compartments.csv file
+    #
+    #  Parse the compartments.csv file to extract the full name and short name of the different compartments
+    #
+    #  @param self Object pointer 
+    #  @param path The compartments.csv file path
+    #  @return model_compartments Dictionnary of compartments names
+    def compartments(self, path=None):
+            """ Open the compartments.tsv file from Metanetx that gives the common name to the MNX ID's
+            TODO: make this optional
+            """
+            model_compartments = {}
+            try:
+                with open(self._checkFilePath(path, 'compartments')) as f:
+                        reader = csv.reader(f, delimiter='\t')
+                        next(reader)
+                        for row in reader:
+                            model_compartments[row[0]] = {'full_name': row[1], 'short_name': row[2]}
+            except (TypeError, FileNotFoundError) as e:
+                return {}
+            return model_compartments
+
+    ## Function to parse chemicals.csv file
+    #
+    #  Extract different information about components
+    #
+    #  @param self Object pointer
+    #  @param The chemicals.csv file path
+    #  @return model_chemicals Dictionnary of component information
+    def chemicals(self, path=None):
+        """ Open the chemicals.tsv file from MetaNetX that describes the sink from a model with InChI
+            TODO: Replace this with a method that scans an SBML document and extracts all the chemical
+            species
+        """
+        model_chemicals = {}
+        ################# open the chemicals file #############
+        try:
+            with open(self._checkFilePath(path, 'chemicals')) as f:
+                reader = csv.reader(f, delimiter='\t')
+                for row in reader:
+                    ######### chemical formula #############
+                    chem_formula = None
+                    if not row[3]=='':
+                        chem_formula = row[3]
+                    ########## mass #####################
+                    mass = None
+                    if not row[4]=='':
+                        try:
+                            mass = float(row[4])
+                        except ValueError:
+                            logging.error('Could not convert the mass to float ('+str(row[4])+')')
+                    ########## charge ##################
+                    charge = None
+                    if not row[5]=='':
+                        try:
+                            charge = int(row[5])
+                        except ValueError:
+                            logging.error('Could not convert charge to int ('+str(row[5])+')')
+                    ######### xref #####################
+                    xref = {} #construct xref dict
+                    for i in list(set([i.split(':')[0] for i in row[6].split(';')])): #unique xref db names
+                        xref[i] = []
+                    for i in [i.split(':') for i in row[6].split(';')]:
+                        if len(i)==2:
+                            xref[i[0]].append(i[1])
+                    model_chemicals[row[0]] = {'name': row[1], 
+                            'names': row[2].split(';'),
+                            'chem_formula': chem_formula,
+                            'mass': mass,
+                            'charge': charge,
+                            'xref': xref}
+        except (TypeError, FileNotFoundError) as e:
+            return {}
+        return model_chemicals
+
+
+    #Given the path, open the model (NOTE: only MNX models for now)
+    def model(self, path=None):
+        try:
+            return cobra.io.read_sbml_model(self._checkFilePath(path, 'model'))
+        except AttributeError:
+            return None
+
+
     ## Function to parse the out_paths.csv file
     #
     #  Reading the RP2path output and extract all the information for each pathway
@@ -575,15 +676,17 @@ class InputReader:
                             try:
                                 tmp_id = self.cmpd_identification_xref(toAdd, self.database)
                                 new_toAdd = tmp_id
+                                step['left'][new_toAdd+':'+toAdd] = toAdd_left[toAdd]
                             except(KeyError, UnboundLocalError, TypeError):
                                 try:
                                     tmp_id = self.cmpd_identification_inchi(toAdd)
                                     new_toAdd = tmp_id
+                                    step['left'][new_toAdd+':'+toAdd] = toAdd_left[toAdd]
                                 except(KeyError, UnboundLocalError):
                                     logging.warning("No identifier have been found for the compound "+str(toAdd))
+                                    step['left'][toAdd] = toAdd_left[toAdd]
                                 except TypeError:
                                     logging.warning("You did not provide a sink file")
-                        step['left'][new_toAdd+':'+toAdd] = toAdd_left[toAdd]
                 for toAdd in toAdd_right:
                     while toAdd in self.deprecatedMNXM_mnxm:
                         toAdd = self.deprecatedMNXM_mnxm[toAdd]
@@ -592,15 +695,17 @@ class InputReader:
                             try:
                                 tmp_id = self.cmpd_identification_xref(toAdd, self.database)
                                 new_toAdd = tmp_id
+                                step['right'][new_toAdd+':'+toAdd] = toAdd_right[toAdd]
                             except(KeyError, UnboundLocalError, TypeError):
                                 try:
                                     tmp_id = self.cmpd_identification_inchi(toAdd)
                                     new_toAdd = tmp_id
+                                    step['right'][new_toAdd+':'+toAdd] = toAdd_right[toAdd]
                                 except(KeyError, UnboundLocalError):
                                     logging.warning("No identifier have been found for the compound "+str(toAdd))
+                                    step['right'][toAdd] = toAdd_right[toAdd]
                                 except TypeError:
                                     logging.warning("You did not provide a sink file")
-                        step['right'][new_toAdd+':'+toAdd] = toAdd_right[toAdd]
                 #reconstruct the complete reaction smiles by adding the smiles of cofactors
                 if not step['transformation_id'] in comp_reac_smiles:
                     try:
@@ -652,9 +757,9 @@ class InputReader:
                                     tmp_smiles_r=''
                         tmp_smiles_r += smiles_r
                         if rr_reactions[step['rule_id']]['rel_direction'] == '-1':
-                            comp_reac_smiles[step['transformation_id']] = tmp_smiles_l+str('>>')+tmp_smiles_r
-                        elif rr_reactions[step['rule_id']]['rel_direction'] == '1':
                             comp_reac_smiles[step['transformation_id']] = tmp_smiles_r+str('>>')+tmp_smiles_l
+                        elif rr_reactions[step['rule_id']]['rel_direction'] == '1':
+                            comp_reac_smiles[step['transformation_id']] = tmp_smiles_l+str('>>')+tmp_smiles_r
                     except KeyError:
                         pass
 
@@ -671,44 +776,29 @@ class InputReader:
             rpsbml = rpSBML.rpSBML()
             #1) create a generic Model, ie the structure and unit definitions that we will use the most
             rpsbml.genericModel('RetroPath_Pathway_'+str(path_id), 'RP_model'+str(path_id))
-            '''
-            model = rpsbml.createModel('RetroPath2.0 Heterologous Pathway', 'rpModel_'+str(path[0]['path_id']))
-            # NOTE: the unit definitions are hard to define as input.... perhaps have a default for the moment
-            # mmol_per_gDW_per_hr
-            unitDef = self.createUnitDefinition(model, 'mmol_per_gDW_per_hr')
-            moleUnit = self.createUnit(unitDef, libsbml.UNIT_KIND_MOLE, 1, -3, 1)
-            gramUnit = self.createUnit(unitDef, libsbml.UNIT_KIND_GRAM, 1, 0, 1)
-            secondUnit = self.createUnit(unitDef, libsbml.UNIT_KIND_SECOND, 1, 0, 3600)
-            # kj_per_mol
-            gibbsDef = self.createUnitDefinition(model, 'kj_per_mol')
-            kjUnit = self.createUnit(gibbsDef, libsbml.UNIT_KIND_JOULE, 1, 3, 1)
-            moleUnit = self.createUnit(gibbsDef, libsbml.UNIT_KIND_MOLE, 1, 1, 1)
-            #compartment
-            compartment = self.createCompartment(model, 1, compartment_name, compartment_id)
-            upInfParam = self.createParameter(model, 'B_INF', float('inf'), 'kj_per_mol')
-            lowInfParam = self.createParameter(model, 'B__INF', float('-inf'), 'kj_per_mol')
-            '''
-            ##################################
             #2) create the pathway (groups)
             rpsbml.createPathway('hetero_pathway')
             #3) find all the unique species and add them to the model
             all_meta = set([i for step in steps for lr in ['left', 'right'] for i in step[lr]])
-            print(all_meta)
             for meta in list(all_meta):
                 for meta2 in list(all_meta):
                     if meta.split(':')[0] == meta2.split(':')[0] and not ':' in meta and ':' in meta2:
-                        print(meta, meta2)
                         all_meta.remove(meta)
-                print(meta)
+            for meta in all_meta:
+                if not ':' in meta and not 'CMPD' in meta[:4] and not 'TARGET' in meta[:6]:
+                    try:
+                        meta = meta+':'+self.cmpd_identification_xref(meta, self.database)
+                    except(KeyError, UnboundLocalError):
+                        logging.warning("No identifier have been found for the compound "+str(meta))
+                        meta = meta
                 cmpd_meta = meta.split(':')
                 meta = cmpd_meta[0]
-                #BILAL this is for you to complete, add SMILES, Inchi, etc....
                 ### INCHI ### 
                 try:
-                    inchi = rp_smiles_inchi[rp_smiles[meta]['smiles']]
+                	inchi = smiles_inchi[meta]['inchi']
                 except KeyError:
                     try:
-                        inchi = smiles_inchi[meta]['inchi']
+                        inchi = rp_smiles_inchi[rp_smiles[meta]['smiles']]
                     except KeyError:
                         inchi = None
                 ### SMILES ###
@@ -738,11 +828,11 @@ class InputReader:
                 try:
                     tmp_xref = {}
                     if cmpd_meta[1]:
-                        for db in self.mnx_pub_chem_xref[cmpd_meta[1]]:
-                            tmp_xref[db] = self.mnx_pub_chem_xref[cmpd_meta[1]][db]
-                    rpsbml.createSpecies(meta, tmp_xref, None, inchi, smiles, compartment_id, charge, formula)   ### [TODO] add the charge, the chemical formula and the compartment
+                        for db in self.chem_xref[cmpd_meta[1]]:
+                            tmp_xref[db] = self.chem_xref[cmpd_meta[1]][db]
+                    rpsbml.createSpecies(meta, tmp_xref, None, inchi, smiles, compartment_id, charge, formula)   # tmp_xref,
                 except (KeyError, IndexError):
-                    rpsbml.createSpecies(meta, {}, None, inchi, smiles, compartment_id, charge, formula)    
+                    rpsbml.createSpecies(meta, None, None, inchi, smiles, compartment_id, charge, formula)   #{},   
             #4) add the complete reactions and their annotations
             for step in path:
                 #BILAL this is for you to complete
@@ -750,14 +840,12 @@ class InputReader:
                     reac_smiles = comp_reac_smiles[step['transformation_id']] ##rp_transformation[step['transformation_id']]
                 except KeyError:
                     reac_smiles = None
-                #print(step)
-                rpsbml.createReaction('RetroPath_Reaction_'+str(step['step']),
-                        'RP'+str(step['step']),
+                rpsbml.createReaction('RP'+str(step['step']), # parameter 'name' of the reaction deleted : 'RetroPath_Reaction_'+str(step['step']),
                         'B_INF', #only for genericModel
                         'B__INF', #only for genericModel
                         step,
                         reac_smiles,
-                        compartment='c')
+                        'c')
             #5) Optional?? Add the flux objectives. Could be in another place, TBD
             rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
             sbml_paths['RP_model_'+str(path_id)] = {'model': rpsbml.document, 'flux_biomass': None, 'flux_target': None, 'flux_splitObj': None, 'flux_biLevel': None}
@@ -765,86 +853,5 @@ class InputReader:
             rpsbml._writeSBML('rpPath_'+str(path_id), '/home/bshahin/workspace/sbml_models/')  ## TODO change the output path to be a parameter
         return sbml_paths
 
-    ## Function to parse the compartments.csv file
-    #
-    #  Parse the compartments.csv file to extract the full name and short name of the different compartments
-    #
-    #  @param self Object pointer 
-    #  @param path The compartments.csv file path
-    #  @return model_compartments Dictionnary of compartments names
-    def compartments(self, path=None):
-            """ Open the compartments.tsv file from Metanetx that gives the common name to the MNX ID's
-            TODO: make this optional
-            """
-            model_compartments = {}
-            try:
-                with open(self._checkFilePath(path, 'compartments')) as f:
-                        reader = csv.reader(f, delimiter='\t')
-                        next(reader)
-                        for row in reader:
-                            model_compartments[row[0]] = {'full_name': row[1], 'short_name': row[2]}
-            except (TypeError, FileNotFoundError) as e:
-                return {}
-            return model_compartments
 
-    ## Function to parse chemicals.csv file
-    #
-    #  Extract different information about components
-    #
-    #  @param self Object pointer
-    #  @param The chemicals.csv file path
-    #  @return model_chemicals Dictionnary of component information
-    def chemicals(self, path=None):
-        """ Open the chemicals.tsv file from MetaNetX that describes the sink from a model with InChI
-            TODO: Replace this with a method that scans an SBML document and extracts all the chemical
-            species
-        """
-        model_chemicals = {}
-        ################# open the chemicals file #############
-        try:
-            with open(self._checkFilePath(path, 'chemicals')) as f:
-                reader = csv.reader(f, delimiter='\t')
-                for row in reader:
-                    ######### chemical formula #############
-                    chem_formula = None
-                    if not row[3]=='':
-                        chem_formula = row[3]
-                    ########## mass #####################
-                    mass = None
-                    if not row[4]=='':
-                        try:
-                            mass = float(row[4])
-                        except ValueError:
-                            logging.error('Could not convert the mass to float ('+str(row[4])+')')
-                    ########## charge ##################
-                    charge = None
-                    if not row[5]=='':
-                        try:
-                            charge = int(row[5])
-                        except ValueError:
-                            logging.error('Could not convert charge to int ('+str(row[5])+')')
-                    ######### xref #####################
-                    xref = {} #construct xref dict
-                    for i in list(set([i.split(':')[0] for i in row[6].split(';')])): #unique xref db names
-                        xref[i] = []
-                    for i in [i.split(':') for i in row[6].split(';')]:
-                        if len(i)==2:
-                            xref[i[0]].append(i[1])
-                    model_chemicals[row[0]] = {'name': row[1], 
-                            'names': row[2].split(';'),
-                            'chem_formula': chem_formula,
-                            'mass': mass,
-                            'charge': charge,
-                            'xref': xref}
-        except (TypeError, FileNotFoundError) as e:
-            return {}
-        return model_chemicals
-
-
-    #Given the path, open the model (NOTE: only MNX models for now)
-    def model(self, path=None):
-        try:
-            return cobra.io.read_sbml_model(self._checkFilePath(path, 'model'))
-        except AttributeError:
-            return None
 

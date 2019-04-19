@@ -181,12 +181,18 @@ class Cache:
                         dbId = ''.join(row[0].split(':')[1:])
                         if dbName=='deprecated':
                             dbName = 'mnx'
+                    ### MNXM ###
                     if not mnx in chemXref:
                         chemXref[mnx] = {}
                     if not dbName in chemXref[mnx]:
                         chemXref[mnx][dbName] = []
                     if not dbId in chemXref[mnx][dbName]:
                         chemXref[mnx][dbName].append(dbId)
+                    ### DB ###
+                    if not dbName in chemXref:
+                        chemXref[dbName] = {}
+                    if not dbId in chemXref[dbName]:
+                        chemXref[dbName][dbId] = mnx
         return chemXref
 
 
