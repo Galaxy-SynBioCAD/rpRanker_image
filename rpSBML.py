@@ -53,13 +53,14 @@ class rpSBML:
         self.rpReactions = []
         self.rpMetabolites = []
         self.hetero_group = None
-        self.compartment = None
+        self.compartmentName = None
+        self.compartmentId = None
         #self.deprecatedMNXM_mnxm = pickle.load(open('cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         #TODO: seems like the wrong strategy
         if self.model==None:
             logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
         if cache_path==None:
-            #open the xref for the species, reactions, compartments
+            #open the xref for the species, reactions, compartment
             self.chemXref = pickle.load(gzip.open('cache/chemXref.pickle.gz', 'rb'))
             self.compXref = pickle.load(gzip.open('cache/compXref.pickle.gz', 'rb'))
             self.reacXref = pickle.load(gzip.open('cache/reacXref.pickle.gz', 'rb'))
@@ -730,27 +731,23 @@ class rpSBML:
     # @param model libSBML model object to add the compartment
     # @param size Set the compartement size
     # @return boolean Execution success
-    def createCompartment(self, size, name, compId=None, metaID=None):
+    #TODO: set the compName as None by default. To do that you need to regenerate the compXref to 
+    #use MNX ids as keys instead of the string names
+    def createCompartment(self, size, compId, compName, metaID=None):
         comp = self.model.createCompartment()
         self._checklibSBML(comp, 'create compartment')
-        self._checklibSBML(comp.setName(name), 'set the name for the cytoplam')
-        if compId==None:
-            try:
-                #here we set the metanetx ID as the model ID
-                self._checklibSBML(comp.setId(self.compXref[name]['mnx'][0]), 'set compartment id')
-                self.compartment = self.compXref[name]['mnx'][0]
-            except KeyError:
-                pass
-        else:
-            self._checklibSBML(comp.setId(compId, 'set compartment id'))
-            self.compartment = compId
+        self._checklibSBML(comp.setId(compId), 'set compartment id')
+        self.compartmentId = compId
+        if compName:
+            self._checklibSBML(comp.setName(compName), 'set the name for the cytoplam')
+            self.compartmentName = compName
         self._checklibSBML(comp.setConstant(True), 'set compartment "constant"')
         self._checklibSBML(comp.setSize(size), 'set compartment "size"')
         self._checklibSBML(comp.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
         if metaID==None:
-            metaID = self._genMetaID(name)
+            metaID = self._genMetaID(compId)
         self._checklibSBML(comp.setMetaId(metaID), 'set the metaID for the compartment')
-        #self.compartments.append(compartment) #this assumes there is only one compartment
+        #self.compartmentNames.append(compartmentName) #this assumes there is only one compartmentName
         annotation = '''<annotation>
   <rdf:RDF 
   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
@@ -764,10 +761,10 @@ class rpSBML:
         <rdf:Bag>'''
         #TODO: for yout to complete
         id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
-        #WARNING: compartmentID as of now, needs to be a MNX ID
-        if name in self.compXref: 
-            for databaseId in self.compXref[name]:
-                for compartmentId in self.compXref[name][databaseId]:
+        #WARNING: compartmentNameID as of now, needs to be a MNX ID
+        if compName in self.compXref: 
+            for databaseId in self.compXref[compName]:
+                for compartmentId in self.compXref[compName][databaseId]:
                     try:
                         annotation += '''
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
@@ -779,7 +776,7 @@ class rpSBML:
     </rdf:Description> 
   </rdf:RDF>
 </annotation>'''
-        self._checklibSBML(comp.setAnnotation(annotation), 'setting annotation for reaction '+str(name))
+        self._checklibSBML(comp.setAnnotation(annotation), 'setting annotation for reaction '+str(compName))
 
 
     ## Create libSBML unit definition
@@ -846,7 +843,7 @@ class rpSBML:
 
     ## Create libSBML reaction
     #
-    # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartments, stoichiometry
+    # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartment, stoichiometry
     #
     # @param name Name for the reaction
     # @param reaction_id Reaction ID
@@ -855,7 +852,7 @@ class rpSBML:
     # BILAL check the lower
     # @param step 2D dictionnary with the following structure {'left': {'name': stoichiometry, ...}, 'right': {}}
     # @param reaction_smiles String smiles description of this reaction (added in IBISBA annotation)
-    # @param compartment String Optinal parameter compartment ID
+    # @param compartmentId String Optinal parameter compartment ID
     # @param hetero_group Groups Optional parameter object that holds all the heterologous pathways
     # @param metaID String Optional parameter reaction metaID
     # @return metaID meta ID for this reaction
@@ -865,7 +862,7 @@ class rpSBML:
             fluxLowerBound,
             step,
             reaction_smiles, 
-            compartment=None,
+            compartmentId=None,
             hetero_group=None, 
             metaID=None):
         reac = self.model.createReaction()
@@ -892,10 +889,10 @@ class rpSBML:
             spe = reac.createReactant()
             self._checklibSBML(spe, 'create reactant')
             #use the same writing convention as CobraPy
-            if compartment:
-                self._checklibSBML(spe.setSpecies(str(reactant)+'__64__'+str(compartment)), 'assign reactant species')
+            if compartmentId:
+                self._checklibSBML(spe.setSpecies(str(reactant)+'__64__'+str(compartmentId)), 'assign reactant species')
             else:
-                self._checklibSBML(spe.setSpecies(str(reactant)+'__64__'+str(self.compartment)), 'assign reactant species')
+                self._checklibSBML(spe.setSpecies(str(reactant)+'__64__'+str(self.compartmentId)), 'assign reactant species')
             #TODO: check to see the consequences of heterologous parameters not being constant
             self._checklibSBML(spe.setConstant(True), 'set "constant" on species '+str(reactant))
             self._checklibSBML(spe.setStoichiometry(float(step['left'][reactant])), 
@@ -904,10 +901,10 @@ class rpSBML:
         for product in step['right']:
             pro = reac.createProduct()
             self._checklibSBML(pro, 'create product')
-            if compartment:
-                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(compartment)), 'assign product species')
+            if compartmentId:
+                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(compartmentId)), 'assign product species')
             else:
-                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(self.compartment)), 'assign product species') 
+                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(self.compartmentId)), 'assign product species') 
             #TODO: check to see the consequences of heterologous parameters not being constant
             self._checklibSBML(pro.setConstant(True), 'set "constant" on species '+str(product))
             self._checklibSBML(pro.setStoichiometry(float(step['right'][product])), 
@@ -964,13 +961,13 @@ class rpSBML:
 
     ## Create libSBML reaction
     #
-    # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartments, stoichiometry
+    # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartmentId, stoichiometry
     #
     # @param chemId Species name (as of now, can only handle MNX ids)
     # @param metaID Name for the reaction
     # @param inchi String Inchi associated with this species
     # @param smiles String SMILES associated with this species
-    # @param compartment String Set this species to belong to another compartment than the one globally set by self.compartment
+    # @param compartmentId String Set this species to belong to another compartmentId than the one globally set by self.compartmentId
     # @param charge Optional parameter describing the charge of the molecule of interest
     # @param chemForm Optional chemical formulae of the substrate (not SMILES or InChI)
     # @param dG Optinal Thermodynamics constant for this species
@@ -980,7 +977,7 @@ class rpSBML:
             metaID=None, 
             inchi=None,
             smiles=None,
-            compartment=None, 
+            compartmentId=None, 
             charge=0,
             chemForm='',
             dG_prime_o=None, 
@@ -993,10 +990,10 @@ class rpSBML:
         self._checklibSBML(spe_fbc, 'creating this species as an instance of FBC')
         spe_fbc.setCharge(charge) #### These are not required for FBA 
         spe_fbc.setChemicalFormula(chemForm) #### These are not required for FBA
-        if compartment:
-            self._checklibSBML(spe.setCompartment(compartment), 'set species spe compartment')
+        if compartmentId:
+            self._checklibSBML(spe.setCompartment(compartmentId), 'set species spe compartment')
         else:
-            self._checklibSBML(spe.setCompartment(self.compartment), 'set species spe compartment')
+            self._checklibSBML(spe.setCompartment(self.compartmentId), 'set species spe compartment')
         #ID same structure as cobrapy
         #TODO: determine if this is always the case or it will change
         self._checklibSBML(spe.setHasOnlySubstanceUnits(False), 'set substance units')
@@ -1005,7 +1002,7 @@ class rpSBML:
         #useless for FBA (usefull for ODE) but makes Copasi stop complaining
         self._checklibSBML(spe.setInitialConcentration(1.0), 'set an initial concentration')
         #same writting convention as COBRApy
-        self._checklibSBML(spe.setId(str(chemId)+'__64__'+str(compartment)), 'set species id')
+        self._checklibSBML(spe.setId(str(chemId)+'__64__'+str(compartmentId)), 'set species id')
         if metaID==None:
             metaID = self._genMetaID(chemId)
         self._checklibSBML(spe.setMetaId(metaID), 'setting reaction metaID')
@@ -1216,8 +1213,11 @@ class rpSBML:
         # infinity parameters (FBA)
         upInfParam = self.createParameter('B_INF', float('inf'), 'kj_per_mol')
         lowInfParam = self.createParameter('B__INF', float('-inf'), 'kj_per_mol')
+        upNineParam = self.createParameter('B__999999', 999999, 'mmol_per_gDW_per_hr')
+        lowNineParam = self.createParameter('B_999999', -999999, 'mmol_per_gDW_per_hr')
+        lowZeroParam = self.createParameter('B_0', 0, 'mmol_per_gDW_per_hr')
         #compartment
-        self.createCompartment(1, 'cytoplasm') 
+        self.createCompartment(1, 'MNXC3', 'cytoplasm') 
 
 
     ##################################################################################################
@@ -1293,7 +1293,7 @@ class rpSBML:
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            self.createReaction('RP_'+str(stepNum), 'RP_id'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum])
+            self.createReaction('RP_'+str(stepNum), 'RP_id'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum])
             step_id += 1
         #we assume that the 0 rpReaction is the last step in the pathway
         #self.createFluxObj(model, 'rpFBA_obj', 'rpReaction_0', 1, True)

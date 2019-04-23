@@ -5,6 +5,7 @@ import pytest
 
 sys.path.append(os.path.join(os.path.dirname('__file__'), '..'))
 import rpSBML
+#import ../rpSBML
 
 
 path_id = 1
@@ -101,7 +102,7 @@ class TestClass(object):
     def test_createParameter(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
-        upInfParam = rpsbml.createParameter('B_INF', float('inf'), 'kj_per_mol')
+        upInfParam = rpsbml.createParameter('B_999999', 999999.0, 'kj_per_mol')
         inModel = libsbml.readSBML('test_models/test_createParameter.sbml')
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
         #assert inModel.getModel().toXMLNode().equals(rpsbml.model.toXMLNode())==True
@@ -111,7 +112,7 @@ class TestClass(object):
     def test_createCompartent(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
-        rpsbml.createCompartment(1, 'cytoplasm')
+        rpsbml.createCompartment(1, 'MNXC3', 'cytoplasm')
         inModel = libsbml.readSBML('test_models/test_createCompartment.sbml')
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
         #assert inModel.getModel().toXMLNode().equals(rpsbml.model.toXMLNode())==True
@@ -139,7 +140,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
         inModel = libsbml.readSBML('test_models/test_createSpecies.sbml')
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
         #assert inModel.getModel().toXMLNode().equals(rpsbml.model.toXMLNode())==True
@@ -158,11 +159,11 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm')
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', rpsbml.hetero_group)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3', rpsbml.hetero_group)
             step_id += 1
         inModel = libsbml.readSBML('test_models/test_createPathway.sbml')
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
@@ -182,12 +183,12 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm')
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm')
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3')
             step_id += 1
         inModel = libsbml.readSBML('test_models/test_createReaction.sbml')
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
@@ -207,11 +208,11 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm')
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm')
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3')
             step_id += 1
         rpsbml.createFluxObj('flux1', 'RP_1', 2.0, True)
         inModel = libsbml.readSBML('test_models/test_createReaction.sbml')
@@ -266,8 +267,8 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
-        annot = rpsbml.readAnnotation(rpsbml.model.getSpecies('MNXM1__64__cytoplasm').getAnnotation())
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
+        annot = rpsbml.readAnnotation(rpsbml.model.getSpecies('MNXM1__64__MNXC3').getAnnotation())
         assert annot=={'bigg.metabolite': ['h', 'M_h'],
                 'metanetx.chemical': ['MNXM1', 'MNXM145872', 'MNXM89553'],
                 'chebi': ['CHEBI:15378', 'CHEBI:10744', 'CHEBI:13357', 'CHEBI:5584'],
@@ -288,22 +289,22 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3', None, None)
             step_id += 1
-        assert rpsbml.readIBISBAAnnotation(rpsbml.model.getSpecies('MNXM1__64__cytoplasm').getAnnotation())=={'smiles': '[H+]', 'inchi': 'InChI=1S', 'inchikey': '', 'ddG': {'units': 'kj_per_mol', 'value': ''}, 'ddG_uncert': {'units': 'kj_per_mol', 'value': ''}}
+        assert rpsbml.readIBISBAAnnotation(rpsbml.model.getSpecies('MNXM1__64__MNXC3').getAnnotation())=={'smiles': '[H+]','inchi': 'InChI=1S','inchikey': '','dG_prime_o': {'units': 'kj_per_mol', 'value': ''},'dG_prime_m': {'units': 'kj_per_mol', 'value': ''},'dG_uncert': {'units': 'kj_per_mol', 'value': ''}}
 
 
     def test_compareAnnotations(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
         document = libsbml.readSBML('test_models/test_createPathway.sbml')
         model = document.getModel()
-        assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__cytoplasm').getAnnotation(), model.getSpecies('MNXM15__64__cytoplasm').getAnnotation())==False
-        assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__cytoplasm').getAnnotation(), model.getSpecies('MNXM1__64__cytoplasm').getAnnotation())==True
+        assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__MNXC3').getAnnotation(), model.getSpecies('MNXM15__64__MNXC3').getAnnotation())==False
+        assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__MNXC3').getAnnotation(), model.getSpecies('MNXM1__64__MNXC3').getAnnotation())==True
 
 
     def test_mergeModels(self):
@@ -318,12 +319,12 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
         rp_pathway = rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', rpsbml.hetero_group, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3', rpsbml.hetero_group, None)
             step_id += 1
         #other model
         document = libsbml.readSBML('test_models/bigg_iMM904.COBRA-sbml3.xml')

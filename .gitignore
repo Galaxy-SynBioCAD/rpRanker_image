@@ -1,5 +1,6 @@
 component_contribution/
-tests.ipynb
+*.ipynb
 cache/
 *.swp
 *.swo
+*.pyc
