@@ -99,7 +99,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, None, 0, '', None, None)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createSpecies.sbml')
 
 
@@ -115,12 +115,12 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, None, 0, '', None, None)
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', rpsbml.hetero_group, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], None, rpsbml.hetero_group, None)
             step_id += 1
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createPathway.sbml')
 
@@ -137,12 +137,12 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm')
+            rpsbml.createSpecies(meta, None, inchi, smiles, None)
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], None, None, None)
             step_id += 1
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createReaction.sbml')
 
@@ -159,11 +159,11 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm')
+            rpsbml.createSpecies(meta, None, inchi, smiles, None)
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], None, None, None)
             step_id += 1
         rpsbml.createFluxObj('flux1', 'RP_1', 2.0, True)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createFluxObj.sbml')
@@ -181,12 +181,12 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'cytoplasm', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, inchi, smiles, None, 0, '', None, None)
         rp_pathway = rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], 'cytoplasm', rpsbml.hetero_group, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_INF', 'B__INF', steps[stepNum], reaction_smiles[stepNum], None, rpsbml.hetero_group, None)
             step_id += 1
         #other model
         document = libsbml.readSBML(self.outputPath+'bigg_iMM904.COBRA-sbml3.xml')

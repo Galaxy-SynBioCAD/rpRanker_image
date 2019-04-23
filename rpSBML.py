@@ -730,15 +730,20 @@ class rpSBML:
     # @param model libSBML model object to add the compartment
     # @param size Set the compartement size
     # @return boolean Execution success
-    def createCompartment(self, size, name, metaID=None):
+    def createCompartment(self, size, name, compId=None, metaID=None):
         comp = self.model.createCompartment()
         self._checklibSBML(comp, 'create compartment')
         self._checklibSBML(comp.setName(name), 'set the name for the cytoplam')
-        try:
-            #here we set the metanetx ID as the model ID
-            self._checklibSBML(comp.setId(self.compXref[name]['mnx'][0]), 'set compartment id')
-        except KeyError:
-            pass
+        if compId==None:
+            try:
+                #here we set the metanetx ID as the model ID
+                self._checklibSBML(comp.setId(self.compXref[name]['mnx'][0]), 'set compartment id')
+                self.compartment = self.compXref[name]['mnx'][0]
+            except KeyError:
+                pass
+        else:
+            self._checklibSBML(comp.setId(compId, 'set compartment id'))
+            self.compartment = compId
         self._checklibSBML(comp.setConstant(True), 'set compartment "constant"')
         self._checklibSBML(comp.setSize(size), 'set compartment "size"')
         self._checklibSBML(comp.setSBOTerm(290), 'set SBO term for the cytoplasm compartment')
