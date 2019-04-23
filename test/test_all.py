@@ -331,6 +331,6 @@ class TestClass(object):
         model = document.getModel()
         rpsbml.mergeModels(model)
         inModel = libsbml.readSBML('test_models/test_mergeModels.sbml')
-        assert self.compareModels(inModel.getModel(), rpsbml.model)==True
+        assert self.compareModels(inModel.getModel(), model)==True
         #assert inModel.getModel().toXMLNode().equals(rpsbml.model.toXMLNode())==True
         #assert inModel.toSBML()==rpsbml.document.toSBML()

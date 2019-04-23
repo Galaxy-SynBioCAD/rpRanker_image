@@ -383,8 +383,8 @@ class rpSBML:
                 #copy unitDef info to the target
                 self._checklibSBML(target_unitDef.setId(source_unitDef.getId()), 
                     'setting target unit definition ID')
-                self._checklibSBML(target_unitDef.setMetaId(source_unitDef.getMetaId()), 
-                    'setting target unit definition MetaId')
+                #self._checklibSBML(target_unitDef.setMetaId(source_unitDef.getMetaId()), 
+                #    'setting target unit definition MetaId')
                 self._checklibSBML(target_unitDef.setAnnotation(source_unitDef.getAnnotation()), 
                     'setting target unit definition Annotation')
                 for source_unit in source_unitDef.getListOfUnits():
@@ -491,25 +491,31 @@ class rpSBML:
                 target_objective = target_fbc.createObjective()
                 self._checklibSBML(target_objective, 'creating target objective')
                 self._checklibSBML(target_objective.setId(source_objective.getId()), 'setting target objective')
-                self._checklibSBML(target_objective.setMetaId(source_objective.geMetatId()),
-                    'setting target objective')
+                try:
+                    self._checklibSBML(target_objective.setMetaId(source_objective.geMetatId()),
+                        'setting target objective')
+                except AttributeError:
+                    self._checklibSBML(target_objective.setMetaId(self._genMetaID(source_objective.getId())),
+                        'setting target objective')
                 self._checklibSBML(target_objective.setName(source_objective.getName()), 'setting target objective')
-                self._checklibSBML(target_objective.setMetaId(source_objective.getMetaId()),
-                    'setting target objective')
-                self._checklibSBML(target_objective.setFluxObjective(source_objective.getFluxObjective()), 
-                    'setting target objective')
+                #self._checklibSBML(target_objective.setFluxObjective(source_objective.getFluxObjective()), 
+                #    'setting target objective')
                 for source_fluxObjective in source_objective.getListOfFluxObjectives():
                     target_fluxObjective = target_objective.createFluxObjective()
                     self._checklibSBML(target_fluxObjective, 'creating target flux objective')
-                    self._checklibSBML(target_fluxObjective.setId(source_fluxObjective.getId()), 
-                        'setting target flux objective ID')
-                    self._checklibSBML(target_fluxObjective.setMetaId(source_fluxObjective.getMetaId()),
-                        'setting target flux objective MetaID')
+                    #self._checklibSBML(target_fluxObjective.setId(source_fluxObjective.getId()), 
+                    #    'setting target flux objective ID')
+                    try:
+                        self._checklibSBML(target_fluxObjective.setMetaId(source_fluxObjective.getMetaId()),
+                            'setting target flux objective MetaID')
+                    except AttributeError:
+                        self._checklibSBML(target_fluxObjective.setMetaId(self._genMetaID(source_fluxObjective.getId())),
+                            'setting target flux objective MetaID')
                     self._checklibSBML(target_fluxObjective.setName(source_fluxObjective.getName()),
                         'setting target flux objective name')
                     self._checklibSBML(target_fluxObjective.setCoefficient(source_fluxObjective.getCoefficient()),
                         'setting target flux objective coefficient')
-                    self._checklibSBML(target_fluxObjective.getReaction(source_fluxObjective.getReaction()),
+                    self._checklibSBML(target_fluxObjective.setReaction(source_fluxObjective.getReaction()),
                         'setting target flux objective reaction')
         ################ SPECIES ####################
         #TODO: modify the name to add rpPathway

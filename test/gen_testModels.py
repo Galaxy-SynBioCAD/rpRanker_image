@@ -192,7 +192,7 @@ class genTestFiles():
         document = libsbml.readSBML(self.outputPath+'bigg_iMM904.COBRA-sbml3.xml')
         model = document.getModel()
         rpsbml.mergeModels(model)
-        libsbml.writeSBML(rpsbml.document, self.outputPath+'test_mergeModels.sbml')
+        libsbml.writeSBML(document, self.outputPath+'test_mergeModels.sbml')
 
 
 if __name__ == "__main__":
