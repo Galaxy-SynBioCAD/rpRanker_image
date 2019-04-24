@@ -159,7 +159,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
@@ -183,7 +183,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -208,7 +208,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3')
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
@@ -267,7 +267,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3', 0, '', None, None)
         annot = rpsbml.readAnnotation(rpsbml.model.getSpecies('MNXM1__64__MNXC3').getAnnotation())
         assert annot=={'bigg.metabolite': ['h', 'M_h'],
                 'metanetx.chemical': ['MNXM1', 'MNXM145872', 'MNXM89553'],
@@ -289,7 +289,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3', 0, '', None, None)
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -319,7 +319,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, None, inchi, smiles, 'MNXC3', 0, '', None, None)
+            rpsbml.createSpecies(meta, None, None, inchi, smiles, 'MNXC3', 0, '', None, None)
         rp_pathway = rpsbml.createPathway(path_id)
         #reactions
         step_id = 0

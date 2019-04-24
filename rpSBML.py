@@ -973,7 +973,8 @@ class rpSBML:
     # @param dG Optinal Thermodynamics constant for this species
     # @param dG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
     def createSpecies(self, 
-            chemId, 
+            chemId,
+            xref, 
             metaID=None, 
             inchi=None,
             smiles=None,
@@ -1019,15 +1020,38 @@ class rpSBML:
     <rdf:Description rdf:about="#'''+str(metaID)+'''">
       <bqbiol:is>
         <rdf:Bag>'''
-        id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg': 'kegg.compound/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/'}
-        if chemId in self.chemXref: 
-            for dbId in self.chemXref[chemId]:
-                for cid in self.chemXref[chemId][dbId]: 
-                    try:
-                        annotation += '''        
+        id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg_c': 'kegg.compound/', 'kegg_d': 'kegg.drug/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/', 'metacyc': 'metacyc/', 'sabiork': 'seed.compound/', 'reactome': 'reactome.compound/'}
+        if xref == None:
+            if chemId in self.chemXref: 
+                for dbId in self.chemXref[chemId]:
+                    for cid in self.chemXref[chemId][dbId]:
+                        try:
+                            if dbId == 'kegg' and cid[0] == 'C':
+                                annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
+                            elif dbId == 'kegg' and cid[0] == 'D':
+                                annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
+                            else:
+                                annotation += '''        
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
-                    except KeyError:
-                        continue
+                        except KeyError:
+                            continue
+        else:
+            for dbId in xref:
+                    for cid in xref[dbId]:
+                        try:
+                            if dbId == 'kegg' and cid[0] == 'C':
+                                annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
+                            elif dbId == 'kegg' and cid[0] == 'D':
+                                annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
+                            else:
+                                annotation += '''        
+          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
+                        except KeyError:
+                            continue
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
