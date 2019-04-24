@@ -16,17 +16,6 @@ import gzip
 
 
 ##################################################################
-######################## Error handling classes ##################
-##################################################################
-
-
-## Error handling exceptions when cofactors_rp_paths is empty
-#
-class EmptyOutRPpaths(Exception):
-    pass
-
-
-##################################################################
 ############################### rpSBML ###########################
 ##################################################################
 
@@ -1271,7 +1260,7 @@ class rpSBML:
         #### Define the if global or local parameter is to be used
         try:
             if cofactors_rp_paths==None and self.cofactors_rp_paths==None:
-                raise EmptyOutRPpaths 
+                raise TypeError 
             if cofactors_rp_paths==None and not self.cofactors_rp_paths==None:
                 cofactors_rp_paths = self.cofactors_rp_paths
         except EmptyOutRPpaths:
