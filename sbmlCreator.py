@@ -846,10 +846,19 @@ class InputReader:
                         step,
                         reac_smiles,
                         'c')
-            #5) Optional?? Add the flux objectives. Could be in another place, TBD
+            '''#5) adding the export reaction
+            rpsbml.createCompartment(1, 'e', 'extracellular')
+            target_name = [i for i in all_meta if i[:6]=='TARGET'][0]
+            rpsbml.createSpecies(target_name, None, None, None, None, 'e')
+            for step in path:
+                print(step)
+                for i in step['right']:
+                    if 'TARGET' in i[:6]:
+                        rpsbml.createReaction('Target_sink', 'B_0', 'B__999999', step, None, 'e')'''
+            #6) Optional?? Add the flux objectives. Could be in another place, TBD
             rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
             sbml_paths['RP_model_'+str(path_id)] = {'model': rpsbml.document, 'flux_biomass': None, 'flux_target': None, 'flux_splitObj': None, 'flux_biLevel': None}
-            #6) Test writing
+            #7) Test writing
             rpsbml._writeSBML('rpPath_'+str(path_id), '/home/bshahin/workspace/sbml_models/')  ## TODO change the output path to be a parameter
         return sbml_paths
 
