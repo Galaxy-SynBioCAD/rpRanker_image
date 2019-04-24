@@ -491,13 +491,17 @@ class rpSBML:
                 target_objective = target_fbc.createObjective()
                 self._checklibSBML(target_objective, 'creating target objective')
                 self._checklibSBML(target_objective.setId(source_objective.getId()), 'setting target objective')
+                '''
                 try:
                     self._checklibSBML(target_objective.setMetaId(source_objective.geMetatId()),
                         'setting target objective')
                 except AttributeError:
                     self._checklibSBML(target_objective.setMetaId(self._genMetaID(source_objective.getId())),
                         'setting target objective')
+                '''
                 self._checklibSBML(target_objective.setName(source_objective.getName()), 'setting target objective')
+                self._checklibSBML(target_objective.setType(source_objective.getType()), 
+                        'setting target objective type')
                 #self._checklibSBML(target_objective.setFluxObjective(source_objective.getFluxObjective()), 
                 #    'setting target objective')
                 for source_fluxObjective in source_objective.getListOfFluxObjectives():
@@ -505,12 +509,14 @@ class rpSBML:
                     self._checklibSBML(target_fluxObjective, 'creating target flux objective')
                     #self._checklibSBML(target_fluxObjective.setId(source_fluxObjective.getId()), 
                     #    'setting target flux objective ID')
+                    '''
                     try:
                         self._checklibSBML(target_fluxObjective.setMetaId(source_fluxObjective.getMetaId()),
                             'setting target flux objective MetaID')
                     except AttributeError:
                         self._checklibSBML(target_fluxObjective.setMetaId(self._genMetaID(source_fluxObjective.getId())),
                             'setting target flux objective MetaID')
+                    '''
                     self._checklibSBML(target_fluxObjective.setName(source_fluxObjective.getName()),
                         'setting target flux objective name')
                     self._checklibSBML(target_fluxObjective.setCoefficient(source_fluxObjective.getCoefficient()),
@@ -1180,14 +1186,14 @@ class rpSBML:
     # @param isMax Boolean to determine if we are maximizing or minimizing the objective
     # @param metaID Set the metaID
     # @return Boolean exit code
-    def createFluxObj(self, fluxObjID, reactionName, coefficient, isMax=True, metaID=None):
+    def createFluxObj(self, fluxObjID, reactionName, coefficient, isMax=True):#, metaID=None):
         #TODO: define more complex objectives and test the simulation using a libSBML object
         fbc_plugin = self.model.getPlugin('fbc')
         target_obj = fbc_plugin.createObjective()
         target_obj.setId(fluxObjID)
-        if metaID==None:
-            metaID = self._genMetaID(fluxObjID)
-        target_obj.setMetaId(metaID)
+        #if metaID==None:
+        #    metaID = self._genMetaID(fluxObjID)
+        #target_obj.setMetaId(metaID)
         if isMax:
             target_obj.setType('maximize')
         else:
