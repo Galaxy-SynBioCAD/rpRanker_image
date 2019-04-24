@@ -1,7 +1,11 @@
 component_contribution/
 *.ipynb
 cache/
+__pycache__/
+test/__pycache__/
+test/.ipynb_checkpoints/
 test/test_models/*
 *.swp
 *.swo
 *.pyc
+*.ini
