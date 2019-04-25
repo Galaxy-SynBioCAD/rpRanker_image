@@ -67,41 +67,17 @@ class rpThermo:
         """Check that the directory and the filename are valid and choose to use
         either the local or the global path
         """
-        if path==None:
-            if self.globalPath==None:
-                logging.error('Both global path and local are not set')
-                return None
+        if path[-1:]=='/':
+            path = path[:-1]
+        if os.path.isdir(path):
+            if os.path.isfile(path+'/'+filename):
+                return path+'/'+filename
             else:
-                if os.path.isdir(self.globalPath):
-                    try:
-                        fName = [i for i in os.listdir(self.globalPath) 
-                                    if not i.find(filename)==-1 
-                                    if not i[-3:]=='swp'
-                                    if not i[-1]=='#'][0]
-                        logging.info('Automatically selected '+str(fName))
-                    except IndexError:
-                        logging.error('Problem finding the correct '+str(filename)+' in '+str(path))
-                        return None
-                    if os.path.isfile(self.globalPath+'/'+fName):
-                        return self.globalPath+'/'+fName
-                    else:
-                        logging.error('Global path file: '+str(fName)+', does not exist')
-                        return None
-                else:
-                    logging.error('Global path is not a directory: '+str(self.globalPath))
-                    return None
+                logging.error('The file is not valid: '+str(path+'/'+filename))
+                return None
         else:
-            if path[-1:]=='/':
-                path = path[:-1]
-            if os.path.isdir(path):
-                if os.path.isfile(path+'/'+filename):
-                    return path+'/'+filename
-                else:
-                    logging.error('The file is not valid: '+str(path+'/'+filename))
-                    return None
-            else:
-                logging.error('Local path is not a directory: '+str(path))
-                return None
+            logging.error('Local path is not a directory: '+str(path))
+            return None
 
     
     def _loadCache(self, path):
@@ -117,12 +93,13 @@ class rpThermo:
             return False
         return True
 
-
+    ## Select a thermodynamics score from the dataset
+    #
+    # Given that there can be multiple precalculated dG for a given molecule (MNXM)
+    # this function gives the priority to a particular order for a given MNXM ID
+    # alberty>smallest(KEGG_ID)>other(KEGG_ID)
+    #
     def _select_dG(self, cid):
-        """Given that there can be multiple precalculated dG for a given molecule (MNXM)
-        this function gives the priority to a particular order for a given MNXM ID
-        alberty>smallest(KEGG_ID)>other(KEGG_ID)
-        """
         if cid in self.kegg_dG:
             if 'component_contribution' in self.kegg_dG[cid] and self.kegg_dG[cid]['component_contribution']:
                 ####### select the smallest one
@@ -191,13 +168,12 @@ class rpThermo:
     ## Calculate the formation energy of a compound
     #
     # Script adapted from the Noor et al.'s component contribution project. Seperates a compound into groups
+    # Decompose a SMILES string
+    # Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
+    # calculate pKas of the target and intermediates using cxcalc
     # and calculates the its formation energy from the individual contribution of each sub-compound.
     #
     def scrt_dfG_prime_o(self, srct_type, srct_string, stoichio):
-        """ Decompose a SMILES string
-        #Warning -- the dimensions of x and g are not the same as the compound_to_matrix function
-        calculate pKas of the target and intermediates using cxcalc
-        """
         molecule = None
         if srct_type=='smiles':
             molecule = pybel.readstring('smiles', srct_string)
@@ -275,7 +251,7 @@ class rpThermo:
     ##########################################################
 
 
-    ##
+    ## Calculate the formation energy taking into consideration pH and ionic strength of environment
     #from the formation energy of the compound calculate its prime
     #ie. taking into account the pH and the ionic strength of the environment
     def dG_dGprime(self, nMg, z, nH, dG0_f):
@@ -294,7 +270,7 @@ class rpThermo:
         return dG0_prime
 
 
-    ##
+    ## Calculate the formation energy of a compoud at 1mM
     #
     #
     def cmp_dfG_prime_o(self, kegg_cid, stoichio):
@@ -338,6 +314,9 @@ class rpThermo:
     ##########################################################
     
 
+    ## Calculate the uncertainty with a given Gibbs free enery
+    #
+    #
     def dG0_uncertainty(self, X, G):
         return 1.92*float(np.sqrt(X.T @ self.cc_preprocess['C1'] @X +
                              X.T @ self.cc_preprocess['C2'] @G +
@@ -407,10 +386,14 @@ class rpThermo:
                 #at last, if all fails use its structure to calculate dfG_prime_o
                 #try for inchi
                 if inchi:
-                    dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
-                            'inchi', 
-                            inchi, 
-                            stoichio)
+                    try:
+                        dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
+                                'inchi', 
+                                inchi, 
+                                stoichio)
+                    #TODO: change this
+                    except (KeyError, LookupError):
+                        raise KeyError
                     self.calculated_dG[inchi] = {}
                     self.calculated_dG[inchi]['dfG_prime_o'] = dfG_prime_o
                     self.calculated_dG[inchi]['X'] = X
@@ -418,10 +401,14 @@ class rpThermo:
                 else:
                     #try for smiles
                     if smiles:
-                        dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
-                                'smiles',
-                                smiles,
-                                stoichio)
+                        try:
+                            dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
+                                    'smiles',
+                                    smiles,
+                                    stoichio)
+                        #TODO: change this
+                        except (KeyError, LookupError):
+                            raise KeyError
                         self.calculated_dG[smiles] = {}
                         self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
                         self.calculated_dG[smiles]['X'] = X
@@ -456,7 +443,8 @@ class rpThermo:
 
     ## Calculate the pathway and reactions dG0_prime_o and its uncertainty
     #
-    #
+    # WARNING: we skip the components that we fail to calculate the thermodynamics and 
+    # and as a consequence the pathway thermo score ignore that step --> need to at least report it
     # TODO: change this to KEGG id's instead of MNX
     def pathway_drG_prime_m(self, rpsbml, pathId='rp_pathway'):
         #calculate the number of species that are involded in the pathway 
@@ -481,9 +469,12 @@ class rpThermo:
             #react
             for pro in reaction.getListOfProducts():
                 rpsbml.model.getSpecies(pro.species).getAnnotation()
-                dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
-                        rpsbml.model.getSpecies(pro.species).getAnnotation(), 
-                        float(pro.stoichiometry))
+                try:
+                    dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
+                            rpsbml.model.getSpecies(pro.species).getAnnotation(), 
+                            float(pro.stoichiometry))
+                except (KeyError, LookupError):
+                    continue
                 reaction_stoichio.append(float(pro.stoichiometry))
                 pathway_stoichio.append(float(pro.stoichiometry))
                 reaction_concentration.append(float(concentration))
@@ -496,9 +487,12 @@ class rpThermo:
                     X_path += X
                     G_path += G
             for rea in reaction.getListOfReactants():
-                dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
-                        rpsbml.model.getSpecies(rea.species).getAnnotation(),
-                        -float(rea.stoichiometry))
+                try:
+                    dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
+                            rpsbml.model.getSpecies(rea.species).getAnnotation(),
+                            -float(rea.stoichiometry))
+                except (KeyError, LookupError):
+                    continue
                 reaction_stoichio.append(-float(rea.stoichiometry))
                 pathway_stoichio.append(-float(rea.stoichiometry))
                 reaction_concentration.append(float(concentration))
@@ -522,28 +516,7 @@ class rpThermo:
         rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr('value', str(self.dG0_uncertainty(X_path, G_path)))
         
             
-    '''
-    def dG_uncertainty(self, X, G):
-        return 1.92*float(np.sqrt(X.T@self.cc_preprocess['C1']@X + 
-            X.T@self.cc_preprocess['C2']@G + 
-            G.T@self.cc_preprocess['C3']@G))
-
-    def sigma_matrix(self, X, G):
-        """Calculate the uncertainty  of a precalculated compound using matrices X and G
-        """
-        ### new method says:
-        #        return float(sqrt(x.T @ Preprocessing.C1 @ x +
-        #                  x.T @ Preprocessing.C2 @ g +
-        #                  g.T @ Preprocessing.C3 @ g))
-        #Calculate the uncertainty of a precalculated compound or group of compounds 
-        U = X.T @ self.cc_preprocess['C1'] @ X + \
-            X.T @ self.cc_preprocess['C2'] @ G + \
-            G.T @ self.cc_preprocess['C2'].T @ X + \
-            G.T @ self.cc_preprocess['C3'] @ G
-        #Below is terrible score, if we want to calculate the dG0 using the matrix
-        #dG0_cc = X.T @ self.cc_preprocess['v_r'] + G.T @ self.cc_preprocess['v_g']
-        return np.sqrt(U[0, 0])#, dG0_cc
-    '''
+    #TODO: implement to return if the reaction is balanced and the reversibility index 
 
     def isBalanced():
         """Function borrowed from the component contribution that checks is the per-atom

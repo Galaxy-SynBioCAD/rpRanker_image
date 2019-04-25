@@ -29,35 +29,17 @@ class rpSBML:
     # @param model libSBML model object
     # @param docModel libSBML Document object
     # @param nameSpaceModel libSBML name space (not required)
-    def __init__(self, model=None, document=None, sbmlns=None, path=None, cache_path=None):
+    def __init__(self, modelName, model=None, document=None, sbmlns=None, path=None, cache_path=None):
+        self.modelName = modelName
         self.model = model
         self.document = document
         self.sbmlns = sbmlns #we allow this to be None
         self.path = path
-        #TODO: if entry model, need to scan for these parameters
-        #self.unitDefinitions = []
-        #self.parameters = []
-        #self.fluxObjs = []
-        #TODO: scan for these upon uploading of a model
-        #self.rpReactions = []
-        #self.rpMetabolites = []
         self.hetero_group = None
         self.compartmentName = None
         self.compartmentId = None
-        #self.deprecatedMNXM_mnxm = pickle.load(open('cache/deprecatedMNXM_mnxm.pickle', 'rb'))
-        #TODO: seems like the wrong strategy
         if self.model==None:
             logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
-        if cache_path==None:
-            #open the xref for the species, reactions, compartment
-            self.chemXref = pickle.load(gzip.open('cache/chemXref.pickle.gz', 'rb'))
-            self.compXref = pickle.load(gzip.open('cache/compXref.pickle.gz', 'rb'))
-            self.reacXref = pickle.load(gzip.open('cache/reacXref.pickle.gz', 'rb'))
-        else:
-            self.chemXref = pickle.load(gzip.open(cache_path+'/chemXref.pickle.gz', 'rb'))
-            self.compXref = pickle.load(gzip.open(cache_path+'/compXref.pickle.gz', 'rb'))
-            self.reacXref = pickle.load(gzip.open(cache_path+'/reacXref.pickle.gz', 'rb'))
-    
 
     #######################################################################
     ############################# PRIVATE FUNCTIONS ####################### 
@@ -122,55 +104,6 @@ class rpSBML:
 
 
     #####################################################################
-    ############################ UPDATE #################################
-    #####################################################################
-
-
-    ''' Do not Use
-    def updateThermoSpecies(self):
-        toRet = {}
-        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
-        for i in range(bag.getNumChildren()):
-            ann = bag.getChild(i)
-            if ann=='':
-                logging.error('This contains no attributes: '+str(ann.toXMLString()))
-                continue
-            if not ann.getName() in toRet:
-                if ann.getName()=='ddG' or ann.getName()=='ddG_uncert':
-                    toRet[ann.getName()] = {
-                            'units': ann.getAttrValue('units'), 
-                            'value': ann.getAttrValue('value')}
-                else:
-                    toRet[ann.getName()] = ann.getChild(0).toXMLString()
-        return toRet
-
-    def updateAnnotThermo(self, annot, ddG, ddG_uncert):
-        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG')
-        bag.addAttr('value', str(ddG))
-        bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('ddG_uncert')
-        bag.addAttr('value', str(ddG_uncert))
-        
-    '''  
-
-    
-
-
-    '''
-    def updateThermoPathway(self, ddG, ddG_uncert, pathId='rp_pathway'):
-        groups = self.model.getPlugin('groups')
-        rp_pathway = groups.getGroup(pathId)
-        annot = rp_pathway.annotation
-        
-
-    def updateThermoReaction(self, reacId, ddG, ddG_uncert):
-                
-
-
-    def updateThermoSpecies(self, specId, ddG, ddG_uncert):
-    '''
-
-
-    #####################################################################
     ########################## READ/WRITE ###############################
     #####################################################################
 
@@ -198,7 +131,8 @@ class rpSBML:
         if not model:
             loging.erro('Either the file was not read correctly or the SBML is empty')
             raise FileNotFoundError
-        return document, model, errors
+        self.document = document
+        self.model = model
 
 
     ## Export a libSBML model to file
@@ -208,7 +142,7 @@ class rpSBML:
     # @param model libSBML model to be saved to file
     # @param model_id model id, note that the name of the file will be that
     # @param path Non required parameter that will define the path where the model will be saved
-    def writeSBML(self, model_id, path=None):
+    def writeSBML(self, path):
         ####### check the path #########
         #need to determine where are the path id's coming from
         p = None
@@ -228,7 +162,7 @@ class rpSBML:
         ########## check and create folder #####
         if not os.path.exists(p):
             os.makedirs(p)
-        libsbml.writeSBMLToFile(self.document, p+'/'+str(model_id)+'.sbml')
+        libsbml.writeSBMLToFile(self.document, p+'/'+str(self.modelName)+'.sbml')
         return True
 
 
@@ -246,7 +180,7 @@ class rpSBML:
         return reacIds
 
 
-    ## 
+    ## Return the the species annitations 
     #
     #
     def readRPspeciesAnnotation(self, reacIds=None):
@@ -263,6 +197,9 @@ class rpSBML:
         return reacMembers
     
 
+    ## Return the MIRIAM annotations of species
+    #
+    #
     def readMIRIAMSpeciesAnnotation(self, annot, cid):
         id_annotId = {'bigg': 'bigg.metabolite', 
                 'mnx': 'metanetx.chemical', 
@@ -475,32 +412,12 @@ class rpSBML:
                 target_objective = target_fbc.createObjective()
                 self._checklibSBML(target_objective, 'creating target objective')
                 self._checklibSBML(target_objective.setId(source_objective.getId()), 'setting target objective')
-                '''
-                try:
-                    self._checklibSBML(target_objective.setMetaId(source_objective.geMetatId()),
-                        'setting target objective')
-                except AttributeError:
-                    self._checklibSBML(target_objective.setMetaId(self._genMetaID(source_objective.getId())),
-                        'setting target objective')
-                '''
                 self._checklibSBML(target_objective.setName(source_objective.getName()), 'setting target objective')
                 self._checklibSBML(target_objective.setType(source_objective.getType()), 
                         'setting target objective type')
-                #self._checklibSBML(target_objective.setFluxObjective(source_objective.getFluxObjective()), 
-                #    'setting target objective')
                 for source_fluxObjective in source_objective.getListOfFluxObjectives():
                     target_fluxObjective = target_objective.createFluxObjective()
                     self._checklibSBML(target_fluxObjective, 'creating target flux objective')
-                    #self._checklibSBML(target_fluxObjective.setId(source_fluxObjective.getId()), 
-                    #    'setting target flux objective ID')
-                    '''
-                    try:
-                        self._checklibSBML(target_fluxObjective.setMetaId(source_fluxObjective.getMetaId()),
-                            'setting target flux objective MetaID')
-                    except AttributeError:
-                        self._checklibSBML(target_fluxObjective.setMetaId(self._genMetaID(source_fluxObjective.getId())),
-                            'setting target flux objective MetaID')
-                    '''
                     self._checklibSBML(target_fluxObjective.setName(source_fluxObjective.getName()),
                         'setting target flux objective name')
                     self._checklibSBML(target_fluxObjective.setCoefficient(source_fluxObjective.getCoefficient()),
@@ -729,7 +646,7 @@ class rpSBML:
     # @return boolean Execution success
     #TODO: set the compName as None by default. To do that you need to regenerate the compXref to 
     #use MNX ids as keys instead of the string names
-    def createCompartment(self, size, compId, compName, metaID=None):
+    def createCompartment(self, size, compId, compName, compXref, metaID=None):
         comp = self.model.createCompartment()
         self._checklibSBML(comp, 'create compartment')
         self._checklibSBML(comp.setId(compId), 'set compartment id')
@@ -758,9 +675,9 @@ class rpSBML:
         #TODO: for yout to complete
         id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
         #WARNING: compartmentNameID as of now, needs to be a MNX ID
-        if compName in self.compXref: 
-            for databaseId in self.compXref[compName]:
-                for compartmentId in self.compXref[compName][databaseId]:
+        if compName in compXref: 
+            for databaseId in compXref[compName]:
+                for compartmentId in compXref[compName][databaseId]:
                     try:
                         annotation += '''
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
@@ -858,6 +775,7 @@ class rpSBML:
             fluxLowerBound,
             step,
             reaction_smiles, 
+            reacXref,
             compartmentId=None,
             hetero_group=None, 
             metaID=None):
@@ -918,9 +836,9 @@ class rpSBML:
       <bqbiol:is>
         <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.reaction/', 'rhea': 'rhea/', 'reactome': 'reactome/', 'bigg': 'bigg.reaction/', 'sabiork': 'sabiork.reaction/', 'ec-code': 'ec-code/', 'biocyc': 'biocyc/'}
-        if reacId in self.reacXref: 
-            for dbId in self.reacXref[reacId]:
-                for cid in self.reacXref[reacId][dbId]: 
+        if reacId in reacXref: 
+            for dbId in reacXref[reacId]:
+                for cid in reacXref[reacId][dbId]: 
                     try:
                         annotation += '''        
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
@@ -970,7 +888,7 @@ class rpSBML:
     # @param dG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
     def createSpecies(self, 
             chemId,
-            xref, 
+            chemXref, 
             metaID=None, 
             inchi=None,
             smiles=None,
@@ -1017,37 +935,21 @@ class rpSBML:
       <bqbiol:is>
         <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg_c': 'kegg.compound/', 'kegg_d': 'kegg.drug/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/', 'metacyc': 'metacyc/', 'sabiork': 'seed.compound/', 'reactome': 'reactome.compound/'}
-        if xref == None:
-            if chemId in self.chemXref: 
-                for dbId in self.chemXref[chemId]:
-                    for cid in self.chemXref[chemId][dbId]:
-                        try:
-                            if dbId == 'kegg' and cid[0] == 'C':
-                                annotation += '''        
+        if chemId in chemXref: 
+            for dbId in chemXref[chemId]:
+                for cid in chemXref[chemId][dbId]:
+                    try:
+                        if dbId == 'kegg' and cid[0] == 'C':
+                            annotation += '''        
           <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
-                            elif dbId == 'kegg' and cid[0] == 'D':
-                                annotation += '''        
+                        elif dbId == 'kegg' and cid[0] == 'D':
+                            annotation += '''        
           <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
-                            else:
-                                annotation += '''        
+                        else:
+                            annotation += '''        
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
-                        except KeyError:
-                            continue
-        else:
-            for dbId in xref:
-                    for cid in xref[dbId]:
-                        try:
-                            if dbId == 'kegg' and cid[0] == 'C':
-                                annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
-                            elif dbId == 'kegg' and cid[0] == 'D':
-                                annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
-                            else:
-                                annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
-                        except KeyError:
-                            continue
+                    except KeyError:
+                        continue
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
@@ -1219,7 +1121,7 @@ class rpSBML:
     #
     #
     #
-    def genericModel(self, modelName, modelID):
+    def genericModel(self, modelName, modelID, compXref):
         self.createModel(modelName, modelID)
         # mmol_per_gDW_per_hr
         unitDef = self.createUnitDefinition('mmol_per_gDW_per_hr')
@@ -1233,11 +1135,11 @@ class rpSBML:
         # infinity parameters (FBA)
         upInfParam = self.createParameter('B_INF', float('inf'), 'kj_per_mol')
         lowInfParam = self.createParameter('B__INF', float('-inf'), 'kj_per_mol')
-        upNineParam = self.createParameter('B__999999', 999999, 'mmol_per_gDW_per_hr')
-        lowNineParam = self.createParameter('B_999999', -999999, 'mmol_per_gDW_per_hr')
+        upNineParam = self.createParameter('B__999999', -999999, 'mmol_per_gDW_per_hr')
+        lowNineParam = self.createParameter('B_999999', 999999, 'mmol_per_gDW_per_hr')
         lowZeroParam = self.createParameter('B_0', 0, 'mmol_per_gDW_per_hr')
         #compartment
-        self.createCompartment(1, 'MNXC3', 'cytoplasm') 
+        self.createCompartment(1, 'MNXC3', 'cytoplasm', compXref) 
 
 
     ##################################################################################################
@@ -1263,60 +1165,5 @@ class rpSBML:
         #### Check what is the best path to use
         if path_id==None:
             path_id = 1
-        return None
-
-
-    ## Main function for testing
-    #
-    # Generate a dummy heterologous pathway file and open an SBML to write the same heterologous pathway
-    #to test the functionality of the class. This should be used as an quide to use to design 
-    # NOTE: we are assuming that the input to the function is the cofactor_rp_paths as generated by the inputReader
-    def main(self):
-        ## as a test we have a pathway of two steps all MNX ###
-        ## input data ##
-        path_id = 1
-        steps = [{'right': {'CMPD_0000000003': 1, 'MNXM13': 1, 'MNXM15': 1, 'MNXM8': 1}, 'left': {'MNXM10': 1, 'MNXM188': 1, 'MNXM4': 1, 'MNXM1': 3}}, {'right': {'TARGET_0000000001': 1, 'MNXM1': 2}, 'left': {'CMPD_0000000003': 1, 'MNXM4': 1, }}]   
-        reaction_smiles = ['[H]Oc1c([H])c([H])c([H])c([H])c1O[H]>>O=O.[H]N=C(O[H])C1=C([H])N(C2([H])OC([H])(C([H])([H])OP(=O)(O[H])OP(=O)(O[H])OC([H])([H])C3([H])OC([H])(n4c([H])nc5c(N([H])[H])nc([H])nc54)C([H])(O[H])C3([H])O[H])C([H])(O[H])C2([H])O[H])C([H])=C([H])C1([H])[H].[H]OC(=O)c1c([H])c([H])c([H])c([H])c1N([H])[H]', '[H]OC(=O)C([H])=C([H])C([H])=C([H])C(=O)O[H]>>O=O.[H]Oc1c([H])c([H])c([H])c([H])c1O[H]', ]
-        rp_smiles = {'MNXM10': '[H]N=C(O[H])C1=C([H])N(C2([H])OC([H])(C([H])([H])OP(=O)(O[H])OP(=O)(O[H])OC([H])([H])C3([H])OC([H])(n4c([H])nc5c(N([H])[H])nc([H])nc54)C([H])(O[H])C3([H])O[H])C([H])(O[H])C2([H])O[H])C([H])=C([H])C1([H])[H]',
- 'MNXM188': '[H]OC(=O)c1c([H])c([H])c([H])c([H])c1N([H])[H]',
- 'MNXM4': 'O=O',
- 'MNXM1': '[H+]',
- 'CMPD_0000000003': '[H]Oc1c([H])c([H])c([H])c([H])c1O[H]',
- 'MNXM13': 'O=C=O',
- 'MNXM15': '[H]N([H])[H]',
- 'MNXM8': 'NC(=O)c1ccc[n+](c1)[C@@H]1O[C@H](COP([O-])(=O)OP([O-])(=O)OC[C@H]2O[C@H]([C@H](O)[C@@H]2O)n2cnc3c(N)ncnc23)[C@@H](O)[C@H]1O',
- 'TARGET_0000000001': '[H]OC(=O)C([H])=C([H])C([H])=C([H])C(=O)O[H]'}
-        rp_inchi = {'MNXM10': 'InChI=1S/C21H29N7O14P2/c22-17-12-19(25-7-24-17)28(8-26-12)21-16(32)14(30)11(41-21)6-39-44(36,37)42-43(34,35)38-5-10-13(29)15(31)20(40-10)27-3-1-2-9(4-27)18(23)33/h1,3-4,7-8,10-11,13-16,20-21,29-32H,2,5-6H2,(H2,23,33)(H,34,35)(H,36,37)(H2,22,24,25)/p-2/t10-,11-,13-,14-,15-,16-,20-,21-/m1/s1',
- 'MNXM188': 'InChI=1S/C7H7NO2/c8-6-4-2-1-3-5(6)7(9)10/h1-4H,8H2,(H,9,10)/p-1',
- 'MNXM4': 'InChI=1S/O2/c1-2',
- 'MNXM1': 'InChI=1S',
- 'CMPD_0000000003': None,
- 'MNXM13': 'InChI=1S/CO2/c2-1-3',
- 'MNXM15': 'InChI=1S/H3N/h1H3/p+1',
- 'MNXM8': 'InChI=1S/C21H27N7O14P2/c22-17-12-19(25-7-24-17)28(8-26-12)21-16(32)14(30)11(41-21)6-39-44(36,37)42-43(34,35)38-5-10-13(29)15(31)20(40-10)27-3-1-2-9(4-27)18(23)33/h1-4,7-8,10-11,13-16,20-21,29-32H,5-6H2,(H5-,22,23,24,25,33,34,35,36,37)/p-1/t10-,11-,13-,14-,15-,16-,20-,21-/m1/s1',
- 'TARGET_0000000001': 'InChI=1S/C6H6O4/c7-5(8)3-1-2-4-6(9)10/h1-4H,(H,7,8)(H,9,10)'}
-        ######### Model
-        self.genericModel('RetroPath_heterologous_pathway', 'rp_model')
-        #list all the unique metabolites that must be created
-        #identify if there are InchI or SMILES description of the two different molecules
-        for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
-            try:
-                inchi = rp_inchi[meta] 
-            except KeyError:
-                inchi = None
-            try:
-                smiles = rp_smiles[meta] 
-            except KeyError:
-                smiles = None
-            self.createSpecies(meta, {}, None, inchi, smiles)
-        self.createPathway(path_id)
-        #reactions
-        step_id = 0
-        for stepNum in range(len(steps)):
-            self.createReaction('RP_'+str(stepNum), 'RP_id'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum])
-            step_id += 1
-        #we assume that the 0 rpReaction is the last step in the pathway
-        #self.createFluxObj(model, 'rpFBA_obj', 'rpReaction_0', 1, True)
-        self.writeSBML('test_out', '/home/mdulac/Documents/rpFBA/sbml_models/')
         return None
 

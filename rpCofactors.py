@@ -8,9 +8,6 @@ import logging
 import rpSBML
 import rpThermo
 
-import sys
-import gc
-
 #TODO: inherit InputReader instead of passing it as a parameter
 
 ## Class to add the cofactors to a monocomponent reaction to construct the full reaction
@@ -32,6 +29,9 @@ class rpCofactors:
         self.full_reactions = None
         self.userXrefDbName = userXrefDbName #TODO: change to interpret all inputs xref database from the input file directly 
         self.rr_reactions = None
+        self.chem_xref = None
+        self.reacXref = None
+        self.compXref = None
         if not self._loadCache(os.getcwd()+'/cache'):
             raise ValueError
 
@@ -74,7 +74,23 @@ class rpCofactors:
         except FileNotFoundError:
             logging.error('The file '+str(path, '/rr_reactions.pickle')+' does not seem to exist')
             return False
+        try:
+            self.chemXref = pickle.load(gzip.open(self._checkFilePath(path, '/chemXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path, '/chemXref.pickle.gz')+' does not seem to exist')
+            return False
+        try:
+            self.compXref = pickle.load(gzip.open(self._checkFilePath(path, '/compXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path, '/compXref.pickle.gz')+' does not seem to exist')
+            return False
+        try:
+            self.reacXref = pickle.load(gzip.open(self._checkFilePath(path, '/reacXref.pickle.gz'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path, '/reacXref.pickle.gz')+' does not seem to exist')
+            return False
         return True
+
 
     ## Function to identify the user identifier from the MNX one
     #
@@ -348,45 +364,19 @@ class rpCofactors:
                         pass
         return rp_paths
 
-    def _get_obj_size(self, obj):
-        marked = {id(obj)}
-        obj_q = [obj]
-        sz = 0
 
-        while obj_q:
-            sz += sum(map(sys.getsizeof, obj_q))
-
-            # Lookup all the object reffered to by the object in obj_q.
-            # See: https://docs.python.org/3.7/library/gc.html#gc.get_referents
-            all_refr = ((id(o), o) for o in gc.get_referents(*obj_q))
-
-            # Filter object that are already marked.
-            # Using dict notation will prevent repeated objects.
-            new_refr = {o_id: o for o_id, o in all_refr if o_id not in marked and not isinstance(o, type)}
-
-            # The new obj_q will be the ones that were not marked,
-            # and we will update marked with their ids so we will
-            # not traverse them again.
-            obj_q = new_refr.values()
-            marked.update(new_refr.keys())
-
-        return sz
-
-
-    def pathsToRPsbml(self, outputFolderName='sbml_models', compartment_id='MNXC3'):
+    def pathsToSBML(self, compartment_id='MNXC3'):
         #if the output folder does not exist then create it
         #for path in rp_paths:
         sbmlThermo = rpThermo.rpThermo()
-        if not os.path.exists(os.getcwd()+'/'+outputFolderName):
-            os.makedirs(os.getcwd()+'/'+outputFolderName)
         for path in self.addCofactors():
             steps = [i for i in path]
             path_id = steps[0]['path_id']
             #logging.info('############ Generating an sbml object for path '+str(path_id)+' ###########')
             ###### create a libSBML model ####
-            rpsbml = rpSBML.rpSBML()
+            rpsbml = rpSBML.rpSBML('rp_'+str(path_id))
             #1) create a generic Model, ie the structure and unit definitions that we will use the most
-            rpsbml.genericModel('RetroPath_Pathway_'+str(path_id), 'RP_model'+str(path_id))
+            rpsbml.genericModel('RetroPath_Pathway_'+str(path_id), 'RP_model'+str(path_id), self.compXref)
             #2) create the pathway (groups)
             rpsbml.createPathway('hetero_pathway')
             #3) find all the unique species and add them to the model
@@ -430,19 +420,7 @@ class rpCofactors:
                 	charge = self.rpReader.model_chemicals[meta]['charge']
                 except KeyError:
                 	charge = 0
-                ### COMPOUND IDENTIFICATION ###
-                #if 'TARGET' in meta[:6]:  ##'CMPD' in meta[:4] or 'TARGET' in meta[:6]
-                #    tmp_meta = cmpd_meta[1]
-                #else:
-                #    tmp_meta = cmpd_meta[0]
-                try:
-                    tmp_xref = {}
-                    if cmpd_meta[1]:
-                        for db in self.chem_xref[cmpd_meta[1]]:
-                            tmp_xref[db] = self.chem_xref[cmpd_meta[1]][db]
-                    rpsbml.createSpecies(meta, tmp_xref, None, inchi, smiles, compartment_id, charge, formula)
-                except (KeyError, IndexError):
-                    rpsbml.createSpecies(meta, None, None, inchi, smiles, compartment_id, charge, formula)
+                rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, compartment_id, charge, formula)
             #4) add the complete reactions and their annotations
             for step in path:
                 try:
@@ -450,10 +428,11 @@ class rpCofactors:
                 except KeyError:
                     reac_smiles = None
                 rpsbml.createReaction('RP'+str(step['step']), # parameter 'name' of the reaction deleted : 'RetroPath_Reaction_'+str(step['step']),
-                        'B_INF', #only for genericModel
+                        'B_999999', #only for genericModel
                         'B_0', #only for genericModel
                         step,
                         reac_smiles,
+                        self.reacXref,
                         compartment_id)
             '''#5) adding the export reaction
             rpsbml.createCompartment(1, 'e', 'extracellular')
@@ -466,11 +445,44 @@ class rpCofactors:
                         rpsbml.createReaction('Target_sink', 'B_0', 'B__999999', step, None, 'e')'''
             #6) Optional?? Add the flux objectives. Could be in another place, TBD
             rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
+            #####################################################
+            ##################### Thermodynamics ################
+            #####################################################
             sbmlThermo.pathway_drG_prime_m(rpsbml)
             #print(sys.getsizeof(rpsbml))
-            if 100000000<self._get_obj_size(self.sbml_paths):
-                print('TOO LLAAAARGE')
-                sys.exit()
-            print(self._get_obj_size(self.sbml_paths))
+            #if 50000<self._get_obj_size(self.sbml_paths):
+            #    print('TOO LLAAAARGE')
+            #    sys.exit()
+            #print(self._get_obj_size(self.sbml_paths))
             #rpsbml.writeSBML('RP'+str(path_id), os.getcwd()+'/'+outputFolderName)
             self.sbml_paths['rp_'+str(path_id)] = rpsbml
+
+
+    ##########################################################################
+    ########################## TEST ##########################################
+    ##########################################################################
+
+    def _get_obj_size(self, obj):
+        marked = {id(obj)}
+        obj_q = [obj]
+        sz = 0
+
+        while obj_q:
+            sz += sum(map(sys.getsizeof, obj_q))
+
+            # Lookup all the object reffered to by the object in obj_q.
+            # See: https://docs.python.org/3.7/library/gc.html#gc.get_referents
+            all_refr = ((id(o), o) for o in gc.get_referents(*obj_q))
+
+            # Filter object that are already marked.
+            # Using dict notation will prevent repeated objects.
+            new_refr = {o_id: o for o_id, o in all_refr if o_id not in marked and not isinstance(o, type)}
+
+            # The new obj_q will be the ones that were not marked,
+            # and we will update marked with their ids so we will
+            # not traverse them again.
+            obj_q = new_refr.values()
+            marked.update(new_refr.keys())
+
+        return sz
+
