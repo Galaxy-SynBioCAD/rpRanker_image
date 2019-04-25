@@ -5,6 +5,7 @@ import json
 from scipy.special import logsumexp
 import copy
 import pickle
+import os
 
 #local package
 import component_contribution
@@ -20,8 +21,7 @@ class rpThermo:
             ionic_strength=0.1, 
             temperature=298.15):
         #self.compound_dict = compound_dict
-        self.cc_preprocess = np.load('cache/cc_preprocess.npz')
-        self.kegg_dG = pickle.load(open('cache/kegg_dG.pickle', 'rb'))
+        #TODO: put this in its own function
         #### set the physiological parameters
         self.pH = pH
         self.pMg = pMg
@@ -52,9 +52,70 @@ class rpThermo:
         self.debye_huckel = self.DH_alpha*self.ionic_strength**(0.5)/(1.0+self.DH_beta*self.ionic_strength**(0.5))
         #temporarely save the calculated dG's
         self.calculated_dG = {}
-
+        if not self._loadCache(os.getcwd()+'/cache'):
+            raise ValueError
+        
 
     ################ PRIVATE FUNCTIONS ###################
+
+
+
+    ##
+    #
+    #
+    def _checkFilePath(self, path, filename):
+        """Check that the directory and the filename are valid and choose to use
+        either the local or the global path
+        """
+        if path==None:
+            if self.globalPath==None:
+                logging.error('Both global path and local are not set')
+                return None
+            else:
+                if os.path.isdir(self.globalPath):
+                    try:
+                        fName = [i for i in os.listdir(self.globalPath) 
+                                    if not i.find(filename)==-1 
+                                    if not i[-3:]=='swp'
+                                    if not i[-1]=='#'][0]
+                        logging.info('Automatically selected '+str(fName))
+                    except IndexError:
+                        logging.error('Problem finding the correct '+str(filename)+' in '+str(path))
+                        return None
+                    if os.path.isfile(self.globalPath+'/'+fName):
+                        return self.globalPath+'/'+fName
+                    else:
+                        logging.error('Global path file: '+str(fName)+', does not exist')
+                        return None
+                else:
+                    logging.error('Global path is not a directory: '+str(self.globalPath))
+                    return None
+        else:
+            if path[-1:]=='/':
+                path = path[:-1]
+            if os.path.isdir(path):
+                if os.path.isfile(path+'/'+filename):
+                    return path+'/'+filename
+                else:
+                    logging.error('The file is not valid: '+str(path+'/'+filename))
+                    return None
+            else:
+                logging.error('Local path is not a directory: '+str(path))
+                return None
+
+    
+    def _loadCache(self, path):
+        try:
+            self.cc_preprocess = np.load(self._checkFilePath(path, 'cc_preprocess.npz'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path+'/cc_preprocess.npz')+' does not seem to exist')
+            return False
+        try:
+            self.kegg_dG = pickle.load(open(self._checkFilePath(path, 'kegg_dG.pickle'), 'rb'))
+        except FileNotFoundError:
+            logging.error('The file '+str(path, '/kegg_dG.pickle.pickle')+' does not seem to exist')
+            return False
+        return True
 
 
     def _select_dG(self, cid):

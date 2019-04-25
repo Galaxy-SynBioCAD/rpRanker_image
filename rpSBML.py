@@ -35,12 +35,12 @@ class rpSBML:
         self.sbmlns = sbmlns #we allow this to be None
         self.path = path
         #TODO: if entry model, need to scan for these parameters
-        self.unitDefinitions = []
-        self.parameters = []
-        self.fluxObjs = []
+        #self.unitDefinitions = []
+        #self.parameters = []
+        #self.fluxObjs = []
         #TODO: scan for these upon uploading of a model
-        self.rpReactions = []
-        self.rpMetabolites = []
+        #self.rpReactions = []
+        #self.rpMetabolites = []
         self.hetero_group = None
         self.compartmentName = None
         self.compartmentId = None
@@ -57,69 +57,11 @@ class rpSBML:
             self.chemXref = pickle.load(gzip.open(cache_path+'/chemXref.pickle.gz', 'rb'))
             self.compXref = pickle.load(gzip.open(cache_path+'/compXref.pickle.gz', 'rb'))
             self.reacXref = pickle.load(gzip.open(cache_path+'/reacXref.pickle.gz', 'rb'))
-
     
 
     #######################################################################
     ############################# PRIVATE FUNCTIONS ####################### 
     #######################################################################
-
-
-    ## Open an SBML using libSBML 
-    #
-    # Situation where an SBML is passed to add the heterologous pathway
-    #
-    # @param inFile String Path to the input SBML file
-    def _readSBML(self, inFile):
-        if not os.path.isfile(inFile):
-            logging.error('Invalid input file')
-            raise FileNotFoundError
-        document = libsbml.readSBML(inFile)
-        self._checklibSBML(document, 'readinf input file')
-        errors = document.getNumErrors()
-        #display the errors in the log accordning to the severity
-        for err in [document.getError(i) for i in range(document.getNumErrors())]:
-            if err.isFatal:
-                logging.error('libSBML reading error: '+str(err.getShortMessage()))
-                raise FileNotFoundError
-            else:
-                logging.warning('libSBML reading warning: '+str(err.getShortMessage()))
-        model = document.getModel()
-        if not model:
-            loging.erro('Either the file was not read correctly or the SBML is empty')
-            raise FileNotFoundError
-        return document, model, errors
-
-
-    ## Export a libSBML model to file
-    #
-    # Export the libSBML model to an SBML file
-    # 
-    # @param model libSBML model to be saved to file
-    # @param model_id model id, note that the name of the file will be that
-    # @param path Non required parameter that will define the path where the model will be saved
-    def _writeSBML(self, model_id, path=None):
-        ####### check the path #########
-        #need to determine where are the path id's coming from
-        p = None
-        if path:
-            if path[-1:]=='/':
-                path = path[:-1]
-            if not os.path.isdir(path):
-                if self.path:
-                    p = self.path
-                else:
-                    logging.error('The output path is not a directory: '+str(path))
-                    return False
-            else:
-                p = path
-        else:
-            p = self.path
-        ########## check and create folder #####
-        if not os.path.exists(p):
-            os.makedirs(p)
-        libsbml.writeSBMLToFile(self.document, p+'/'+str(model_id)+'.sbml')
-        return True
 
 
     ## Check the libSBML calls
@@ -228,13 +170,66 @@ class rpSBML:
     '''
 
 
-    
-
-    
     #####################################################################
-    ############################ READ ###################################
+    ########################## READ/WRITE ###############################
     #####################################################################
 
+    
+    ## Open an SBML using libSBML 
+    #
+    # Situation where an SBML is passed to add the heterologous pathway
+    #
+    # @param inFile String Path to the input SBML file
+    def readSBML(self, inFile):
+        if not os.path.isfile(inFile):
+            logging.error('Invalid input file')
+            raise FileNotFoundError
+        document = libsbml.readSBML(inFile)
+        self._checklibSBML(document, 'readinf input file')
+        errors = document.getNumErrors()
+        #display the errors in the log accordning to the severity
+        for err in [document.getError(i) for i in range(document.getNumErrors())]:
+            if err.isFatal:
+                logging.error('libSBML reading error: '+str(err.getShortMessage()))
+                raise FileNotFoundError
+            else:
+                logging.warning('libSBML reading warning: '+str(err.getShortMessage()))
+        model = document.getModel()
+        if not model:
+            loging.erro('Either the file was not read correctly or the SBML is empty')
+            raise FileNotFoundError
+        return document, model, errors
+
+
+    ## Export a libSBML model to file
+    #
+    # Export the libSBML model to an SBML file
+    # 
+    # @param model libSBML model to be saved to file
+    # @param model_id model id, note that the name of the file will be that
+    # @param path Non required parameter that will define the path where the model will be saved
+    def writeSBML(self, model_id, path=None):
+        ####### check the path #########
+        #need to determine where are the path id's coming from
+        p = None
+        if path:
+            if path[-1:]=='/':
+                path = path[:-1]
+            if not os.path.isdir(path):
+                if self.path:
+                    p = self.path
+                else:
+                    logging.error('The output path is not a directory: '+str(path))
+                    return False
+            else:
+                p = path
+        else:
+            p = self.path
+        ########## check and create folder #####
+        if not os.path.exists(p):
+            os.makedirs(p)
+        libsbml.writeSBMLToFile(self.document, p+'/'+str(model_id)+'.sbml')
+        return True
 
 
     ## Return the reaction ID's and the pathway annotation
@@ -795,7 +790,7 @@ class rpSBML:
         if metaID==None:
             metaID = self._genMetaID(unit_id)
         self._checklibSBML(unitDef.setMetaId(metaID), 'setting metaID')
-        self.unitDefinitions.append(unit_id)
+        #self.unitDefinitions.append(unit_id)
         return unitDef
 
 
@@ -838,7 +833,7 @@ class rpSBML:
         if metaID==None:
             metaID = self._genMetaID(parameter_id)
         self._checklibSBML(newParam.setMetaId(metaID), 'setting meta ID')
-        self.parameters.append(parameter_id)
+        #self.parameters.append(parameter_id)
         return newParam
 
 
@@ -1322,6 +1317,6 @@ class rpSBML:
             step_id += 1
         #we assume that the 0 rpReaction is the last step in the pathway
         #self.createFluxObj(model, 'rpFBA_obj', 'rpReaction_0', 1, True)
-        self._writeSBML('test_out', '/home/mdulac/Documents/rpFBA/sbml_models/')
+        self.writeSBML('test_out', '/home/mdulac/Documents/rpFBA/sbml_models/')
         return None
 

@@ -3,20 +3,14 @@ import os
 import itertools
 import logging
 import collections
-import numpy as np
 import pickle
-import copy
 import logging
 import gzip
 import sys
-from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
-
-import rpSBML
 
 ## @package InputReader
 #
 # Documentation for the input files reader of rpFBA
-
 
 ## \brief Class to read all the input files
 #
@@ -29,7 +23,7 @@ import rpSBML
 # - scope.csv (RetroPath2 output)
 # - xref.csv (User, if needed)
 # - sink.csv (User, if needed)
-class InputReader:
+class rpReader:
     """ WARNING: if you define inputPath, then all the files must have specific names to
         make sure that it can find the appropriate files
     """
@@ -38,34 +32,25 @@ class InputReader:
     #  @param self The object pointer
     #  @param inputPath The path to the folder that contains all the input/output files required
     #  @param Database The database name of the user's xref
-    def __init__(self, inputPath=None, outputPath=None, Database=None):
+    def __init__(self, inputPath=None):
         if inputPath and inputPath[-1:]=='/':
             inputPath = inputPath[:-1]
-            if outputPath and outputPath[-1:]=='/':
-                outputPath = outputPath[:-1]
         self.globalPath = inputPath
-        self.outputPath = outputPath
         #cache files
         self.cc_preprocess = None
-        self.rr_reactions = None
-        self.full_reactions = None
         self.deprecatedMNXM_mnxm = None
-        self.mnxm_dG = None
         #input files
-        self.database = Database
         self.rp_paths = None
-        self.cofactors_rp_paths = None
         self.rp_smiles = None
-        self.cobra_model = None
+        #TODO: not the best strategy to have this set in this fashion -- change it
         self.model_chemicals = None
         self.model_compartments = None
+        #TODO: not the best strategy to have this set in this fashion -- change it
         self.rp_transformation = None
         self.rp_smiles_inchi = None
         self.smiles_inchi = None
         self.in_xref = None
         self.in_inchi = None
-        self.convertid_inchi = {}
-        self.convertid_xref = {}
         if not self._loadCache(os.getcwd()+'/cache'):
             raise ValueError
 
@@ -116,53 +101,19 @@ class InputReader:
                 return None
 
 
+    ## Private function to load the required cache parameters
+    #
+    #
     def _loadCache(self, path):
-        """Open the cache files
-        """
-        try:
-            self.cc_preprocess = np.load(self._checkFilePath(path, 'cc_preprocess.npz'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/cc_preprocess.npz')+' does not seem to exist')
-            return False
-        try:
-            self.rr_reactions = pickle.load(open(self._checkFilePath(path, 'rr_reactions.pickle'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path, '/rr_reactions.pickle')+' does not seem to exist')
-            return False
-        try:
-            self.full_reactions = pickle.load(open(self._checkFilePath(path, 'full_reactions.pickle'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path, '/full_reactions.pickle')+' does not seem to exist')
-            return False
         try:
             self.deprecatedMNXM_mnxm = pickle.load(open(self._checkFilePath(path, 'deprecatedMNXM_mnxm.pickle'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/deprecatedMNXM_mnxm.pickle')+' does not seem to exist')
             return False
         try:
-            self.mnxm_dG = pickle.load(open(self._checkFilePath(path, 'mnxm_dG.pickle'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/mnxm_dG.pickle')+' does not seem to exist')
-            return False
-        try:
             self.smiles_inchi = pickle.load(gzip.open(self._checkFilePath(path, 'smiles_inchi.pickle.gz'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/smiles_inchi.pickle')+' does not seem to exists')
-            return False
-        try:
-        	self.chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'chemXref.pickle.gz'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/chemXref.pickle.gz')+' does not seem to exists')
-            return False
-        try:
-        	self.reac_xref = pickle.load(gzip.open(self._checkFilePath(path, 'reacXref.pickle.gz'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/reacXref.pickle.gz')+' does not seem to exists')
-            return False
-        try:
-        	self.comp_xref = pickle.load(gzip.open(self._checkFilePath(path, 'compXref.pickle.gz'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(path+'/compXref.pickle.gz')+' does not seem to exists')
             return False
         return True
 
@@ -188,21 +139,13 @@ class InputReader:
         if not os.path.isdir(self.globalPath):
             logging.error('The global path is not a directory: '+str(self.globalPath))
             return False
-        self.in_xref = self.user_xref()
+        self.in_xref = self.user_xref() #not sure
         self.in_inchi = self.user_sink()
         self.rp_paths = self.outPaths()
         self.rp_transformation, self.rp_smiles_inchi = self.transformation()
         self.rp_smiles = self.compounds()
         self.model_chemicals = self.chemicals()
         self.model_compartments = self.compartments()
-        self.cofactors_rp_paths = self.addCofactors(self.rp_paths, 
-                                                    self.rr_reactions,
-                                                    self.full_reactions, 
-                                                    self.rp_smiles,
-                                                    self.rp_transformation,
-                                                    self.smiles_inchi,
-                                                    self.rp_smiles_inchi,
-                                                    self.model_chemicals)
         return True    
 
 
@@ -392,7 +335,7 @@ class InputReader:
         #### (with priority with the local path)
         try:
             rp_paths = {}
-            reactions = self.rr_reactions
+            #reactions = self.rr_reactions
             with open(self._checkFilePath(path, 'out_paths')) as f:
                 reader = csv.reader(f)
                 next(reader)
