@@ -36,60 +36,60 @@ class genTestFiles():
             self.outputPath = 'test_models/'
         else:
             self.ouputPath = outputPath
-
+        self.compXref = pickle.load(gzip.open('input_cache/compXref.pickle.gz'), 'rb')
 
     def createModel(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createModel.sbml')
 
 
     def createGenericModel(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_genericModel.sbml')
 
 
     def createUnitDefinition(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         unitDef = rpsbml.createUnitDefinition('mmol_per_gDW_per_hr')
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createUnitDefinition.sbml')
 
 
     def createUnit(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         unitDef = rpsbml.createUnitDefinition('mmol_per_gDW_per_hr')
         rpsbml.createUnit(unitDef, libsbml.UNIT_KIND_MOLE, 1, -3, 1)
         rpsbml.createUnit(unitDef, libsbml.UNIT_KIND_GRAM, 1, 0, 1)
         rpsbml.createUnit(unitDef, libsbml.UNIT_KIND_SECOND, 1, 0, 3600)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createUnit.sbml')
 
-        
+
     def createParameter(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         upInfParam = rpsbml.createParameter('B_999999', 999999.0, 'kj_per_mol')
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createParameter.sbml')
 
 
     def createCompartent(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         rpsbml.createCompartment(1, 'MNXC3', 'cytoplasm')
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createCompartent.sbml')
 
 
     def genericModel(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_genericModel.sbml')
 
 
     def createSpecies(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
                 inchi = rp_inchi[meta]
@@ -105,7 +105,7 @@ class genTestFiles():
 
     def createPathway(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
                 inchi = rp_inchi[meta]
@@ -127,7 +127,7 @@ class genTestFiles():
 
     def createReaction(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
                 inchi = rp_inchi[meta]
@@ -149,7 +149,7 @@ class genTestFiles():
 
     def createFluxObj(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
                 inchi = rp_inchi[meta]
@@ -171,7 +171,7 @@ class genTestFiles():
         
     def createMergeModels(self):
         rpsbml = rpSBML.rpSBML(None, None, None, None, '../cache')
-        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model')
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', self.compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
                 inchi = rp_inchi[meta]

@@ -422,7 +422,7 @@ class Cache:
     #  @return rule Dictionnary describing each reaction rule
     def retro_reactions(self, path=None):
         try:
-            with open(self._checkFilePath(path, 'rules_rall')) as f:
+            with open(self._checkFilePath(path, 'rules_rall'), 'r') as f:
                 reader = csv.reader(f, delimiter = '\t')
                 next(reader)
                 rule = {}

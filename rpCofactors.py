@@ -60,7 +60,7 @@ class rpCofactors:
     #
     def _loadCache(self, path):
         try:
-        	self.chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'chemXref.pickle.gz'), 'rb'))
+            self.chem_xref = pickle.load(gzip.open(self._checkFilePath(path, 'chemXref.pickle.gz'), 'rb'))
         except FileNotFoundError:
             logging.error('The file '+str(path+'/chemXref.pickle.gz')+' does not seem to exists')
             return False
