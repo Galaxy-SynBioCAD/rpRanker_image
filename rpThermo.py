@@ -58,38 +58,20 @@ class rpThermo:
 
     ################ PRIVATE FUNCTIONS ###################
 
-
-
+    
     ##
     #
     #
-    def _checkFilePath(self, path, filename):
-        """Check that the directory and the filename are valid and choose to use
-        either the local or the global path
-        """
-        if path[-1:]=='/':
-            path = path[:-1]
-        if os.path.isdir(path):
-            if os.path.isfile(path+'/'+filename):
-                return path+'/'+filename
-            else:
-                logging.error('The file is not valid: '+str(path+'/'+filename))
-                return None
-        else:
-            logging.error('Local path is not a directory: '+str(path))
-            return None
-
-    
-    def _loadCache(self, path):
+    def _loadCache(self):
         try:
-            self.cc_preprocess = np.load(self._checkFilePath(path, 'cc_preprocess.npz'))
+            self.cc_preprocess = np.load(os.path.join(os.path.abspath('cache'), 'cc_preprocess.npz'))
         except FileNotFoundError:
-            logging.error('The file '+str(path+'/cc_preprocess.npz')+' does not seem to exist')
+            logging.error('The file '+str(os.path.abspath('cache')+'/cc_preprocess.npz')+' does not seem to exist')
             return False
         try:
-            self.kegg_dG = pickle.load(open(self._checkFilePath(path, 'kegg_dG.pickle'), 'rb'))
+            self.kegg_dG = pickle.load(open(os.path.join(os.path.abspath('cache'), 'kegg_dG.pickle'), 'rb'))
         except FileNotFoundError:
-            logging.error('The file '+str(path, '/kegg_dG.pickle.pickle')+' does not seem to exist')
+            logging.error('The file '+str(os.path.abspath('cache'), '/kegg_dG.pickle.pickle')+' does not seem to exist')
             return False
         return True
 
