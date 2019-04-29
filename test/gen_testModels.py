@@ -103,7 +103,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         libsbml.writeSBML(rpsbml.document, self.outputPath+'test_createSpecies.sbml')
 
 
@@ -119,7 +119,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -141,7 +141,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -163,7 +163,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
@@ -185,7 +185,7 @@ class genTestFiles():
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, self.chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rp_pathway = rpsbml.createPathway(path_id)
         #reactions
         step_id = 0

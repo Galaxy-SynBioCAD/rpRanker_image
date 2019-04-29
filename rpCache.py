@@ -19,7 +19,7 @@ import gzip
 #
 # Contains all the functions that parse different files, used to calculate the thermodynamics and the FBA of the 
 #the other steps. These should be called only when the files have changes
-class Cache:
+class rpCache:
     ## Cache constructor
     # 
     # @param self The object pointer
@@ -85,55 +85,8 @@ class Cache:
 
     ########################################################
     ############################# FUNCTIONS ################
-    ########################################################
+    ######################################################## 
 
-    ## Run all the functions
-    #
-    #  Run all the files required to generate the cache. Requires : mvc.db, chem_xref.tsv, chem_prop.tsv, cc_compounds.json.gz and alberty.json
-    #
-    #  @param self Object pointer
-    def all(self):
-        if self.globalPath==None:
-            logging.error('Need to define the global path to use all()')
-            return False
-        if not os.path.isdir(os.getcwd()+'/cache'):
-            os.mkdir('cache')
-        #self.deprecatedMNXM_mnxm
-        logging.info('Generating deprecatedMNXM_mnxm')
-        self.deprecatedMNXM_mnxm = self.deprecatedMNXM()
-        pickle.dump(self.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
-        #mnxm_dG
-        logging.info('Generating mnxm_dG')
-        pickle.dump(self.kegg_dG(), open('cache/kegg_dG.pickle', 'wb'))
-        #rr_reactions
-        logging.info('Generating rr_reactions')
-        rr_reactions = self.retro_reactions()
-        pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
-        #full_reactions
-        logging.info('Generating full_reactions')
-        pickle.dump(self.full_reac(), open('cache/full_reactions.pickle', 'wb'))
-        #smiles_inchi --> use gzip since it is a large file
-        logging.info('Parsing the SMILES and InChI')
-        #pickle.dump(self.smiles_inchi(), open('cache/smiles_inchi.pickle', 'wb'))
-        pickle.dump(self.smiles_inchi(), gzip.open('cache/smiles_inchi.pickle.gz','wb'))
-        #xref --> use gzip since it is a large file
-        logging.info('Parsing the Cross-references')
-        pickle.dump(self.chem_xref(), gzip.open('cache/chemXref.pickle.gz','wb'))
-        pickle.dump(self.reac_xref(), gzip.open('cache/reacXref.pickle.gz','wb'))
-        pickle.dump(self.comp_xref(), gzip.open('cache/compXref.pickle.gz','wb'))
-        '''
-        pub_mnx_chem_xref, mnx_pub_chem_xref = self.chem_xref()
-        pickle.dump(pub_mnx_chem_xref, gzip.open('cache/pub_mnx_chem_xref.gz','wb'))
-        pickle.dump(mnx_pub_chem_xref, gzip.open('cache/mnx_pub_chem_xref.gz','wb'))
-        pub_mnx_reax_xref, mnx_pub_reac_xref = self.reac_xref()
-        pickle.dump(pub_mnx_reax_xref, gzip.open('cache/pub_mnx_reax_xref.gz','wb'))
-        pickle.dump(mnx_pub_reac_xref, gzip.open('cache/mnx_pub_reac_xref.gz','wb'))
-        pub_mnx_comp_xref, mnx_pub_comp_xref = self.comp_xref()
-        pickle.dump(pub_mnx_comp_xref, gzip.open('cache/pub_mnx_comp_xref.gz','wb'))
-        pickle.dump(mnx_pub_comp_xref, gzip.open('cache/mnx_pub_comp_xref.gz','wb'))
-        '''
-        #pickle.dump(self.xref(), gzip.open('cache/Id_xref.pickle.gz','wb'))
-        
 
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
@@ -497,3 +450,55 @@ class Cache:
                 logging.error('Could not read the rxn_recipes file ('+str(path)+')')
                 return {}
         return reaction
+
+
+
+## Run all the functions
+#
+#  Run all the files required to generate the cache. Requires : mvc.db, chem_xref.tsv, chem_prop.tsv, cc_compounds.json.gz and alberty.json
+#
+#  @param self Object pointer
+#TODO: change the input_cache to a compressed file with a given checksum to assure that it is fine
+#TODO: consider checksumming the individual files that are generated from here
+if __name__ == "__main__":
+    cache = rpCache(os.path.abspath('input_cache'))
+    if cache.globalPath==None:
+        logging.error('Need to define the global path to use all()')
+        sys.exit()
+    if not os.path.isdir(os.getcwd()+'/cache'):
+        os.mkdir('cache')
+    #cache.deprecatedMNXM_mnxm
+    logging.info('Generating deprecatedMNXM_mnxm')
+    cache.deprecatedMNXM_mnxm = cache.deprecatedMNXM()
+    pickle.dump(cache.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
+    #mnxm_dG
+    logging.info('Generating mnxm_dG')
+    pickle.dump(cache.kegg_dG(), open('cache/kegg_dG.pickle', 'wb'))
+    #rr_reactions
+    logging.info('Generating rr_reactions')
+    rr_reactions = cache.retro_reactions()
+    pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
+    #full_reactions
+    logging.info('Generating full_reactions')
+    pickle.dump(cache.full_reac(), open('cache/full_reactions.pickle', 'wb'))
+    #smiles_inchi --> use gzip since it is a large file
+    logging.info('Parsing the SMILES and InChI')
+    #pickle.dump(cache.smiles_inchi(), open('cache/smiles_inchi.pickle', 'wb'))
+    pickle.dump(cache.smiles_inchi(), gzip.open('cache/smiles_inchi.pickle.gz','wb'))
+    #xref --> use gzip since it is a large file
+    logging.info('Parsing the Cross-references')
+    pickle.dump(cache.chem_xref(), gzip.open('cache/chemXref.pickle.gz','wb'))
+    pickle.dump(cache.reac_xref(), gzip.open('cache/reacXref.pickle.gz','wb'))
+    pickle.dump(cache.comp_xref(), gzip.open('cache/compXref.pickle.gz','wb'))
+    '''
+    pub_mnx_chem_xref, mnx_pub_chem_xref = cache.chem_xref()
+    pickle.dump(pub_mnx_chem_xref, gzip.open('cache/pub_mnx_chem_xref.gz','wb'))
+    pickle.dump(mnx_pub_chem_xref, gzip.open('cache/mnx_pub_chem_xref.gz','wb'))
+    pub_mnx_reax_xref, mnx_pub_reac_xref = cache.reac_xref()
+    pickle.dump(pub_mnx_reax_xref, gzip.open('cache/pub_mnx_reax_xref.gz','wb'))
+    pickle.dump(mnx_pub_reac_xref, gzip.open('cache/mnx_pub_reac_xref.gz','wb'))
+    pub_mnx_comp_xref, mnx_pub_comp_xref = cache.comp_xref()
+    pickle.dump(pub_mnx_comp_xref, gzip.open('cache/pub_mnx_comp_xref.gz','wb'))
+    pickle.dump(mnx_pub_comp_xref, gzip.open('cache/mnx_pub_comp_xref.gz','wb'))
+    '''
+    #pickle.dump(cache.xref(), gzip.open('cache/Id_xref.pickle.gz','wb'))

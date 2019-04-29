@@ -138,7 +138,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createSpecies.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
@@ -155,7 +155,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -178,7 +178,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
@@ -201,7 +201,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):

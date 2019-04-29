@@ -852,6 +852,11 @@ class rpSBML:
     <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:smiles>'''+str(reaction_smiles)+'''</ibisba:smiles>
+        <ibisba:rule_score value=""/>
+        <ibisba:fba_biomass_score value=""/>
+        <ibisba:fba_target_score value=""/>
+        <ibisba:fba_splitObj_score value=""/>
+        <ibisba:global_score value=""/>
         <ibisba:dG_prime_o units="kj_per_mol" value=""/>
         <ibisba:dG_prime_m units="kj_per_mol" value=""/>
         <ibisba:dG_uncert units="kj_per_mol" value=""/>
@@ -894,10 +899,7 @@ class rpSBML:
             smiles=None,
             compartmentId=None, 
             charge=0,
-            chemForm='',
-            dG_prime_o=None, 
-            dG_prime_m=None, 
-            dG_uncert=None):
+            chemForm=''):
         spe = self.model.createSpecies()
         self._checklibSBML(spe, 'create species')
         ##### FBC #####
@@ -973,25 +975,10 @@ class rpSBML:
             annotation += '''
         <ibisba:inchi></ibisba:inchi>
         <ibisba:inchikey></ibisba:inchikey>'''
-        if dG_prime_o:
-            annotation += '''
-        <ibisba:dG_prime_o units="kj_per_mol" value="'''+str(dG_prime_o)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_prime_o units="kj_per_mol" value=""/>'''
-        if dG_prime_m:
-            annotation += '''
-        <ibisba:dG_prime_m units="kj_per_mol" value="'''+str(dG_prime_m)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_prime_m units="kj_per_mol" value=""/>'''
-        if dG_uncert:
-            annotation += '''
-        <ibisba:dG_uncert units="kj_per_mol" value="'''+str(dG_uncert)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_uncert units="kj_per_mol" value=""/>'''
         annotation += '''
+        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
+        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
+        <ibisba:dG_uncert units="kj_per_mol" value=""/>
       </ibisba:ibisba>
     </rdf:Ibisba>'''
         annotation += '''
@@ -1012,7 +999,7 @@ class rpSBML:
     # @param products list of species that are the products of this reaction
     # @param reaction_smiles String smiles description of this reaction (added in IBISBA annotation)
     # @return hetero_group The number libSBML groups object to pass to createReaction to categorise the new reactions
-    def createPathway(self, path_id, metaID=None, dG_prime_o=None, dG_prime_m=None, dG_uncert=None):
+    def createPathway(self, path_id, metaID=None):
         groups_plugin = self.model.getPlugin('groups')
         self.hetero_group = groups_plugin.createGroup()
         self.hetero_group.setId('rp_pathway')
@@ -1024,26 +1011,14 @@ class rpSBML:
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
     <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
-      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">'''
-        if dG_prime_o:
-            annotation += '''
-        <ibisba:dG_prime_o units="kj_per_mol" value="'''+str(dG_prime_o)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_prime_o units="kj_per_mol" value=""/>'''
-        if dG_prime_m:
-            annotation += '''
-        <ibisba:dG_prime_m units="kj_per_mol" value="'''+str(dG_prime_m)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_prime_m units="kj_per_mol" value=""/>'''
-        if dG_uncert:
-            annotation += '''
-        <ibisba:dG_uncert units="kj_per_mol" value="'''+str(dG_uncert)+'''"/>'''
-        else:
-            annotation += '''
-        <ibisba:dG_uncert units="kj_per_mol" value=""/>'''
-        annotation += '''
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
+        <ibisba:fba_biomass_score value=""/>
+        <ibisba:fba_target_score value=""/>
+        <ibisba:fba_splitObj_score value=""/>
+        <ibisba:global_score value=""/>
+        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
+        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
+        <ibisba:dG_uncert units="kj_per_mol" value=""/>
       </ibisba:ibisba>
     </rdf:Ibisba>
   </rdf:RDF>
