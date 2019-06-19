@@ -1,4 +1,3 @@
-component_contribution/
 *.ipynb
 cache/
 __pycache__/
@@ -9,3 +8,4 @@ test/test_models/*
 *.swo
 *.pyc
 *.ini
+component_contribution/data/
