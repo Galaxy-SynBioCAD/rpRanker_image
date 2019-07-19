@@ -1,7 +1,46 @@
 #list of functions that are usefull but not directly related to the rpFBA
-import cobra
+#import cobra
 import csv
+#import libsbml
+import rpSBML
+import pickle
+import gzip
+import os
 
+## Generate the sink from a given model and the 
+#
+# NOTE: this only works for MNX models, since we are parsing the id
+# TODO: change this to read the annotations and extract the MNX id's
+#
+def genSink(sbml_model, file_out, compartment_id='MNXC3'):
+    ### open the cache ###
+    dirname = os.path.dirname(os.path.abspath( __file__ ))
+    smiles_inchi = pickle.load(gzip.open(dirname+'/cache/smiles_inchi.pickle.gz', 'rb'))
+    rpsbml = rpSBML.rpSBML('tmp')
+    rpsbml.readModel(sbml_model)
+    cytoplasm_species = []
+    for i in rpsbml.model.getListOfSpecies():
+        if i.getCompartment()==compartment_id:
+            cytoplasm_species.append(i)
+    with open(file_out, mode='w') as f:
+        writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+        writer.writerow(['Name','InChI'])
+        for i in cytoplasm_species:
+            res = rpsbml.readAnnotation(i.getAnnotation())
+            #extract the MNX id's
+            try:
+                mnx = res['metanetx.chemical'][0]
+            except KeyError:
+                continue
+            #mnx = i.getId().split('__')[0]
+            try:
+                inchi = meta_inchi[mnx]
+            except KeyError:
+                inchi = None
+            if mnx and inchi:
+                writer.writerow([mnx,inchi])
+
+'''
 def genSink(path_cobraModel, path_chem_prop, file_out_name=None, compartment=None):
     """Function to extract from an SBML MNX model the available compounds
     and generating the sink for RetroPath2.0. There is the option to
@@ -31,3 +70,4 @@ def genSink(path_cobraModel, path_chem_prop, file_out_name=None, compartment=Non
                 writer.writerow([m, meta_inchi[m]])
             except KeyError:
                 print('Cannot find '+str(m)+' in '+str(path_chem_prop))
+'''

@@ -9,6 +9,8 @@ import re
 import itertools
 from ast import literal_eval
 import gzip
+from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
+from shutil import copyfile
 
 ## @package Cache
 #
@@ -24,10 +26,7 @@ class rpCache:
     # 
     # @param self The object pointer
     # @param inputPath The path to the folder that contains all the input/output files required
-    def __init__(self, inputPath=None):
-        if inputPath and inputPath[-1:]=='/':
-            inputPath = inputPath[:-1]
-        self.globalPath = inputPath
+    def __init__(self):
         #given by Thomas
         self.convertMNXM = {'MNXM162231': 'MNXM6',
                 'MNXM84': 'MNXM15',
@@ -39,52 +38,50 @@ class rpCache:
         #personally looked at the KEGG to MNXM conversion for the thermodynamics 
         self.deprecatedMNXM_mnxm = None
 
-    #######################################################################
-    ############################# PRIVATE FUNCTIONS ####################### 
-    #######################################################################
+    #######################################################
+    ################### PRIVATE FUNCTION ##################
+    #######################################################
 
-    def _checkFilePath(self, path, filename):
-        """Check that the directory and the filename are valid and choose to use
-        either the local or the global path
-        """
-        if path==None:
-            if self.globalPath==None:
-                logging.error('Both global path and local are not set')
-                return None
-            else:
-                if os.path.isdir(self.globalPath):
-                    try:
-                        fName = [i for i in os.listdir(self.globalPath) 
-                            if not i.find(filename)==-1 
-                            if not i[-3:]=='swp'
-                            if not i[-1]=='#'][0]
-                        logging.info('Automatically selected '+str(fName))
-                    except IndexError:
-                        logging.error('Problem finding the correct '+str(filename)+' in '+str(path))
-                        return None
-                    if os.path.isfile(self.globalPath+'/'+fName):
-                        return self.globalPath+'/'+fName
-                    else:
-                        logging.error('Global path file: '+str(fName)+', does not exist')
-                        return None
-                else:
-                    logging.error('Global path is not a directory: '+str(self.globalPath))
-                    return None
+
+
+    ## Convert chemical depiction to others type of depictions
+    #
+    # Usage example:
+    # - convert_depiction(idepic='CCO', otype={'inchi', 'smiles', 'inchikey'})
+    # - convert_depiction(idepic='InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3', itype='inchi', otype={'inchi', 'smiles', 'inchikey'})
+    #
+    #  @param self The onject pointer
+    #  @param idepic string depiction to be converted, str
+    #  @param itype type of depiction provided as input, str
+    #  @param otype types of depiction to be generated, {"", "", ..}
+    #  @return odepic generated depictions, {"otype1": "odepic1", ..}
+    def _convert_depiction(self, idepic, itype='smiles', otype={'inchikey'}):
+        # Import (if needed)
+        if itype == 'smiles':
+            rdmol = MolFromSmiles(idepic, sanitize=True)
+        elif itype == 'inchi':
+            rdmol = MolFromInchi(idepic, sanitize=True)
         else:
-            if path[-1:]=='/':
-                path = path[:-1]
-            if os.path.isdir(path):
-                if os.path.isfile(path+'/'+filename):
-                    return path+'/'+filename
-                else:
-                    logging.error('The file is not valid: '+str(path+'/'+filename))
-                    return None
+            raise NotImplementedError('"{}" is not a valid input type'.format(itype))
+        if rdmol is None:  # Check imprt
+            raise Exception('Import error from depiction "{}" of type "{}"'.format(idepic, itype))
+        # Export
+        odepic = dict()
+        for item in otype:
+            if item == 'smiles':
+                odepic[item] = MolToSmiles(rdmol)  # MolToSmiles is tricky, one mays want to check the possible options..
+            elif item == 'inchi':
+                odepic[item] = MolToInchi(rdmol)
+            elif item == 'inchikey':
+                odepic[item] = MolToInchiKey(rdmol)
             else:
-                logging.error('Local path is not a directory: '+str(path))
-                return None
+                raise NotImplementedError('"{}" is not a valid output type'.format(otype))
+        return odepic
+
+
 
     ########################################################
-    ############################# FUNCTIONS ################
+    ####################### PUBLIC FUNCTIONS ###############
     ######################################################## 
 
 
@@ -97,9 +94,9 @@ class rpCache:
     #  @param chem_xref_path Input file path
     #  @return a The dictionnary of identifiers  
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
-    def deprecatedMNXM(self, chem_xref_path=None):
+    def deprecatedMNXM(self, chem_xref_path):
         a = {}
-        with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
+        with open(chem_xref_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 mnx = row[0].split(':')
@@ -119,9 +116,9 @@ class rpCache:
     #  @param chem_xref_path Input file path
     #  @return a The dictionnary of identifiers  
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
-    def chem_xref(self, chem_xref_path=None):
+    def chemXref(self, chem_xref_path):
         chemXref = {}
-        with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
+        with open(chem_xref_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#':
@@ -149,7 +146,7 @@ class rpCache:
         return chemXref
 
 
-    ## Function to parse the reac_xref.tsv file of MetanetX
+    ## Function to parse the reacXref.tsv file of MetanetX
     #
     #  Generate a dictionnary of old to new MetanetX identifiers
     #
@@ -157,9 +154,9 @@ class rpCache:
     #  @param chem_xref_path Input file path
     #  @return a The dictionnary of identifiers  
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
-    def reac_xref(self, reac_xref_path=None):
+    def reacXref(self, reacXref_path, reac_prop_path):
         reacXref = {}
-        with open(self._checkFilePath(reac_xref_path, 'reac_xref.tsv')) as f:
+        with open(reacXref_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#' and len(row[0].split(':'))==2:
@@ -178,10 +175,25 @@ class rpCache:
                         reacXref[mnx][dbName] = []
                     if not dbId in reacXref[mnx][dbName]:
                         reacXref[mnx][dbName].append(dbId)
+        #use this to retreive the EC number for the reactions
+        with open(reac_prop_path) as f:
+            c = csv.reader(f, delimiter='\t')
+            for row in c:
+                if not row[0][0]=='#' and not row[4]=='':
+                    mnx = row[0]
+                    if not mnx in reacXref:
+                        reacXref[mnx] = {}
+                    dbName = 'ec'
+                    if not dbName in reacXref[mnx]:
+                        reacXref[mnx][dbName] = []
+                    for ec in row[4].split(';'):
+                        if not ec in reacXref[mnx][dbName]:
+                            reacXref[mnx][dbName].append(ec)
         return reacXref
 
 
-    ## Function to parse the comp_xref.tsv file of MetanetX
+
+    ## Function to parse the compXref.tsv file of MetanetX
     #
     #  Generate a dictionnary of old to new MetanetX identifiers
     #
@@ -189,9 +201,9 @@ class rpCache:
     #  @param chem_xref_path Input file path
     #  @return a The dictionnary of identifiers  
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
-    def comp_xref(self, comp_xref_path=None, comp_prop_path=None):
+    def compXref(self, compXref_path, comp_prop_path):
         mnxc_name = {}
-        with open(self._checkFilePath(comp_prop_path, 'comp_prop.tsv')) as f:
+        with open(comp_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#':
@@ -202,7 +214,7 @@ class rpCache:
         #pubDB_name_xref = {}
         name_pubDB_xref = {}
         try:
-            with open(self._checkFilePath(comp_xref_path, 'comp_xref.tsv')) as f:
+            with open(compXref_path) as f:
                 c = csv.reader(f, delimiter='\t')
                 #not_recognised = []
                 for row in c:
@@ -225,9 +237,10 @@ class rpCache:
                         if not dbCompId in name_pubDB_xref[name][dbName]:
                             name_pubDB_xref[name][dbName].append(dbCompId)
         except FileNotFoundError:
-            logging.error('comp_xref file not found')
+            logging.error('compXref file not found')
             return {}
         return name_pubDB_xref
+
 
     ## Function to parse the chemp_prop.tsv file from MetanetX
     #
@@ -235,16 +248,34 @@ class rpCache:
     #
     #  @param self Object pointer
     #  @param chem_prop_path Input file path 
-    #  @return smiles_inchi Dictionnary of formula, smiles, inchi and inchikey
-    def smiles_inchi(self, chem_prop_path=None):
+    #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
+    def mnxm_strc(self, chem_prop_path):
         #TODO: need to reduce the size of this file. As it stands its 250MB
-        smiles_inchi = {}
-        with open(self._checkFilePath(chem_prop_path, 'chem_prop.tsv')) as f:
+        mnxm_strc = {}
+        with open(chem_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#':
-                    smiles_inchi[row[0]] = {'forumla':  row[2], 'smiles': row[6], 'inchi': row[5], 'inchikey': row[8]}
-        return smiles_inchi
+                    mnxm_strc[row[0]] = {'forumla':  row[2], 'smiles': row[6], 'inchi': row[5], 'inchikey': row[8]}
+                    #mnxm_strc[row[6]] = {'forumla':  row[2], 'mnxm': row[0], 'inchi': row[5], 'inchikey': row[8]}
+                    for i in mnxm_strc[row[0]]:
+                        if mnxm_strc[row[0]][i]=='' or mnxm_strc[row[0]][i]=='NA':
+                            mnxm_strc[row[0]][i] = None
+                    # if you have smiles
+                    try:
+                        if mnxm_strc[row[0]]['smiles']:
+                            if not mnxm_strc[row[0]]['inchi']:
+                                resConv = self._convert_depiction(idepic=mnxm_strc[row[0]]['smiles'], itype='smiles', otype={'inchi, inchikey'})
+                                mnxm_strc[row[0]]['inchi'] = resConv['inchi']
+                                mnxm_strc[row[0]]['inchikey'] = resConv['inchikey']
+                        elif mnxm_strc[row[0]]['inchi']:
+                            resConv = self._convert_depiction(idepic=mnxm_strc[row[0]]['inchi'], itype='inchi', otype={'smiles, inchikey'})
+                            mnxm_strc[row[0]]['smiles'] = resConv['smiles']
+                            mnxm_strc[row[0]]['inchikey'] = resConv['inchikey']
+                    except (NotImplementedError, Exception) as e:
+                        logging.warning('Could not convert the structures for '+str(row[0])+': '+str(mnxm_strc[row[0]]))
+        return mnxm_strc
+
 
     ## Function exctract the dG of components
     #
@@ -257,14 +288,14 @@ class rpCache:
     #  @param alberty_path alberty.json file path
     #  @param compounds_path compounds.csv file path
     def kegg_dG(self,
-                cc_compounds_path=None,
-                alberty_path=None,
-                compounds_path=None):
+                cc_compounds_path,
+                alberty_path,
+                compounds_path):
         cc_alberty = {}
         ########################## compounds ##################
         #contains the p_kas and molecule decomposition 
         cid_comp = {}
-        with open(self._checkFilePath(compounds_path, 'compounds.csv')) as f:
+        with open(compounds_path) as f:
             c = csv.reader(f, delimiter=',', quotechar='"')
             next(c)
             for row in c:
@@ -297,7 +328,7 @@ class rpCache:
         #TODO: seems like the new version of equilibrator got rid of this file... need to update the function
         #to take as input the new file --> i.e. the JSON input
         #notFound_cc = []
-        gz_file = gzip.open(self._checkFilePath(cc_compounds_path, 'cc_compounds.json.gz'), 'rb')
+        gz_file = gzip.open(cc_compounds_path, 'rb')
         f_c = gz_file.read()
         c = json.loads(f_c)
         for cd in c:
@@ -331,7 +362,7 @@ class rpCache:
             else:
                 cc_alberty[cd['CID']]['component_contribution'].append(cd)
         ######################## alberty ################
-        with open(self._checkFilePath(alberty_path, 'alberty.json')) as json_data:
+        with open(alberty_path) as json_data:
             d = json.loads(json_data.read())
             for cd in d:
                 '''
@@ -373,84 +404,129 @@ class rpCache:
     #  @param self The object pointer.
     #  @param path The input file path.
     #  @return rule Dictionnary describing each reaction rule
-    def retro_reactions(self, path=None):
+    def retro_reactions(self, path):
         try:
-            with open(self._checkFilePath(path, 'rules_rall'), 'r') as f:
+            with open(path, 'r') as f:
                 reader = csv.reader(f, delimiter = '\t')
                 next(reader)
                 rule = {}
                 for row in reader:
-                    rule[row[0]]= {'reaction':row[1], 'rel_direction': row[13], 'left': row[5], 'right': row[7]}
-        except (TypeError, FileNotFoundError) as e:
+                    #rule[row[0]]= {'rule_id': row[0], 'rule_score': row[11], 'reaction':row[1], 'rel_direction': row[13], 'left': row[5], 'right': row[7]}
+                    #NOTE: as of now all the rules are generated using MNX
+                    #but it may be that other db are used, we are handling this case
+                    #WARNING: can have multiple products so need to seperate them
+                    products = {}
+                    for i in row[7].split('.'):
+                        if not i in products:
+                            products[i] = 1
+                        else:
+                            products[i] += 1
+                    try:
+                        rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[11]), 'reac_id': row[1], 'subs_id': row[5], 'rel_direction': int(row[13]), 'left': {row[5]: 1}, 'right': products}
+                    except ValueError:
+                        logging.error('Problem converting rel_direction: '+str(row[13]))
+                        logging.error('Problem converting rule_score: '+str(row[11]))
+        except FileNotFoundError as e:
                 logging.error('Could not read the rules_rall file ('+str(path)+')')
                 return {}
-        return(rule)
+        return rule
 
 
-    ## Function to parse rxn_recipes.tsv file
-    #
-    #  Extract the substracts and products of the origin reaction with the stochiometry
-    #
-    #  @param self The object pointer.
-    #  @param self.deprecatedMNXM_mnxm Dictionnary of old to new version of MetanetX identifiers
-    #  @param path The input file path.
-    #  @return reaction Dictionnnary containing the description of the reaction of origin for each reactionID
-    def full_reac(self, path=None):
+    def full_reac(self, path):
+        #### for character matching that are returned
+        DEFAULT_STOICHIO_RESCUE = {"4n": 4, "3n": 3, "2n": 2, 'n': 1,
+                           '(n)': 1, '(N)': 1, '(2n)': 2, '(x)': 1,
+                           'N': 1, 'm': 1, 'q': 1,
+                           '0.01': 1, '0.1': 1, '0.5': 1, '1.5': 1,
+                           '0.02': 1, '0.2': 1,
+                           '(n-1)': 0, '(n-2)': -1}
+        reaction = {}
         try:
-            with open(self._checkFilePath(path, 'rxn_recipes')) as f:
-                def dico(liste, i=0, x=1):
-                        while i <= len(liste)-1:
-                            tmp = liste[i];
-                            liste[i] = liste[x]
-                            liste[x] = tmp
-                            i = i+2
-                            x = x+2
-                        dico = dict(itertools.zip_longest(*[iter(liste)] * 2, fillvalue=""))
-                        return dico
-                reader = csv.reader(f, delimiter = '\t')
+            with open(path) as f:
+                reader = csv.reader(f, delimiter='\t')
                 next(reader)
-                reaction = {}
                 for row in reader:
-                    reaction[row[0]]= {'main_left': row[9], 'main_right': row[10], 'left':{}, 'right':{}, 'direction': row[3]}
-                    #tmp_l = (((((((((row[1].split('=')[0]).replace('+ ',"")).replace('@MNXD1','')).replace('@MNXD2','')).replace('@MNXDX','')).replace('@BOUNDARY','')).replace('@\S',''))).split(' '))[:-1]
-                    tmp_l = ((row[1].split('=')[0]).replace('+ ',"")).split(' ')[:-1]
-                    #tmp_r = ((((((((row[1].split('=')[1]).replace('+ ',"")).replace('@MNXD1','')).replace('@MNXD2','')).replace('@MNXDX','')).replace('@BOUNDARY',''))).split(' '))[1:]
-                    tmp_r = ((row[1].split('=')[1]).replace('+ ',"")).split(' ')[1:]
-                    
-                    p = re.compile('@\\w+')
-                    for x,i in enumerate(tmp_l):
-                        l = re.sub(p, '', i)
-                        tmp_l[x]= l
-                    for x,i in enumerate(tmp_r):
-                        r = re.sub(p, '', i)
-                        tmp_r[x]= r
-                    
-                    dico_l = dico(tmp_l)
-                    dico_r = dico(tmp_r)
-                    
-                    #remove the main_right and the main_left because already in the out_path.csv
-                    #WARNING: There is a small chance that you will remove elements with MNX codes that 
-                    #are in fact not described as the CMP
-                    '''for i in reaction[row[0]]['main_right'].split(','):
-                        del dico_r[i]
-                    for i in reaction[row[0]]['main_left'].split(','):
-                        del dico_l[i]'''
-
-                    for i in dico_l:
-                        tmp_i = i
-                        while tmp_i in self.deprecatedMNXM_mnxm:
-                            tmp_i = self.deprecatedMNXM_mnxm[tmp_i]
-                        reaction[row[0]]['left'][tmp_i] = dico_l[i]
-                    for i in dico_r:
-                        tmp_i = i
-                        while tmp_i in self.deprecatedMNXM_mnxm:
-                            tmp_i = self.deprecatedMNXM_mnxm[tmp_i]
-                        reaction[row[0]]['right'][tmp_i] = dico_r[i]
-        except (TypeError, FileNotFoundError) as e:
-                logging.error('Could not read the rxn_recipes file ('+str(path)+')')
-                return {}
-        return reaction
-
+                    tmp = {} # makes sure that if theres an error its not added
+                    #parse the reaction equation
+                    if len(row[1].split('='))==2:
+                        #reac_left = row[1].split('=')[0]
+                        #reac_right = row[1].split('=')[1]
+                        ######### LEFT ######
+                        #### MNX id
+                        tmp['left'] = {}
+                        for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row[1].split('=')[0]):
+                            #1) try to rescue if its one of the values
+                            try:
+                                tmp['left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                            except KeyError:
+                                #2) try to convert to int if its not
+                                try:
+                                    tmp['left'][spe[1]] = int(spe[0])
+                                except ValueError:
+                                    logging.warning('Cannot convert '+str(spe[0]))
+                                    continue
+                        '''# Common name of chemicals -- Perhaps implement some day
+                        #### chem names
+                        tmp['chem_left'] = {}
+                        for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[0]):
+                            #1) try to rescue if its one of the values
+                            try:
+                                tmp['chem_left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                            except KeyError:
+                                #2) try to convert to int if its not
+                                try: 
+                                    tmp['chem_left'][spe[1]] = int(spe[0])
+                                except ValueError:
+                                    logging.warning('Cannot convert '+str(spe[0]))
+                                    continue
+                        '''
+                        ####### RIGHT #####
+                        ####  MNX id
+                        tmp['right'] = {}
+                        for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row[1].split('=')[1]):
+                            #1) try to rescue if its one of the values
+                            try:
+                                tmp['right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                            except KeyError:
+                                #2) try to convert to int if its not
+                                try: 
+                                    tmp['right'][spe[1]] = int(spe[0])
+                                except ValueError:
+                                    logging.warning('Cannot convert '+str(spe[0]))
+                                    continue
+                        ''' Common name of chemicals -- Perhaps implement some day
+                        #### chem names
+                        tmp['chem_right'] = {}
+                        for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[1]):
+                            #1) try to rescue if its one of the values
+                            try:
+                                tmp['chem_right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                            except KeyError:
+                                #2) try to convert to int if its not
+                                try: 
+                                    tmp['chem_right'][spe[1]] = int(spe[0])
+                                except ValueError:
+                                    logging.warning('Cannot convert '+str(spe[0]))
+                                    continue
+                        '''
+                        ####### DIRECTION ######
+                        try:
+                            tmp['direction'] = int(row[3])
+                        except ValueError:
+                            logging.error('Cannot convert '+str(row[3])+' to int')
+                            continue
+                        ### add the others
+                        tmp['main_left'] = row[9].split(',')
+                        tmp['main_right'] = row[10].split(',')
+                        reaction[row[0]] = tmp
+                    else:
+                        logging.warning('There should never be more or less than a left and right of an euation')
+                        continue
+            return reaction
+        except FileNotFoundError:
+            logging.error('Cannot find file: '+str(path))
+            return False
+ 
 
 
 ## Run all the functions
@@ -461,44 +537,38 @@ class rpCache:
 #TODO: change the input_cache to a compressed file with a given checksum to assure that it is fine
 #TODO: consider checksumming the individual files that are generated from here
 if __name__ == "__main__":
-    cache = rpCache(os.path.abspath('input_cache'))
-    if cache.globalPath==None:
-        logging.error('Need to define the global path to use all()')
-        sys.exit()
     if not os.path.isdir(os.getcwd()+'/cache'):
         os.mkdir('cache')
+    #dirname = os.path.dirname(os.path.abspath( __file__ ))
+    cache = rpCache()
     #cache.deprecatedMNXM_mnxm
     logging.info('Generating deprecatedMNXM_mnxm')
-    cache.deprecatedMNXM_mnxm = cache.deprecatedMNXM()
+    cache.deprecatedMNXM_mnxm = cache.deprecatedMNXM('input_cache/chem_xref.tsv')
     pickle.dump(cache.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
     #mnxm_dG
     logging.info('Generating mnxm_dG')
-    pickle.dump(cache.kegg_dG(), open('cache/kegg_dG.pickle', 'wb'))
+    pickle.dump(cache.kegg_dG('input_cache/cc_compounds.json.gz',
+        'input_cache/alberty.json',
+        'input_cache/compounds.csv'),
+        open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
     logging.info('Generating rr_reactions')
-    rr_reactions = cache.retro_reactions()
+    rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
     logging.info('Generating full_reactions')
-    pickle.dump(cache.full_reac(), open('cache/full_reactions.pickle', 'wb'))
-    #smiles_inchi --> use gzip since it is a large file
+    pickle.dump(cache.full_reac('input_cache/rxn_recipes.tsv'), 
+            open('cache/full_reactions.pickle', 'wb'))
+    #mnxm_strc --> use gzip since it is a large file
     logging.info('Parsing the SMILES and InChI')
-    #pickle.dump(cache.smiles_inchi(), open('cache/smiles_inchi.pickle', 'wb'))
-    pickle.dump(cache.smiles_inchi(), gzip.open('cache/smiles_inchi.pickle.gz','wb'))
+    #pickle.dump(cache.mnxm_strc(), open('cache/mnxm_strc.pickle', 'wb'))
+    pickle.dump(cache.mnxm_strc('input_cache/chem_prop.tsv'), 
+            gzip.open('cache/mnxm_strc.pickle.gz','wb'))
     #xref --> use gzip since it is a large file
     logging.info('Parsing the Cross-references')
-    pickle.dump(cache.chem_xref(), gzip.open('cache/chemXref.pickle.gz','wb'))
-    pickle.dump(cache.reac_xref(), gzip.open('cache/reacXref.pickle.gz','wb'))
-    pickle.dump(cache.comp_xref(), gzip.open('cache/compXref.pickle.gz','wb'))
-    '''
-    pub_mnx_chem_xref, mnx_pub_chem_xref = cache.chem_xref()
-    pickle.dump(pub_mnx_chem_xref, gzip.open('cache/pub_mnx_chem_xref.gz','wb'))
-    pickle.dump(mnx_pub_chem_xref, gzip.open('cache/mnx_pub_chem_xref.gz','wb'))
-    pub_mnx_reax_xref, mnx_pub_reac_xref = cache.reac_xref()
-    pickle.dump(pub_mnx_reax_xref, gzip.open('cache/pub_mnx_reax_xref.gz','wb'))
-    pickle.dump(mnx_pub_reac_xref, gzip.open('cache/mnx_pub_reac_xref.gz','wb'))
-    pub_mnx_comp_xref, mnx_pub_comp_xref = cache.comp_xref()
-    pickle.dump(pub_mnx_comp_xref, gzip.open('cache/pub_mnx_comp_xref.gz','wb'))
-    pickle.dump(mnx_pub_comp_xref, gzip.open('cache/mnx_pub_comp_xref.gz','wb'))
-    '''
-    #pickle.dump(cache.xref(), gzip.open('cache/Id_xref.pickle.gz','wb'))
+    pickle.dump(cache.chemXref('input_cache/chem_xref.tsv'), gzip.open('cache/chemXref.pickle.gz','wb'))
+    pickle.dump(cache.reacXref('input_cache/reac_xref.tsv', 'input_cache/reac_prop.tsv'), gzip.open('cache/reacXref.pickle.gz','wb'))
+    pickle.dump(cache.compXref('input_cache/comp_xref.tsv', 'input_cache/comp_prop.tsv'), gzip.open('cache/compXref.pickle.gz','wb'))
+    #copy the other file required
+    copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
+

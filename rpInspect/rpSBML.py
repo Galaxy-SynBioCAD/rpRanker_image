@@ -2,7 +2,6 @@ import libsbml
 from hashlib import md5
 import logging
 import os
-from rdkit import Chem
 import pickle
 import gzip
 
@@ -29,17 +28,20 @@ class rpSBML:
     # @param model libSBML model object
     # @param docModel libSBML Document object
     # @param nameSpaceModel libSBML name space (not required)
-    def __init__(self, modelName, model=None, document=None, sbmlns=None, path=None, cache_path=None):
+    def __init__(self, modelName, document=None, path=None):
         self.modelName = modelName
-        self.model = model
         self.document = document
-        self.sbmlns = sbmlns #we allow this to be None
+        if self.document==None:
+            self.model = None
+        else:
+            self.model = self.document.getModel()
         self.path = path
+        #need to scan for these if we are passing mode and documents
         self.hetero_group = None
         self.compartmentName = None
         self.compartmentId = None
-        if self.model==None:
-            logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
+        #if self.model==None:
+        #    logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
 
     #######################################################################
     ############################# PRIVATE FUNCTIONS ####################### 
@@ -66,7 +68,7 @@ class rpSBML:
                 logging.error(err_msg)
                 raise SystemExit(err_msg)
         else:
-            logging.info(message)
+            #logging.info(message)
             return None
 
 
@@ -129,7 +131,7 @@ class rpSBML:
                 logging.warning('libSBML reading warning: '+str(err.getShortMessage()))
         model = document.getModel()
         if not model:
-            loging.erro('Either the file was not read correctly or the SBML is empty')
+            loging.error('Either the file was not read correctly or the SBML is empty')
             raise FileNotFoundError
         self.document = document
         self.model = model
@@ -172,41 +174,56 @@ class rpSBML:
     def readRPpathway(self, pathId='rp_pathway'):
         groups = self.model.getPlugin('groups')
         rp_pathway = groups.getGroup(pathId)
+        self._checklibSBML(rp_pathway, 'retreiving groups rp_pathway')
         toRet = {}
         toRet['annotation'] = rp_pathway.getAnnotation()
         toRet['members'] = []
         for member in rp_pathway.getListOfMembers():
             toRet['members'].append(member.getIdRef())
-        return reacIds
+        return toRet
+
+
+    ## Read the reaction rules from the IBISBA annotation
+    #
+    #@param path_id default='rp_pathway' unique ID (per SBML) where the heterologous pathways are stored
+    #@return toRet dictionnary with the reaction rule and rule_id as key
+    def readRPrules(self, path_id='rp_pathway'):
+        toRet = {}
+        for reacId in self.readRPpathway(path_id)['members']:
+            reac = rpsbml.model.getReaction(reacId)
+            ibibsa_annot = rpsbml.readIBISBAAnnotation(reac.getAnnotation())
+            toRet[ibibsa_annot['rule_id']] = ibibsa_annot['smiles'].replace('&gt;', '>')
+        return toRet
 
 
     ## Return the the species annitations 
     #
     #
-    def readRPspeciesAnnotation(self, reacIds=None):
-        reacMembers = {'reactants': {}, 'products': {}}
-        if not reacIds:
-            reacIds = self.readPathwayMembers()
-        for reacId in reacIds:
+    def readRPspeciesAnnotation(self, path_id='rp_pathway'):
+        #reacMembers = {'reactants': {}, 'products': {}}
+        for reacId in self.readRPpathway(path_id):
             reacMembers[reacId] = {}
             reac = self.model.getReaction(reacId)
             for pro in reac.getListOfProducts():
                 reacMembers['products'][pro.getSpecies()] = pro.getStoichiometry()
             for rea in reac.getListOfReactants():
-                reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry() 
+                reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry()
         return reacMembers
-    
+
 
     ## Return the MIRIAM annotations of species
     #
     #
     def readMIRIAMSpeciesAnnotation(self, annot, cid):
-        id_annotId = {'bigg': 'bigg.metabolite', 
-                'mnx': 'metanetx.chemical', 
-                'chebi': 'chebi', 
-                'hmdb': 'hmdb', 
+        '''
+        id_annotId = {'bigg': 'bigg.metabolite',
+                'mnx': 'metanetx.chemical',
+                'chebi': 'chebi',
+                'hmdb': 'hmdb',
                 'kegg': 'kegg.compound',
                 'seed': 'seed.compound'}
+        '''
+        id_annotId = {}
         toRet = []
         if not cid in id_annotId:
             logging.warning('Cannnot find '+str(cid)+' in id_annotId')
@@ -215,22 +232,25 @@ class rpSBML:
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
-                logging.error('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
+                logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
                 continue
-            if str_annot.split('/')[-2]==id_annotId[cid]:
-                toRet.append(str_annot.split('/')[-1])
+            #if str_annot.split('/')[-2]==id_annotId[cid]:
+            #    toRet.append(str_annot.split('/')[-1])
+            if str_annot.split('/')[-2] not in id_annotId:
+                id_annotId[str_annot.split('/')[-2]] = []
+            id_annotId[str_annot.split('/')[-2]] = str_annot.split('/')[-1]
         return toRet
 
 
     ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
-    #
+    #TODO: how is this different from the above function???
     def readAnnotation(self, annot):
         toRet = {}
         bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
-                logging.error('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
+                logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
                 continue
             if not str_annot.split('/')[-2] in toRet:
                 toRet[str_annot.split('/')[-2]] = []
@@ -248,7 +268,7 @@ class rpSBML:
         for i in range(bag.getNumChildren()):
             ann = bag.getChild(i)
             if ann=='':
-                logging.error('This contains no attributes: '+str(ann.toXMLString()))
+                logging.warning('This contains no attributes: '+str(ann.toXMLString()))
                 continue
             if not ann.getName() in toRet:
                 if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o':
@@ -277,8 +297,29 @@ class rpSBML:
             if bool(set(source_dict[com_key]) & set(target_dict[com_key])):
                 return True
         return False
- 
-    
+
+
+    def compareAnnotations_annot_dict(self, source_annot, target_dict):
+        source_dict = self.readAnnotation(source_annot)
+        #list the common keys between the two
+        for com_key in set(list(source_dict.keys()))-(set(list(source_dict.keys()))-set(list(target_dict.keys()))):
+            #compare the keys and if same is non-empty means that there 
+            #are at least one instance of the key that is the same
+            if bool(set(source_dict[com_key]) & set(target_dict[com_key])):
+                return True
+        return False
+
+
+    def compareAnnotations_dict_dict(self, source_dict, target_dict):
+        #list the common keys between the two
+        for com_key in set(list(source_dict.keys()))-(set(list(source_dict.keys()))-set(list(target_dict.keys()))):
+            #compare the keys and if same is non-empty means that there 
+            #are at least one instance of the key that is the same
+            if bool(set(source_dict[com_key]) & set(target_dict[com_key])):
+                return True
+        return False
+
+
     #########################################################################
     ############################# MODEL APPEND ##############################
     #########################################################################
@@ -288,6 +329,7 @@ class rpSBML:
     #
     # The source mode has to have both the GROUPS and FBC packages enabled in its SBML. The course must have a groups
     #called rp_pathway.
+    # We add the reactions and species from the rpsbml to the target_model
     #
     def mergeModels(self, target_model):
         #target_model = target_document.getModel()
@@ -316,6 +358,8 @@ class rpSBML:
                         'setting target unit kind')
                     self._checklibSBML(target_unit.setExponent(source_unit.getExponent()), 
                         'setting target unit exponent')
+                    self._checklibSBML(target_unit.setScale(source_unit.getScale()), 
+                        'setting target unit scale')
                     self._checklibSBML(target_unit.setMultiplier(source_unit.getMultiplier()), 
                         'setting target unit multiplier')
                 target_unitDefID.append(source_unitDef.getId()) #add to the list to make sure its not added twice
@@ -337,7 +381,7 @@ class rpSBML:
                 self._checklibSBML(target_compartment, 'Getting target compartment')
                 target_annotation = target_compartment.getAnnotation()
                 #self._checklibSBML(target_annotation, 'Getting target annotation')
-                if not target_annotation:    
+                if not target_annotation:
                     logging.warning('No annotation for the target of compartment: '+str(target_compartment.getId()))
                     continue
                 if self.compareAnnotations(source_annotation, target_annotation):
@@ -427,6 +471,20 @@ class rpSBML:
         ################ SPECIES ####################
         #TODO: modify the name to add rpPathway
         sourceSpeciesID_targetSpeciesID = {}
+        #### compare
+        # first make the target model dictionnary of the species for the target model
+        targetModel_speciesAnnot = {}
+        for y in range(target_model.getNumSpecies()):
+            #target_species = target_model.getSpecies(y)
+            #self._checklibSBML(target_species, 'Getting target species')
+            #target_annotation = target_species.getAnnotation()
+            target_annotation = target_model.getSpecies(y).getAnnotation()
+            if not target_annotation:    
+                logging.warning('Cannot find annotations for species: '+str(target_model.getSpecies(y).getId()))
+                continue
+            self._checklibSBML(target_annotation, 'Getting target annotation')
+            targetModel_speciesAnnot[y] = self.readAnnotation(target_annotation)
+        # second make the target model dictionnary for the species of the rp model
         toAddNum = []
         for i in range(self.model.getNumSpecies()):
             found = False
@@ -436,18 +494,23 @@ class rpSBML:
             self._checklibSBML(source_annotation, 'Getting source annotation')
             if not source_annotation:
                 logging.warning('No annotation for the source of compartment '+str(source_compartment.getId()))
+                #we assume that if there are no annotations then we add it
+                toAddNum.append(i)
                 continue
-            for y in range(target_model.getNumSpecies()):
-                target_species = target_model.getSpecies(y)
-                self._checklibSBML(target_species, 'Getting target species')
-                target_annotation = target_species.getAnnotation()
+            #for y in range(target_model.getNumSpecies()):
+                #target_species = target_model.getSpecies(y)
+                #self._checklibSBML(target_species, 'Getting target species')
+                #target_annotation = target_species.getAnnotation()
                 #self._checklibSBML(target_annotation, 'Getting target annotation')
-                if not target_annotation:    
-                    logging.warning('Cannot find target number: '+str(y))
-                    continue
-                if self.compareAnnotations(source_annotation, target_annotation):
+                #if not target_annotation:    
+                #    logging.warning('Cannot find target number: '+str(y))
+                #    continue
+            for y in targetModel_speciesAnnot:
+                #if self.compareAnnotations(source_annotation, targetModel_speciesAnnot[y]):
+                if self.compareAnnotations_annot_dict(source_annotation, targetModel_speciesAnnot[y]):
                     #save the speciesID as being the same
-                    sourceSpeciesID_targetSpeciesID[self.model.species[i].getId()] = target_model.species[y].getId()
+                    #sourceSpeciesID_targetSpeciesID[self.model.species[i].getId()] = target_model.species[y].getId()
+                    sourceSpeciesID_targetSpeciesID[self.model.species[i].getId()] = target_model.getSpecies(y).getId()
                     found = True
                     break
             #if it has not been found then add it to the target_model
@@ -492,6 +555,26 @@ class rpSBML:
                 'fbc',
                 True),
                     'Enabling the FBC package')
+        #note sure why one needs to set this as False
+        self._checklibSBML(self.document.setPackageRequired('fbc', False), 'enabling FBC package')
+        #### compare the annotations to find the co-factors
+        #first make the target model dictionnary of the reactions
+        targetModel_reactionsAnnot = {}
+        for y in range(target_model.getNumReactions()):
+            #target_reaction = target_model.getReaction(y)
+            #self._checklibSBML(target_reaction, 'fetching target reaction annotation') 
+            #target_annotation = target_reaction.getAnnotation()
+            #self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
+            target_annotation = target_model.getReaction(y).getAnnotation()
+            if not target_annotation:    
+                logging.warning('No annotation for the target of reaction: '+str(target_model.getReaction(y).getId()))
+                continue
+            self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
+            targetModel_reactionsAnnot[y] = self.readAnnotation(target_annotation)
+        #### WANRING: important to list the heterologous pathways in the original model and if
+        # comparing the annotations returns true to not add them
+        # this is a fix to a bug caused by adding EC numbers to the reactions
+        model_rpPathway = self.readRPpathway()
         for i in range(self.model.getNumReactions()):
             found = False
             source_reaction = self.model.getReaction(i)
@@ -499,18 +582,27 @@ class rpSBML:
             source_annotation = source_reaction.getAnnotation()
             #self._checklibSBML(source_annotation, 'fetching source reaction annotation')
             if not source_annotation:
+                logging.warning(source_annotation)
                 logging.warning('No annotation for the source of reaction: '+str(source_reaction.getId()))
+                toAddNum.append(i)
                 continue
-            for y in range(target_model.getNumReactions()):
-                target_reaction = target_model.getReaction(y)
-                self._checklibSBML(target_reaction, 'fetching target reaction annotation') 
-                target_annotation = target_reaction.getAnnotation()
+            if source_reaction.getId() in model_rpPathway['members']:
+                toAddNum.append(i)
+                continue
+            #for y in range(target_model.getNumReactions()):
+                #target_reaction = target_model.getReaction(y)
+                #self._checklibSBML(target_reaction, 'fetching target reaction annotation') 
+                #target_annotation = target_reaction.getAnnotation()
                 #self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
-                if not target_annotation:    
-                    logging.warning('No annotation for the target of reaction: '+str(target_reaction.getId()))
-                    continue
-                if self.compareAnnotations(source_annotation, target_annotation):
-                    sourceReactionsID_targetReactionsID[self.model.reactions[i].getId()] = target_model.reactions[y].getId()
+                #if not target_annotation:    
+                #    logging.warning('No annotation for the target of reaction: '+str(target_reaction.getId()))
+                #    continue
+            for y in targetModel_reactionsAnnot:
+                #if self.compareAnnotations(source_annotation, target_annotation):
+                #if self.compareAnnotations(source_annotation, targetModel_reactionsAnnot[y]):
+                if self.compareAnnotations_annot_dict(source_annotation, targetModel_reactionsAnnot[y]):
+                    #sourceReactionsID_targetReactionsID[self.model.reactions[i].getId()] = target_model.reactions[y].getId()
+                    sourceReactionsID_targetReactionsID[source_reaction.getId()] = target_model.getReaction(y).getId()
                     found = True
                     break
             if not found:
@@ -589,13 +681,20 @@ class rpSBML:
                 'groups',
                 True),
                     'Enabling the GROUPS package')
+        #!!!! must be set to false for no apparent reason
+        self._checklibSBML(self.document.setPackageRequired('groups', False), 'enabling groups package')
+        #self._checklibSBML(self.sbmlns.addPkgNamespace('groups',1), 'Add groups package')
         source_groups = self.model.getPlugin('groups')
         self._checklibSBML(source_groups, 'fetching the source model groups')
         target_groups = target_model.getPlugin('groups')
         self._checklibSBML(target_groups, 'fetching the target model groups')
         self._checklibSBML(target_groups.addGroup(source_groups.getGroup('rp_pathway')),
                 'copying the source groups "rp_pathway" to the target groups')
-        
+        #return the fluxObj for the original model to define the bilevel objective        
+        ###### TITLES #####
+        target_model.setId(target_model.getId()+'_'+self.model.getId())
+        target_model.setName(target_model.getName()+' merged with '+self.model.getId())
+
 
     #########################################################################
     ############################# MODEL CREATION FUNCTIONS ##################
@@ -669,7 +768,7 @@ class rpSBML:
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
         #TODO: need to add all known xref from different databases (not just MetaNetX)
         annotation += '''
-    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+    <rdf:Description rdf:about="#'''+str(metaID or '')+'''">
       <bqbiol:is>
         <rdf:Bag>'''
         #TODO: for yout to complete
@@ -766,18 +865,21 @@ class rpSBML:
     # @param step 2D dictionnary with the following structure {'left': {'name': stoichiometry, ...}, 'right': {}}
     # @param reaction_smiles String smiles description of this reaction (added in IBISBA annotation)
     # @param compartmentId String Optinal parameter compartment ID
+    # @param isTarget Boolean Flag to suppress the warning that the passed step is missing information. Used in this case for the target compound
     # @param hetero_group Groups Optional parameter object that holds all the heterologous pathways
     # @param metaID String Optional parameter reaction metaID
     # @return metaID meta ID for this reaction
-    def createReaction(self, 
-            reacId, 
+    def createReaction(self,
+            reacId,
             fluxUpperBound,
             fluxLowerBound,
             step,
-            reaction_smiles, 
+            reaction_smiles,
             reacXref,
+            rp_transformation,
             compartmentId=None,
-            hetero_group=None, 
+            isTarget=False,
+            hetero_group=None,
             metaID=None):
         reac = self.model.createReaction()
         self._checklibSBML(reac, 'create reaction')
@@ -809,7 +911,7 @@ class rpSBML:
                 self._checklibSBML(spe.setSpecies(str(reactant)+'__64__'+str(self.compartmentId)), 'assign reactant species')
             #TODO: check to see the consequences of heterologous parameters not being constant
             self._checklibSBML(spe.setConstant(True), 'set "constant" on species '+str(reactant))
-            self._checklibSBML(spe.setStoichiometry(float(step['left'][reactant])), 
+            self._checklibSBML(spe.setStoichiometry(float(step['left'][reactant])),
                 'set stoichiometry ('+str(float(step['left'][reactant]))+')')
         #products_dict
         for product in step['right']:
@@ -818,48 +920,53 @@ class rpSBML:
             if compartmentId:
                 self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(compartmentId)), 'assign product species')
             else:
-                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(self.compartmentId)), 'assign product species') 
+                self._checklibSBML(pro.setSpecies(str(product)+'__64__'+str(self.compartmentId)), 'assign product species')
             #TODO: check to see the consequences of heterologous parameters not being constant
             self._checklibSBML(pro.setConstant(True), 'set "constant" on species '+str(product))
-            self._checklibSBML(pro.setStoichiometry(float(step['right'][product])), 
+            self._checklibSBML(pro.setStoichiometry(float(step['right'][product])),
                 'set the stoichiometry ('+str(float(step['right'][product]))+')')
         #annotation
         annotation = '''<annotation>
-  <rdf:RDF 
-  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
-  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/" 
+  <rdf:RDF
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:bqbiol="http://biomodels.net/biology-qualifiers/"
   xmlns:bqmodel="http://biomodels.net/model-qualifiers/">'''
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
         #TODO: need to add all known xref from different databases (not just MetaNetX)
+        ############################ MIRIAM ############################
         annotation += '''
-    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+    <rdf:Description rdf:about="#'''+str(metaID or '')+'''">
       <bqbiol:is>
         <rdf:Bag>'''
-        id_ident = {'mnx': 'metanetx.reaction/', 'rhea': 'rhea/', 'reactome': 'reactome/', 'bigg': 'bigg.reaction/', 'sabiork': 'sabiork.reaction/', 'ec-code': 'ec-code/', 'biocyc': 'biocyc/'}
-        if reacId in reacXref: 
+        id_ident = {'mnx': 'metanetx.reaction/', 'rhea': 'rhea/', 'reactome': 'reactome/', 'bigg': 'bigg.reaction/', 'sabiork': 'sabiork.reaction/', 'ec': 'ec-code/', 'biocyc': 'biocyc/'}
+        if reacId in reacXref:
             for dbId in reacXref[reacId]:
-                for cid in reacXref[reacId][dbId]: 
+                for cid in reacXref[reacId][dbId]:
                     try:
-                        annotation += '''        
+                        annotation += '''
           <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
                     except KeyError:
                         continue
+        if not isTarget:
+            try:
+                for trans_ec in rp_transformation[step['transformation_id']]['ec']:
+                    annotation += '''
+              <rdf:li rdf:resource="http://identifiers.org/ec-code/'''+str(trans_ec)+'''"/>'''
+            except KeyError:
+                #TODO: consider ignoring this since if we pass the target this should be ignored
+                logging.warning('There is no element: '+str(step['transformation_id'])+' in rp_transformation')
+        ############################## IBISBA #########################
+        #return the EC number associated with the original reaction 
+        #print(step)
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
-    </rdf:Description>'''   
-        annotation += '''    
-    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
+    </rdf:Description>
+    <rdf:Ibisba rdf:about="#'''+str(metaID or '')+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
-        <ibisba:smiles>'''+str(reaction_smiles)+'''</ibisba:smiles>
-        <ibisba:rule_score value=""/>
-        <ibisba:fba_biomass_score value=""/>
-        <ibisba:fba_target_score value=""/>
-        <ibisba:fba_splitObj_score value=""/>
-        <ibisba:global_score value=""/>
-        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
-        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
-        <ibisba:dG_uncert units="kj_per_mol" value=""/>
+        <ibisba:smiles>'''+str(reaction_smiles or '')+'''</ibisba:smiles>
+        <ibisba:rule_id>'''+str(step['rule_id'] or '')+'''</ibisba:rule_id>
+        <ibisba:rule_score value="'''+str(step['rule_score'] or '')+'''" />
       </ibisba:ibisba>
     </rdf:Ibisba>
   </rdf:RDF>
@@ -896,17 +1003,19 @@ class rpSBML:
             chemXref, 
             metaID=None, 
             inchi=None,
+            inchiKey=None,
             smiles=None,
-            compartmentId=None, 
-            charge=0,
-            chemForm=''):
+            compartmentId=None):
+            #TODO: add these at some point -- not very important
+            #charge=0,
+            #chemForm=''):
         spe = self.model.createSpecies()
         self._checklibSBML(spe, 'create species')
         ##### FBC #####
         spe_fbc = spe.getPlugin('fbc')
         self._checklibSBML(spe_fbc, 'creating this species as an instance of FBC')
-        spe_fbc.setCharge(charge) #### These are not required for FBA 
-        spe_fbc.setChemicalFormula(chemForm) #### These are not required for FBA
+        #spe_fbc.setCharge(charge) #### These are not required for FBA 
+        #spe_fbc.setChemicalFormula(chemForm) #### These are not required for FBA
         if compartmentId:
             self._checklibSBML(spe.setCompartment(compartmentId), 'set species spe compartment')
         else:
@@ -933,7 +1042,7 @@ class rpSBML:
         # if the name of the species is MNX then we annotate it using MIRIAM compliance
         #TODO: need to add all known xref from different databases (not just MetaNetX)
         annotation += '''
-    <rdf:Description rdf:about="#'''+str(metaID)+'''">
+    <rdf:Description rdf:about="#'''+str(metaID or '')+'''">
       <bqbiol:is>
         <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg_c': 'kegg.compound/', 'kegg_d': 'kegg.drug/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/', 'metacyc': 'metacyc/', 'sabiork': 'seed.compound/', 'reactome': 'reactome.compound/'}
@@ -957,28 +1066,12 @@ class rpSBML:
       </bqbiol:is>
     </rdf:Description>'''   
         ###### IBISBA additional information ########
-        if smiles:
-            annotation += '''
-    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
-      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-        <ibisba:smiles>'''+str(smiles)+'''</ibisba:smiles>'''
-        else:
-            annotation += '''
-    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
-      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
-        <ibisba:smiles></ibisba:smiles>'''
-        if inchi:
-            annotation += '''
-        <ibisba:inchi>'''+str(inchi)+'''</ibisba:inchi>
-        <ibisba:inchikey>'''+str(Chem.rdinchi.InchiToInchiKey(inchi))+'''</ibisba:inchikey>'''
-        else:
-            annotation += '''
-        <ibisba:inchi></ibisba:inchi>
-        <ibisba:inchikey></ibisba:inchikey>'''
         annotation += '''
-        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
-        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
-        <ibisba:dG_uncert units="kj_per_mol" value=""/>
+    <rdf:Ibisba rdf:about="#'''+str(metaID or '')+'''">
+      <ibisba:ibisba xmlns:ibisba="http://ibisba.eu/qualifiers">
+        <ibisba:smiles>'''+str(smiles or '')+'''</ibisba:smiles>
+        <ibisba:inchi>'''+str(inchi or '')+'''</ibisba:inchi>
+        <ibisba:inchikey>'''+str(inchiKey or '')+'''</ibisba:inchikey>
       </ibisba:ibisba>
     </rdf:Ibisba>'''
         annotation += '''
@@ -986,7 +1079,7 @@ class rpSBML:
 </annotation>'''
         self._checklibSBML(spe.setAnnotation(annotation), 'setting the annotation for new species')
 
-
+    
     ## Create libSBML pathway
     #
     # Create the collection of reactions that constitute the pathway using the Groups package and create the custom IBIBSA annotations
@@ -1010,15 +1103,8 @@ class rpSBML:
         annotation = '''<annotation>
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
   xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
-    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
+    <rdf:Ibisba rdf:about="#'''+str(metaID or '')+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
-        <ibisba:fba_biomass_score value=""/>
-        <ibisba:fba_target_score value=""/>
-        <ibisba:fba_splitObj_score value=""/>
-        <ibisba:global_score value=""/>
-        <ibisba:dG_prime_o units="kj_per_mol" value=""/>
-        <ibisba:dG_prime_m units="kj_per_mol" value=""/>
-        <ibisba:dG_uncert units="kj_per_mol" value=""/>
       </ibisba:ibisba>
     </rdf:Ibisba>
   </rdf:RDF>
@@ -1050,7 +1136,7 @@ class rpSBML:
         annotation = '''<annotation>
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
         xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
-    <rdf:Ibisba rdf:about="#'''+str(metaID)+'''">
+    <rdf:Ibisba rdf:about="#'''+str(metaID or '')+'''">
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:fasta value="" />
       </ibisba:ibisba>
@@ -1106,15 +1192,16 @@ class rpSBML:
         # kj_per_mol
         gibbsDef = self.createUnitDefinition('kj_per_mol')
         self.createUnit(gibbsDef, libsbml.UNIT_KIND_JOULE, 1, 3, 1)
-        self.createUnit(gibbsDef, libsbml.UNIT_KIND_MOLE, 1, 1, 1)
+        self.createUnit(gibbsDef, libsbml.UNIT_KIND_MOLE, -1, 1, 1)
         # infinity parameters (FBA)
-        upInfParam = self.createParameter('B_INF', float('inf'), 'kj_per_mol')
-        lowInfParam = self.createParameter('B__INF', float('-inf'), 'kj_per_mol')
+        #upInfParam = self.createParameter('B_INF', float('inf'), 'kj_per_mol')
+        #lowInfParam = self.createParameter('B__INF', float('-inf'), 'kj_per_mol')
         upNineParam = self.createParameter('B__999999', -999999, 'mmol_per_gDW_per_hr')
         lowNineParam = self.createParameter('B_999999', 999999, 'mmol_per_gDW_per_hr')
         lowZeroParam = self.createParameter('B_0', 0, 'mmol_per_gDW_per_hr')
         #compartment
-        self.createCompartment(1, 'MNXC3', 'cytoplasm', compXref) 
+        #TODO: create a new compartment 
+        self.createCompartment(1, 'MNXC3', 'cytoplasm', compXref)
 
 
     ##################################################################################################
@@ -1132,7 +1219,7 @@ class rpSBML:
         #### Define the if global or local parameter is to be used
         try:
             if cofactors_rp_paths==None and self.cofactors_rp_paths==None:
-                raise TypeError 
+                raise TypeError
             if cofactors_rp_paths==None and not self.cofactors_rp_paths==None:
                 cofactors_rp_paths = self.cofactors_rp_paths
         except EmptyOutRPpaths:
@@ -1141,4 +1228,22 @@ class rpSBML:
         if path_id==None:
             path_id = 1
         return None
+
+if __name__ == "__main__":
+    #read the TAR.XZ with all the SBML pathways
+    rpsbml_paths = {}
+    tar = tarfile.open('tests/testFBAin.tar.xz') #TODO: create this
+    rpsbml_paths = {}
+    for member in tar.getmembers():
+        rpsbml_paths[member.name] = rpFBA.rpSBML(member.name,libsbml.readSBMLFromString(tar.extractfile(member).read().decode("utf-8")))
+    #pass the different models to the SBML solvers and write the results to file
+    #TODO
+    #designed to write using TAR.XZ with all the SBML pathways
+    with tarfile.open('testFBAout.tar.xz', 'w:xz') as tf:
+        for rpsbml_name in rpsbml_paths:
+            data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
+            fiOut = BytesIO(data)
+            info = tarfile.TarInfo(rpsbml_name)
+            info.size = len(data)
+            tf.addfile(tarinfo=info, fileobj=fiOut)
 

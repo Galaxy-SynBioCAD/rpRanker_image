@@ -10,6 +10,7 @@ import rpSBML
 #import ../rpSBML
 
 
+#example input data to make the models and test the different functions
 path_id = 1
 steps = [{'right': {'CMPD_0000000003': 1, 'MNXM13': 1, 'MNXM15': 1, 'MNXM8': 1}, 'left': {'MNXM10': 1, 'MNXM188': 1, 'MNXM4': 1, 'MNXM1': 3}}, {'right': {'TARGET_0000000001': 1, 'MNXM1': 2}, 'left': {'CMPD_0000000003': 1, 'MNXM4': 1, }}]
 reaction_smiles = ['[H]Oc1c([H])c([H])c([H])c([H])c1O[H]>>O=O.[H]N=C(O[H])C1=C([H])N(C2([H])OC([H])(C([H])([H])OP(=O)(O[H])OP(=O)(O[H])OC([H])([H])C3([H])OC([H])(n4c([H])nc5c(N([H])[H])nc([H])nc54)C([H])(O[H])C3([H])O[H])C([H])(O[H])C2([H])O[H])C([H])=C([H])C1([H])[H].[H]OC(=O)c1c([H])c([H])c([H])c([H])c1N([H])[H]', '[H]OC(=O)C([H])=C([H])C([H])=C([H])C(=O)O[H]>>O=O.[H]Oc1c([H])c([H])c([H])c([H])c1O[H]', ]
@@ -38,6 +39,10 @@ reacXref = pickle.load(gzip.open(os.path.join(os.path.abspath('..'), 'cache/reac
 
 
 class TestClass(object):
+
+    ############################################################################### 
+    ################################ rpSBML ####################################### 
+    ############################################################################### 
 
     #function to compare two models 
     #TODO: need to improve this function to check in a lower level that two SBML are the same
@@ -76,23 +81,22 @@ class TestClass(object):
         return True
 
 
-
     def test_createModel(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createModel.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
 
     def test_genericModel(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_genericModel.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
 
     def test_createUnitDefinition(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
         unitDef = rpsbml.createUnitDefinition('mmol_per_gDW_per_hr')
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createUnitDefinition.sbml'))
@@ -100,7 +104,7 @@ class TestClass(object):
 
 
     def test_createUnit(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
         unitDef = rpsbml.createUnitDefinition('mmol_per_gDW_per_hr')
         rpsbml.createUnit(unitDef, libsbml.UNIT_KIND_MOLE, 1, -3, 1)
@@ -111,7 +115,7 @@ class TestClass(object):
 
 
     def test_createParameter(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
         upInfParam = rpsbml.createParameter('B_999999', 999999.0, 'kj_per_mol')
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createParameter.sbml'))
@@ -119,7 +123,7 @@ class TestClass(object):
 
 
     def test_createCompartent(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.createModel('RetroPath_heterologous_pathway', 'rp_model')
         rpsbml.createCompartment(1, 'MNXC3', 'cytoplasm', compXref)
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createCompartment.sbml'))
@@ -127,7 +131,7 @@ class TestClass(object):
 
 
     def test_createSpecies(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -144,7 +148,7 @@ class TestClass(object):
 
 
     def test_createPathway(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -160,14 +164,14 @@ class TestClass(object):
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, None, rpsbml.hetero_group, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, 'testRid', 0.0, None, rpsbml.hetero_group, None)
             step_id += 1
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createPathway.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
 
     def test_createReaction(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -183,14 +187,14 @@ class TestClass(object):
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, None, None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, 'testRid', 0.0, None, rpsbml.hetero_group, None)
             step_id += 1
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createReaction.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
 
     def test_createFluxObj(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -205,15 +209,15 @@ class TestClass(object):
         rpsbml.createPathway(path_id)
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, None, None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, 'testRid', 0.0, None, rpsbml.hetero_group, None)
             step_id += 1
         rpsbml.createFluxObj('flux1', 'RP_1', 2.0, True)
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createFluxObj.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
-        
+
     def test_createMergeModels(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -224,12 +228,12 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rp_pathway = rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, None, rpsbml.hetero_group, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, 'testRid', 0.0, None, rpsbml.hetero_group, None)
             step_id += 1
         #other model
         document = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'bigg_iMM904.COBRA-sbml3.xml'))
@@ -237,17 +241,17 @@ class TestClass(object):
         rpsbml.mergeModels(model)
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_mergeModels.sbml'))
         assert self.compareModels(inModel.getModel(), model)==True
- 
+
 
     def test_readSBML(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createReaction.sbml')) 
         inModel = libsbml.readSBML(os.path.join(os.path.abspath('test_models'), 'test_createReaction.sbml'))
         assert self.compareModels(inModel.getModel(), rpsbml.model)==True
 
 
     def test_writeSBML(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         rpsbml.modelName = 'test_writeSBML'
         rpsbml.writeSBML(os.path.abspath('test_models'))
@@ -259,19 +263,19 @@ class TestClass(object):
     #def test_checklibSBML(self):
 
     def test_nameToSbmlId(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         id_name = rpsbml._nameToSbmlId('###test_input-23####')
         assert id_name=='___test_input_23___'
 
 
     def test_genMetaID(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         id_name = rpsbml._genMetaID('###test_input-23####')
         assert id_name=='_5df40e51a5d358ecfdf0372317853a79'
 
 
     def test_readAnnotation(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -282,7 +286,7 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         annot = rpsbml.readAnnotation(rpsbml.model.getSpecies('MNXM1__64__MNXC3').getAnnotation())
         assert annot=={'bigg.metabolite': ['h', 'M_h'],
                 'metanetx.chemical': ['MNXM1', 'MNXM145872', 'MNXM89553'], 
@@ -292,10 +296,10 @@ class TestClass(object):
                 'metacyc': ['PROTON'], 
                 'reactome.compound': ['1132304', '113529', '1470067', '156540', '163953', '193465', '194688', '2000349', '2872447', '351626', '372511', '374900', '425969', '425978', '425999', '427899', '428040', '428548', '5668577', '70106', '74722'], 
                 'seed.compound': ['39', 'cpd00067']}
-        
+
 
     def test_readIBISBAAnnotation(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
         for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
             try:
@@ -306,24 +310,101 @@ class TestClass(object):
                 smiles = rp_smiles[meta]
             except KeyError:
                 smiles = None
-            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '', None, None, None)
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
         rpsbml.createPathway(path_id)
         #reactions
         step_id = 0
         for stepNum in range(len(steps)):
-            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], 'MNXC3', None, None)
+            rpsbml.createReaction('RP_'+str(stepNum), 'B_999999', 'B__999999', steps[stepNum], reaction_smiles[stepNum], reacXref, 'testRid', 0.0, None, rpsbml.hetero_group, None)
             step_id += 1
         assert rpsbml.readIBISBAAnnotation(rpsbml.model.getSpecies('MNXM1__64__MNXC3').getAnnotation())=={'smiles': '[H+]','inchi': 'InChI=1S','inchikey': '','dG_prime_o': {'units': 'kj_per_mol', 'value': ''},'dG_prime_m': {'units': 'kj_per_mol', 'value': ''},'dG_uncert': {'units': 'kj_per_mol', 'value': ''}}
 
 
     def test_compareAnnotations(self):
-        rpsbml = rpSBML.rpSBML(None, None, None, None, os.path.abspath('../cache'))
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
         document = libsbml.readSBML('test_models/test_createPathway.sbml')
         model = document.getModel()
-        assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__MNXC3').getAnnotation(), model.getSpecies('MNXM15__64__MNXC3').getAnnotation())==False
+        #assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__MNXC3').getAnnotation(), model.getSpecies('MNXM15__64__MNXC3').getAnnotation())==False
         assert rpsbml.compareAnnotations(model.getSpecies('MNXM1__64__MNXC3').getAnnotation(), model.getSpecies('MNXM1__64__MNXC3').getAnnotation())==True
 
 
+    ############################################################################### 
+    ############################### rpThermo ###################################### 
+    ############################################################################### 
 
+
+    def test_scrt_dfG_prime_o(self):
+        srct_type = 'smiles'
+        srct_string = '[H]OC(=O)c1c([H])c([H])c([H])c([H])c1N([H])[H]'
+        stochio = 1
+        rpthermo = rpThermo.rpThermo()
+        dG0_prime, X, G, addInfo = rpthermo(srct_type, srct_string, stochio)
+        assert dG0_prime==?
+
+
+    def test_dG_dGprime(self):
+        #for C19259
+        nMg = 0
+        z =  0
+        nH = 14
+        dG0_f = 389.25
+        rpthermo = rpThermo.rpThermo()
+        dG0_prime = rpthermo.dG_dGprime(nMg, z, nH, dG0_f)
+        assert dG0_prime==956.9035925820388
+
+
+    def test_species_dfG_prime_o(self):
+        #create a species inside an SBML model
+        rpsbml = rpSBML.rpSBML('test', None, os.path.abspath('../cache'))
+        rpsbml.genericModel('RetroPath_heterologous_pathway', 'rp_model', compXref)
+        for meta in set([i for step in steps for lr in ['left', 'right'] for i in step[lr]]):
+            try:
+                inchi = rp_inchi[meta]
+            except KeyError:
+                inchi = None
+            try:
+                smiles = rp_smiles[meta]
+            except KeyError:
+                smiles = None
+            rpsbml.createSpecies(meta, chemXref, None, inchi, smiles, 'MNXC3', 0, '')
+        species_annot = rpsbml.model.getSpecies('MNXM10__64__MNXC3').getAnnotation()
+        rpthermo = rpThermo.rpThermo()
+        dfG_prime_o, X, G, physioParameter = rpthermo.species_dfG_prime_o(species_annot, 1)
+        #TODO: calculate this
+        assert dfG_prime_o==-1141.617003796832
+
+
+    def pathway_drG_prime_m(self, rpsbml):
+        pathId = 'rp_pathway'
+        #TODO: generate the SBML with an annotated thermodynamics model
+        #TODO: make a rpSBML object (without the thermodynamics annotations)
+        rpthermo = rpThermo.rpThermo()
+        rpthermo.pathway_drG_prime_m(rpsbml, pathId)
+        assert compareModels(newModel, oldModel)==True
+
+
+    ############################################################################### 
+    ############################# rpCofactors ##################################### 
+    ############################################################################### 
+
+
+
+    ############################################################################### 
+    ############################### rpReader ###################################### 
+    ############################################################################### 
+
+
+
+    ############################################################################### 
+    ################################ rpFBA ######################################## 
+    ############################################################################### 
+
+
+
+    ############################################################################### 
+    ############################### rpThermo ###################################### 
+    ############################################################################### 
+
+    
 
 

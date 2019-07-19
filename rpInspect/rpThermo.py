@@ -6,10 +6,11 @@ from scipy.special import logsumexp
 import copy
 import pickle
 import os
+import libsbml
 
 #local package
-import component_contribution
-
+#import component_contribution
+from . import component_contribution
 
 class rpThermo:
     """Combination of equilibrator and group_contribution analysis to calculate the thermodymaics of the individual
@@ -52,7 +53,7 @@ class rpThermo:
         self.debye_huckel = self.DH_alpha*self.ionic_strength**(0.5)/(1.0+self.DH_beta*self.ionic_strength**(0.5))
         #temporarely save the calculated dG's
         self.calculated_dG = {}
-        if not self._loadCache(os.getcwd()+'/cache'):
+        if not self._loadCache():
             raise ValueError
         
 
@@ -63,17 +64,19 @@ class rpThermo:
     #
     #
     def _loadCache(self):
+        dirname = os.path.dirname(os.path.abspath( __file__ ))
         try:
-            self.cc_preprocess = np.load(os.path.join(os.path.abspath('cache'), 'cc_preprocess.npz'))
-        except FileNotFoundError:
-            logging.error('The file '+str(os.path.abspath('cache')+'/cc_preprocess.npz')+' does not seem to exist')
+            self.cc_preprocess = np.load(dirname+'/cache/cc_preprocess.npz')
+        except FileNotFoundError as e:
+            logging.error(e)
             return False
         try:
-            self.kegg_dG = pickle.load(open(os.path.join(os.path.abspath('cache'), 'kegg_dG.pickle'), 'rb'))
-        except FileNotFoundError:
-            logging.error('The file '+str(os.path.abspath('cache'), '/kegg_dG.pickle.pickle')+' does not seem to exist')
+            self.kegg_dG = pickle.load(open(dirname+'/cache/kegg_dG.pickle', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
             return False
         return True
+
 
     ## Select a thermodynamics score from the dataset
     #
@@ -330,10 +333,11 @@ class rpThermo:
         G = None
         dfG_prime_o = None
         cid = None
-        physioParameter = None #this paraemter determines the concentration of the copound for the adjustemet, (dG_prime_m). It assumes physiological conditions ie 1e-3 for aquaeus and 1 for gas, solid etc.... Next step is to have the user input his own
+        physioParameter = None #this paraemter determines the concentration of the copound for the adjustemet, (dG_prime_m). It assumes physiological conditions ie 1e-3 for aquaeus and 1 for gas, solid etc.... TODO: Next step is to have the user input his own
         #Try to find your species in the already calculated species
         smiles = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('smiles').getChild(0).toXMLString()
         inchi = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('inchi').getChild(0).toXMLString()
+        ################### use already calculated ##########################
         if inchi in self.calculated_dG:
             X = self.calculated_dG[inchi]['X']
             G = self.calculated_dG[inchi]['G']
@@ -343,83 +347,123 @@ class rpThermo:
             G = self.calculated_dG[smiles]['G']
             dfG_prime_o = self.calculated_dG[smiles]['dfG_prime_o']
         else:
+            ################## use the KEGG id for precalculated ######################
             #if not try to find it in cc_preprocess
-            try:
-                #return the KEGG CID
-                cids = []
-                #TODO: replace this by reading the SBML model directly
-                bag = species_annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
-                for i in range(bag.getNumChildren()):
-                    str_annot = bag.getChild(i).getAttrValue(0)
-                    if str_annot.split('/')[-2]=='kegg.compound':
-                        cids.append(str_annot.split('/')[-1])
-                cid = [i for i in cids if i[0]=='C']
-                if len(cid)==1:
-                    cid = cid[0]
-                elif len(cid)>1:
-                    logging.warning('There are more than one results, using the first one '+str(cid))
-                    cid = cid[0]
-                else:
-                    raise KeyError
-                dfG_prime_o, X, G, physioParameter = self.cmp_dfG_prime_o(
-                        cid, 
-                        stoichio)
-            except KeyError:
+            cids = []
+            bag = species_annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
+            for i in range(bag.getNumChildren()):
+                str_annot = bag.getChild(i).getAttrValue(0)
+                if str_annot.split('/')[-2]=='kegg.compound':
+                    cids.append(str_annot.split('/')[-1])
+            cid = [i for i in cids if i[0]=='C'] #some of the KEGG compounds are drugs and start with a D
+            if len(cid)==1:
+                cid = cid[0]
+            #TODO: sort them to have the lowest KEGG CID used
+            elif len(cid)>1:
+                cid = sorted(cid)[0]
+                logging.warning('There are more than one results, using the first one '+str(sorted(cid)))
+            else:
+                cid = None
+            if cid:
+                #BUG or overlooked? overwrite H+ and H2O dfG_prime_m
+                if not cid=='C00080': #ignore H+ for the moment
+                    try:
+                        dfG_prime_o, X, G, physioParameter = self.cmp_dfG_prime_o(
+                                cid, 
+                                stoichio)
+                    except KeyError:
+                        #TODO: seperate this part in a function instead of repeating the code
+                        #calculate using the structure
+                        #try for smiles
+                        if inchi:
+                            try:
+                                dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
+                                        'inchi', 
+                                        inchi, 
+                                        stoichio)
+                                self.calculated_dG[smiles] = {}
+                                self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
+                                self.calculated_dG[smiles]['X'] = X
+                                self.calculated_dG[smiles]['G'] = G
+                            except (KeyError, LookupError):
+                                logging.warning('Cannot use InChI to calculate the thermodynamics')
+                                pass
+                        #try for inchi
+                        if smiles and dfG_prime_o==None:
+                            try:
+                                dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
+                                        'smiles',
+                                        smiles,
+                                        stoichio)
+                                self.calculated_dG[smiles] = {}
+                                self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
+                                self.calculated_dG[smiles]['X'] = X
+                                self.calculated_dG[smiles]['G'] = G
+                            except (KeyError, LookupError):
+                                logging.warning('Cannot use SMILES to calculate the thermodynamics')
+                                raise KeyError
+            ############## use the structure #########################
+            else:
+                if cid:
+                    logging.warning('Database does not contain thermodynamics for KEGG: '+str(cid))
                 #at last, if all fails use its structure to calculate dfG_prime_o
-                #try for inchi
+                #try for smiles
                 if inchi:
                     try:
                         dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
                                 'inchi', 
                                 inchi, 
                                 stoichio)
-                    #TODO: change this
-                    except (KeyError, LookupError):
-                        raise KeyError
-                    self.calculated_dG[inchi] = {}
-                    self.calculated_dG[inchi]['dfG_prime_o'] = dfG_prime_o
-                    self.calculated_dG[inchi]['X'] = X
-                    self.calculated_dG[inchi]['G'] = G
-                else:
-                    #try for smiles
-                    if smiles:
-                        try:
-                            dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
-                                    'smiles',
-                                    smiles,
-                                    stoichio)
-                        #TODO: change this
-                        except (KeyError, LookupError):
-                            raise KeyError
                         self.calculated_dG[smiles] = {}
                         self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
                         self.calculated_dG[smiles]['X'] = X
                         self.calculated_dG[smiles]['G'] = G
-                    else:
-                        logging.warning('Cannot find either inchi or smiles in the annotation')
+                    except (KeyError, LookupError):
+                        logging.warning('Cannot use InChI to calculate the thermodynamics')
+                        pass
+                #try for inchi
+                if smiles and dfG_prime_o==None:
+                    try:
+                        dfG_prime_o, X, G, additional_info = self.scrt_dfG_prime_o(
+                                'smiles',
+                                smiles,
+                                stoichio)
+                        self.calculated_dG[smiles] = {}
+                        self.calculated_dG[smiles]['dfG_prime_o'] = dfG_prime_o
+                        self.calculated_dG[smiles]['X'] = X
+                        self.calculated_dG[smiles]['G'] = G
+                    except (KeyError, LookupError):
+                        logging.warning('Cannot use SMILES to calculate the thermodynamics')
+                        raise KeyError
         #update the species dfG information
         dfG_prime_m = None
+        if physioParameter==None:
+            physioParameter = 1e-3
         if not dfG_prime_o==None:
-            if physioParameter==None:
-                physioParameter = 1e-3
+            write_dfG_prime_o = dfG_prime_o
             dfG_prime_m = dfG_prime_o+self.concentrationCorrection([abs(stoichio)], [physioParameter]) 
-            #BUG or overlooked? overwrite H+ and H2O dfG_prime_m
-            if not cid==None:
-                if cid=='C00080':
-                    dfG_prime_m = -17.1
-                    dfG_prime_o = 0.0
-                    #dfG_prime_m = 0.0
-                    X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
-                    G = np.zeros((self.cc_preprocess['C3'].shape[0], 1))
-            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr(
-                    'value', 
-                    str(dfG_prime_o))
-            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr(
-                    'value', 
-                    str(dfG_prime_m))
-            species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr(
-                    'value',
-                    str(self.dG0_uncertainty(X, G)))
+            write_dfG_prime_m = dfG_prime_m
+            write_uncertainty = self.dG0_uncertainty(X, G)
+        elif cid=='C00080':
+            write_dfG_prime_o = 0.0
+            write_dfG_prime_m = -17.1
+            write_uncertainty = 5.8
+            ### this is wrong.... need to define it better
+            X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+            G = np.zeros((self.cc_preprocess['C3'].shape[0], 1)) 
+        else:
+            write_dfG_prime_o = 0.0
+            write_dfG_prime_m = 0.0
+            write_uncertainty = 0.0
+            X = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
+            G = np.zeros((self.cc_preprocess['C3'].shape[0], 1)) 
+        ibisba_annot = species_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_o units="kj_per_mol" value="'+str(write_dfG_prime_o)+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_o'))
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_m units="kj_per_mol" value="'+str(write_dfG_prime_m)+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_m'))
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_uncert units="kj_per_mol" value="'+str(write_uncertainty)+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_uncert'))
         return dfG_prime_o, X, G, physioParameter #we call physioParameter concentration later 
 
 
@@ -427,7 +471,6 @@ class rpThermo:
     #
     # WARNING: we skip the components that we fail to calculate the thermodynamics and 
     # and as a consequence the pathway thermo score ignore that step --> need to at least report it
-    # TODO: change this to KEGG id's instead of MNX
     def pathway_drG_prime_m(self, rpsbml, pathId='rp_pathway'):
         #calculate the number of species that are involded in the pathway 
         #for each species calculate the ddG_prime_m and its uncertainty
@@ -441,6 +484,7 @@ class rpThermo:
         pathway_stoichio = []
         pathway_concentration = []
         #path
+        already_calculated = {}
         for member in rp_pathway.getListOfMembers():
             reaction_dfG_prime_o = 0.0
             X_reaction = np.zeros((self.cc_preprocess['C1'].shape[0], 1))
@@ -450,12 +494,25 @@ class rpThermo:
             reaction = rpsbml.model.getReaction(member.getIdRef())
             #react
             for pro in reaction.getListOfProducts():
-                rpsbml.model.getSpecies(pro.species).getAnnotation()
+                #rpsbml.model.getSpecies(pro.species).getAnnotation()
+                #print(rpsbml.model.getSpecies(pro.species).getAnnotation().toXMLString())
                 try:
-                    dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
-                            rpsbml.model.getSpecies(pro.species).getAnnotation(), 
-                            float(pro.stoichiometry))
+                    if not pro.species in already_calculated:
+                        dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
+                                rpsbml.model.getSpecies(pro.species).getAnnotation(), 
+                                float(pro.stoichiometry))
+                        already_calculated[pro.species] = {}
+                        already_calculated[pro.species]['dfG_prime_o'] = dfG_prime_o
+                        already_calculated[pro.species]['X'] = X
+                        already_calculated[pro.species]['G'] = G
+                        already_calculated[pro.species]['concentration'] = concentration
+                    else:
+                        dfG_prime_o = already_calculated[pro.species]['dfG_prime_o']
+                        X = already_calculated[pro.species]['X']
+                        G = already_calculated[pro.species]['G']
+                        concentration = already_calculated[pro.species]['concentration']
                 except (KeyError, LookupError):
+                    logging.warning('Failed to calculate the thermodynamics for '+str(pro.species))
                     continue
                 reaction_stoichio.append(float(pro.stoichiometry))
                 pathway_stoichio.append(float(pro.stoichiometry))
@@ -469,11 +526,24 @@ class rpThermo:
                     X_path += X
                     G_path += G
             for rea in reaction.getListOfReactants():
+                #print(rpsbml.model.getSpecies(rea.species).getAnnotation().toXMLString())
                 try:
-                    dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
-                            rpsbml.model.getSpecies(rea.species).getAnnotation(),
-                            -float(rea.stoichiometry))
+                    if not rea.species in already_calculated:
+                        dfG_prime_o, X, G, concentration = self.species_dfG_prime_o(
+                                rpsbml.model.getSpecies(rea.species).getAnnotation(),
+                                -float(rea.stoichiometry))
+                        already_calculated[rea.species] = {}
+                        already_calculated[rea.species]['dfG_prime_o'] = dfG_prime_o
+                        already_calculated[rea.species]['X'] = X
+                        already_calculated[rea.species]['G'] = G
+                        already_calculated[rea.species]['concentration'] = concentration
+                    else:
+                        dfG_prime_o = already_calculated[rea.species]['dfG_prime_o']
+                        X = already_calculated[rea.species]['X']
+                        G = already_calculated[rea.species]['G']
+                        concentration = already_calculated[rea.species]['concentration']
                 except (KeyError, LookupError):
+                    logging.warning('Failed to calculate the thermodynamics for '+str(pro.species))
                     continue
                 reaction_stoichio.append(-float(rea.stoichiometry))
                 pathway_stoichio.append(-float(rea.stoichiometry))
@@ -487,17 +557,39 @@ class rpThermo:
                     X_path += X
                     G_path += G
             #add the reaction thermo to the sbml
+            #ibisba_annot = member.getIdRef().getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba')
+            reac = rpsbml.model.getReaction(member.getIdRef())
+            reac_annot = reac.getAnnotation()
+            ibisba_annot = reac_annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
+            tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_o units="kj_per_mol" value="'+str(reaction_dfG_prime_o)+'" /> </ibisba:ibisba>')
+            ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_o'))
+            tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_m units="kj_per_mol" value="'+str(reaction_dfG_prime_o+self.concentrationCorrection(reaction_stoichio, reaction_concentration))+'" /> </ibisba:ibisba>')
+            ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_m'))
+            tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_uncert units="kj_per_mol" value="'+str(self.dG0_uncertainty(X_reaction, G_reaction))+'" /> </ibisba:ibisba>')
+            ibisba_annot.addChild(tmpAnnot.getChild('dfG_uncert'))
+            '''
+            rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr('value', str(reaction_dfG_prime_o))
             rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr('value', str(reaction_dfG_prime_o))
             #rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(reaction_dfG_prime_m))
             rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(reaction_dfG_prime_o+self.concentrationCorrection(reaction_stoichio, reaction_concentration)))
             rpsbml.model.getReaction(member.getIdRef()).getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr('value', str(self.dG0_uncertainty(X_reaction, G_reaction)))
+            '''
         #add the pathway thermo to the sbml
+        ibisba_annot = rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba')
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_o units="kj_per_mol" value="'+str(pathway_dfG_prime_o)+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_o'))
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_prime_m units="kj_per_mol" value="'+str(pathway_dfG_prime_o+self.concentrationCorrection(pathway_stoichio, pathway_concentration))+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_prime_m'))
+        tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:dfG_uncert units="kj_per_mol" value="'+str(self.dG0_uncertainty(X_path, G_path))+'" /> </ibisba:ibisba>')
+        ibisba_annot.addChild(tmpAnnot.getChild('dfG_uncert'))
+        '''
         rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_o').addAttr('value', str(pathway_dfG_prime_o))
         #rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(pathway_dfG_prime_m))
-        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(pathway_dfG_prime_o+self.concentrationCorrection(pathway_stoichio, reaction_concentration)))
+        rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_prime_m').addAttr('value', str(pathway_dfG_prime_o+self.concentrationCorrection(pathway_stoichio, pathway_concentration)))
         rp_pathway.getAnnotation().getChild('RDF').getChild('Ibisba').getChild('ibisba').getChild('dG_uncert').addAttr('value', str(self.dG0_uncertainty(X_path, G_path)))
-        
-            
+        '''
+
+
     #TODO: implement to return if the reaction is balanced and the reversibility index 
 
     def isBalanced():
@@ -512,3 +604,23 @@ class rpThermo:
         """Quantitative measure for the reversibility of a reaction by taking into consideration the concentration of the substrate and products
         """
         return False
+
+if __name__ == "__main__":
+    #READ THE TAR.XZ FILE
+    rpsbml_paths = {}
+    tar = tarfile.open('tests/testTHERMOin.tar.xz') #TODO: create this
+    rpsbml_paths = {}
+    for member in tar.getmembers():
+        rpsbml_paths[member.name] = rpFBA.rpSBML(member.name,libsbml.readSBMLFromString(tar.extractfile(member).read().decode("utf-8")))
+    ###
+    rpthermo = rpThermo()
+    for rpsbml_name in rpsbml_paths:
+        rpthermo.pathway_drG_prime_m(rpsbml_paths[rpsbml_name])
+    #WRITE THE TAR.XZ FILE
+    with tarfile.open('testFBAout.tar.xz', 'w:xz') as tf:
+        for rpsbml_name in rpsbml_paths:
+            data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
+            fiOut = BytesIO(data)
+            info = tarfile.TarInfo(rpsbml_name)
+            info.size = len(data)
+            tf.addfile(tarinfo=info, fileobj=fiOut)
