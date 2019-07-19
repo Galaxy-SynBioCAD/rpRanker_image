@@ -1,6 +1,7 @@
-rpInspect/component_contribution/data
+component_contribution/data
 *.ipynb
 cache/
+input_cache/
 __pycache__/
 test/__pycache__/
 test/.ipynb_checkpoints/
@@ -9,5 +10,4 @@ test/test_models/*
 *.swo
 *.pyc
 *.ini
-rpInspect/component_contribution/data/
 *.tar.xz
