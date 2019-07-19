@@ -571,4 +571,3 @@ if __name__ == "__main__":
     pickle.dump(cache.compXref('input_cache/comp_xref.tsv', 'input_cache/comp_prop.tsv'), gzip.open('cache/compXref.pickle.gz','wb'))
     #copy the other file required
     copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
-
