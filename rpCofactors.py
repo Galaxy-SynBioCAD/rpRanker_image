@@ -21,14 +21,9 @@ class rpCofactors:
     #
     # @param rpReader input reader object with the parsed user input and cache files required
     #DEPRECATED def __init__(self, rpReader, userXrefDbName=None):
-    def __init__(self, rpReader):
-        #TODO: test that the rpReader is valid...
-        self.rpReader = rpReader
-        #DEPRECATED self.comp_reac_smiles = {}
-        self.rp_paths = {}
-        #DEPRECATED: self.convertid_inchi = {}
-        self.sbml_paths = {}
-        #DEPRECATED self.userXrefDbName = userXrefDbName #TODO: change to interpret all inputs xref database from the input file directly 
+    def __init__(self, rpsbml):
+        #TODO: check that the sbml is valid
+        self.rpsbml = rpsbml
         ##### stuff to load from cache #####
         self.full_reactions = None
         self.rr_reactions = None
@@ -82,62 +77,16 @@ class rpCofactors:
     ################################################################
 
 
-    ''' DEPRECATED -- need to find a better way to have user xref 
-    ## Function to identify the user identifier from the MNX one
+    ## Function that converts an rpSBML model to the dictionnary that is used by the algorithm
     #
-    #  Go through the cross references files to extract the corresponding identifiers
     #
-    #  @param self Object pointer
-    #  @param compound The MNX identifier to be identifiy
-    #  @param db The user database containing a cross reference
-    #  @return finalID 
-    def cmpd_identification_xref(self, compound, db):
-        if not 'MNXM' in compound[:4]:
-            if compound in self.rpReader.in_xref:
-                db_cid = self.rpReader.in_xref[compound][db]
-                if db_cid in self.chemXref[db]:  #for i in self.chemXref if db in self.chemXref[i]: for n in self.chemXref[i][db]: if db_cid == n:
-                    final_id = self.chemXref[db][db_cid]
-        else:
-            tmp_id = self.chemXref[compound][db]
-            for i in self.in_xref:
-                for n in tmp_id:
-                    if n == self.rpReader.in_xref[i][db]:
-                        final_id = i
-        return final_id
-    '''
+    def convertSBMLdict():
+        
 
+    ## Function that converts a dictionnary used by the algorithm to rpSBML model
+    #
+    def convertDictSBML():
 
-    ''' DEPRECATED -- This is the same family of tools that need to be revisited for the input. Need to define a better input for the user xref
-    ## Function to identify the id of a compound using the structure comparison
-    #
-    #  Go through cem_prop inchis dictionnary, and the user's sink to identify the compound using inchis
-    #
-    #  @param self The object pointer
-    #  @param compound The compound to be identified
-    #  @return final_id The corresponding ID
-    def cmpd_identification_inchi(self, compound):
-        a = {}
-        if not compound in self.convertid_inchi:
-            cmpd_inchikey = self.smiles_inchi[compound]['inchikey']
-            for i in self.rpReader.in_inchi:
-                c = self.convert_depiction(idepic=self.rpReader.in_inchi[i], itype='inchi', otype={'inchikey'})
-                tmp_inchikey = c['inchikey']
-                if cmpd_inchikey == tmp_inchikey:
-                    final_id = i
-                    a[compound] = i
-                elif cmpd_inchikey.split('-')[0:2] == tmp_inchikey.split('-')[0:2]:
-                    logging.info('The compound '+compound+' has been identified as '+str(i)+' using the two first layers of their inchikey')
-                    final_id = i
-                    a[compound] = i
-                elif cmpd_inchikey.split('-')[0] == tmp_inchikey.split('-')[0]:
-                    logging.info('The compound '+compound+' has been identified as '+str(i)+' using the first layers of their inchikey')
-                    final_id = i
-                    a[compound] = i
-            self.convertid_inchi.update(a)
-        else:
-            final_id = self.convertid_inchi[compound]
-        return final_id
-    '''
 
     ## Given a dictionnary describing a monocomponent reaction, add the cofactors by comparing it with the original reaction
     #

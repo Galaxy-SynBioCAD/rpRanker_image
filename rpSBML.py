@@ -110,6 +110,9 @@ class rpSBML:
     #####################################################################
 
     
+
+    
+    
     ## Open an SBML using libSBML 
     #
     # Situation where an SBML is passed to add the heterologous pathway
@@ -278,6 +281,10 @@ class rpSBML:
                 else:
                     toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet
+
+    #########################################################################
+    ############################# COMPARE MODELS ############################
+    #########################################################################
 
 
     ## Find out if two libSBML Species or Reactions come from the same species
