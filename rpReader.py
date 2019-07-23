@@ -9,6 +9,7 @@ import gzip
 import sys
 import random
 from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
+from .rpSBML import rpSBML
 
 ## @package InputReader
 #
@@ -36,23 +37,16 @@ class rpReader:
     #  @param Database The database name of the user's xref
     def __init__(self):
         #cache files
-        self.deprecatedMNXM_mnxm = None
+        self.rpsbml_paths = {}
         #input files
-        self.rp_paths = None
-        self.rp_strc = None #These are the structures contained within the 
-        #TODO: not the best strategy to have this set in this fashion -- change it
-        #self.model_chemicals = None
-        #self.model_compartments = None
-        #TODO: not the best strategy to have this set in this fashion -- change it
+        self.deprecatedMNXM_mnxm = None
+        self.rp_strc = None #These are the structures contained within the output of rp2paths
         self.rp_transformation = None
-        #deprecated self.rp_strc_inchi = {} #if you need to add one more then add it to mnxm_strc directly -> is that a good idea?
-        self.mnxm_strc = None
-        #self.in_xref = None #DEPRECATED -- to redo in a different manner:
-        #self.in_inchi = None #DEPRECATED -- parameter for a function that does not exist
-        #DEPRECATED -- the logic behind this is to identify user id's for compounds using
-        #either a file input by the user with the user id and public id or InChI
-        #Inchi is converted to its key before being compared
+        self.mnxm_strc = None #There are the structures from MNXM
         self.rr_reactions = None
+        self.chemXref = None
+        self.compXref = None
+        self.reacXref = None
         if not self._loadCache():
             raise ValueError
 
@@ -79,6 +73,21 @@ class rpReader:
             return False
         try:
             self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
+            return False
+        try:
+            self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
+            return False
+        try:
+            self.compXref = pickle.load(gzip.open(dirname+'/cache/compXref.pickle.gz', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
+            return False
+        try:
+            self.reacXref = pickle.load(gzip.open(dirname+'/cache/reacXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
             logging.error(e)
             return False
@@ -119,51 +128,11 @@ class rpReader:
                 raise NotImplementedError('"{}" is not a valid output type'.format(otype))
         return odepic
 
+
     ###############################################################
     ############################# PUBLIC FUNCTIONS ################
     ############################################################### 
 
-
-    ''' DEPRECATED - For the moment, need to find a better way to define user xref
-    ## Function to parse a given cross references file by the user
-    #
-    #  Extract the identifiers for each compound
-    #
-    #  @param self Object pointer
-    #  @param path The input file path
-    #  @return xref The dictionnary of cross references
-    def user_xref(self, path):
-        """The file has to be of the form : ID   DatabaseID  Database
-        """
-        self.in_xref = {}
-        try:
-            with open(path) as f:
-                reader = csv.reader(f, delimiter='\t')
-                next(reader)
-                for row in reader:
-                    for i in range(1,len(row)-1):
-                        self.in_xref[row[0]] = {'{}' .format(str(row[i+1])): row[i]}
-                        i += 2
-        except(FileNotFoundError, TypeError):
-            logging.warning('You did not provide an xref file, or the path is not correct')
-    '''
-
-    ''' DEPRECATED - Not sure what this function does as it is not used anywhere else
-    ## Function to extract the inchi for each compound in the model of the user
-    #
-    #  @param self The Object pointer
-    #  @return inchi_sink Dictionnary of inchis for the user's ids  
-    def user_sink(self, path):
-        try:
-            self.in_inchi = {}
-            with open(path) as f :
-                reader = csv.reader(f, delimiter='\t')
-                next(reader)
-                for row in reader:
-                    self.in_inchi[row[0]] = row[1]
-        except(FileNotFoundError, TypeError):
-            logging.warning('You did not provide a sink file, or the path is not correct')
-    '''
 
     ## Function to parse the compounds.txt file
     #
@@ -223,14 +192,6 @@ class rpReader:
                         self.rp_transformation[row[1]] = {}
                         self.rp_transformation[row[1]]['rule'] = row[2]
                         self.rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
-                        #self.rp_transformation[row[1]]['ec'] = [i.replace(' ', '') if not i.replace(' ', '')=='NOEC' else pass for i in row[11][1:-1].split(',')]
-                    '''
-                    #DEPRECATED: trying to remove self.mnxm_strc for space
-                    if not row[3] in self.mnxm_strc:
-                        self.mnxm_strc[row[3]] = row[4]
-                    if not row[5] in self.mnxm_strc:
-                        self.mnxm_strc[row[5]] = row[6]
-                    '''
         except FileNotFoundError:
             logging.error('Could not read the compounds file: '+str(path))
 
@@ -333,6 +294,72 @@ class rpReader:
             return {}
 
 
+    ## TODO: switch this from generic to defined, with defined bounds
+    #
+    # rp_paths structure is the following {1: {1: {1: {'rule_id': '', 'right': {}, 'left': {}, 'path_id': int, 'step': int, 'sub_step': int, 'transformation_id': ''}, ...}, ...}, ...}
+    # a single step looks like this {'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
+    #
+    #TODO: remove the default MNXC3 compartment ID
+    def pathsToSBML(self, rp_paths, compartment_id='MNXC3'):
+        #if the output folder does not exist then create it
+        #for path in rp_paths:
+        #sbmlThermo = rpThermo.rpThermo()
+        for pathNum in rp_paths:
+            #first level is the list of lists of sub_steps
+            #second is itertools all possible combinations using product
+            altPathNum = 1
+            for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+                steps = []
+                for i in range(len(comb_path)):
+                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+                path_id = steps[0]['path_id']
+                rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
+                #1) create a generic Model, ie the structure and unit definitions that we will use the most
+                ##### TODO: give the user more control over a generic model creation:
+                #   -> special attention to the compartment
+                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum), 'RP_model_'+str(path_id)+'_'+str(altPathNum), self.compXref)
+                #2) create the pathway (groups)
+                rpsbml.createPathway('rp_pathway')
+                #3) find all the unique species and add them to the model
+                all_meta = set([i for step in steps for lr in ['left', 'right'] for i in step[lr]])
+                for meta in all_meta:
+                    #here we want to gather the info from rpReader's rp_strc and mnxm_strc
+                    try:
+                        rpsbml.createSpecies(meta, self.chemXref, None, self.rpReader.rp_strc[meta]['inchi'], self.rpReader.rp_strc[meta]['inchikey'], self.rpReader.rp_strc[meta]['smiles'], compartment_id)
+                    except KeyError:    
+                        try:
+                            rpsbml.createSpecies(meta, self.chemXref, None, self.rpReader.mnxm_strc[meta]['inchi'], self.rpReader.mnxm_strc[meta]['inchikey'], self.rpReader.mnxm_strc[meta]['smiles'], compartment_id)
+                        except KeyError:
+                            logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
+                #4) add the complete reactions and their annotations
+                for step in steps:
+                    xref = {} #with new reactions, its impossible to find the same ones
+                    rpsbml.createReaction('RP'+str(step['step']), # parameter 'name' of the reaction deleted : 'RetroPath_Reaction_'+str(step['step']),
+                            'B_999999', #only for genericModel
+                            'B_0', #only for genericModel
+                            step,
+                            self.rpReader.rp_transformation[step['transformation_id']]['rule'],
+                            xref,
+                            self.rpReader.rp_transformation,
+                            compartment_id)
+                #5) adding the consumption of the target
+                targetRule = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+                rpsbml.createReaction('targetSink',
+                        'B_999999',
+                        'B_0',
+                        targetRule,
+                        None,
+                        self.reacXref,
+                        self.rpReader.rp_transformation,
+                        compartment_id,
+                        True)
+                #6) Optional?? Add the flux objectives. Could be in another place, TBD
+                #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
+                rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
+                #self.sbml_paths['rp_'+str(path_id)] = rpsbml
+                self.sbml_paths['rp_'+str(path_id)+'_'+str(altPathNum)] = rpsbml
+                altPathNum += 1
+
 
     ## Generate the sink from a given model and the 
     #
@@ -364,6 +391,7 @@ class rpReader:
                     writer.writerow([mnx,inchi])
 
 
+#TODO: update this thing
 if __name__ == "__main__":
     #READ THE INPUT FILES AND PASS THEM TO rpFBA
     rpreader = rpFBA.rpReader()
