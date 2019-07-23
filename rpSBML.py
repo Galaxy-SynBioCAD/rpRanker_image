@@ -863,14 +863,13 @@ class rpSBML:
         #TODO: for yout to complete
         id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
         #WARNING: compartmentNameID as of now, needs to be a MNX ID
-        if compName in compXref: 
-            for databaseId in compXref[compName]:
-                for compartmentId in compXref[compName][databaseId]:
-                    try:
-                        annotation += '''
-          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
-                    except KeyError:
-                        continue
+        for databaseId in compXref:
+            for compartmentId in compXref[databaseId]:
+                try:
+                    annotation += '''
+      <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
+                except KeyError:
+                    continue
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
