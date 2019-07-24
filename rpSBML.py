@@ -298,7 +298,7 @@ class rpSBML:
                 for y in range(ann.getNumChildren()):
                     selAnn = ann.getChild(y)
                     toRet['selenzyme'][selAnn.getName()] = float(selAnn.getAttrValue('value'))
-            elif ann.getName()=='':
+            #elif ann.getName()=='':
             else:
                 toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet

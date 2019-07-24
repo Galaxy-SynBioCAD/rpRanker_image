@@ -40,15 +40,17 @@ class rpReader:
         #cache files
         self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
-		#TODO: remove all the rp parameters since these should not be used, 
+        #TODO: remove all the rp parameters since these should not be used, 
         self.rp_strc = None #These are the structures contained within the output of rp2paths
         self.rp_transformation = None
         self.deprecatedMNXM_mnxm = None
+        self.deprecatedMNXR_mnxr = None
         self.mnxm_strc = None #There are the structures from MNXM
         self.rr_reactions = None
         self.chemXref = None
         self.compXref = None
-        self.reacXref = None
+        self.rp_paths = None
+        #self.reacXref = None #for the moment we are not using it, we are adding heterologous reactions
         if not self._loadCache():
             raise ValueError
 
@@ -65,6 +67,11 @@ class rpReader:
         dirname = os.path.dirname(os.path.abspath( __file__ ))
         try:
             self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
+            return False
+        try:
+            self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
         except FileNotFoundError as e:
             logging.error(e)
             return False
@@ -88,11 +95,13 @@ class rpReader:
         except FileNotFoundError as e:
             logging.error(e)
             return False
+        '''
         try:
             self.reacXref = pickle.load(gzip.open(dirname+'/cache/reacXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
             logging.error(e)
             return False
+        '''
         return True
 
 
@@ -246,7 +255,9 @@ class rpReader:
                             ruleIds = random.sample(ruleIds, maxRuleIds)
                     sub_path_step = 1
                     for singleRule in ruleIds:
+                        print(singleRule)
                         tmpReac = {'rule_id': singleRule,
+                                'rule_score': self.rr_reactions[singleRule]['rule_score'],
                                 'right': {},
                                 'left': {},
                                 'path_id': int(row[0]),
@@ -301,18 +312,18 @@ class rpReader:
     # a single step looks like this {'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
     #
     #TODO: remove the default MNXC3 compartment ID
-    def pathsToSBML(self, rp_paths, pathId='rp_pathway', compartment_id='MNXC3'):
+    def pathsToSBML(self, pathId='rp_pathway', compartment_id='MNXC3'):
         #if the output folder does not exist then create it
-        #for path in rp_paths:
+        #for path in self.rp_paths:
         #sbmlThermo = rpThermo.rpThermo()
-        for pathNum in rp_paths:
+        for pathNum in self.rp_paths:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
             altPathNum = 1
-            for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+            for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
                 steps = []
                 for i in range(len(comb_path)):
-                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+                    steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
                 path_id = steps[0]['path_id']
                 rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
@@ -326,10 +337,10 @@ class rpReader:
                 for meta in all_meta:
                     #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
-                        rpsbml.createSpecies(meta, self.chemXref, None, self.rpReader.rp_strc[meta]['inchi'], self.rpReader.rp_strc[meta]['inchikey'], self.rpReader.rp_strc[meta]['smiles'], compartment_id)
+                        rpsbml.createSpecies(meta, self.chemXref[meta], None, self.rp_strc[meta]['inchi'], self.rp_strc[meta]['inchikey'], self.rp_strc[meta]['smiles'], compartment_id)
                     except KeyError:    
                         try:
-                            rpsbml.createSpecies(meta, self.chemXref, None, self.rpReader.mnxm_strc[meta]['inchi'], self.rpReader.mnxm_strc[meta]['inchikey'], self.rpReader.mnxm_strc[meta]['smiles'], compartment_id)
+                            rpsbml.createSpecies(meta, self.chemXref[meta], None, self.mnxm_strc[meta]['inchi'], self.mnxm_strc[meta]['inchikey'], self.mnxm_strc[meta]['smiles'], compartment_id)
                         except KeyError:
                             logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
                 #4) add the complete reactions and their annotations
@@ -338,9 +349,9 @@ class rpReader:
                             'B_999999', #only for genericModel
                             'B_0', #only for genericModel
                             step,
-                            self.rpReader.rp_transformation[step['transformation_id']]['rule'],
+                            self.rp_transformation[step['transformation_id']]['rule'],
                             {}, #with new reactions, its impossible to find the same ones
-                            self.rpReader.rp_transformation,
+                            self.rp_transformation,
                             compartment_id)
                 #5) adding the consumption of the target
                 targetRule = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
@@ -349,8 +360,8 @@ class rpReader:
                         'B_0',
                         targetRule,
                         None,
-						{},
-                        self.rpReader.rp_transformation,
+                        {},
+                        self.rp_transformation,
                         compartment_id,
                         True)
                 #6) Optional?? Add the flux objectives. Could be in another place, TBD
@@ -376,81 +387,81 @@ class rpReader:
     #  TODO: change the ID of all species to take a normal string and not sepcial caracters
     def jsonToSBML(self, jsonfile, pathId='rp_pathway', compartment_id='MNXC3'):
         pathNum = 1
-		#TODO: ask how are the JSON is organised. i.e. is there one file per pathway or multiple ones
-		with open(jsonfile) as json_data:
-			## Load json data as a dictionnary
-			data = json.load(json_data)
-			## 1) create a generic Model, i.e the structure and unit definitions that we will be used the most
-			rpsbml = rpSBML.rpSBML('rp_'+str(pathNum))
-			#rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum)) # TODO: add self.compXref as per Melchior
-			rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
-			## 2) create the pathway (groups)
-			rpsbml.createPathway(pathId) ## Create the heterologous pathway
-			self.rp_paths = {}
-			rp_stpechio = {}
-			for node in data['elements']['nodes']:
-				## ListOfSpecies
-				if node['data']['type'] == 'compound':
-					tmp_inchi = self.convert_depiction(node['data']['SMILES'], 'smiles', {'inchi'})
-					### rp_strc like (compounds.txt)
-					self.rp_strc[node['data']['id']] = {'smiles': node['data']['SMILEs'], 'inchi': tmp_inchi, 'inchikey': node['data']['id']}
-					### create a specie
-					rpsbml.createSpecies(node['data']['id'].split('-')[0], self.inchikey_mnxm, None, convert_depiction(self, node['data']['SMILES'], itype='smiles', otype={'inchi'}), node['data']['id'], node['data']['SMILES'], compartment_id)
-					if node['data']['isSource'] == 1:
-						target_ID = node['data']['id'].split('-')[0]
-				## Create a dictionnary containing all the reactions 
-				elif node['data']['type'] == 'reaction':
-					step = node['data']['iteration']
-					### rp_transformation like (scope.scv)
-					self.rp_transformation[node['data']['id']] = {'rule': node['data']['Reaction SMILES'], 'ec': [i for i in [node['data']['EC number']]]}
-					### rp_paths like (out_paths.csv)
-					self.rp_paths[pathNum][step][1] = {'rule_id': node['data']['Rule ID'],
-												 'right':{},
-												 'left':{},
-												 'step': node['data']['iteration'] #node['data']['id'].split('-')[-1],
-												 'EC_number': node['data']['EC number'],
-												 'smiles': node['data']['Reaction SMILES'],
-												 'diameter': node['data']['Diameter'],
-												 'score': node['data']['Score'],
-												 'iteration': node['data']['Iteration']
-												 'transformation_id': node['data']['id']}
-					rp_stpechio.update(node['data']['Stoechiometry'])
-			## Substrats and products for each reactions in the reactions dictionnary
-			for reaction in data['elements']['edges']:
-				if len(reaction['data']['target'].split('-')) == 3:
-					self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]['left'][reaction['data']['target'].split('-')[0]] = rp_stpechio[reaction['data']['target']]
-				else:
-					self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stpechio[reaction['data']['source']]
-			## ListOfReactions
-			for step in self.rp_paths[pathNum]:
-				rpsbml.createReaction('RetroPath_Reaction_'+step.keys().split('-')[7], # name of the reaction, to change
-						'B_999999', #only for genericModel
-						'B_0', #only for genericModel
-						step[1],
-						self.rp_transformation[step[1]['transformation_id']]['rule'],
-						{}, #self.reacXref,
-						self.rp_transformation,
-						compartment_id)
-			## targetSink reaction    
-			targetRule = {'rule_id': None, 'left': {target_ID: 1}, 'right': [], 'step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
-			rpsbml.createReaction('targetSink',
-					'B_999999',
-					'B_0',
-					targetRule,
-					None,
-					{}, #
-					self.rp_transformation,
-					compartment_id,
-					True)
-			rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
-			self.sbml_paths['rp_'+str(pathNum)] = rpsbml
-			#TODO: these will be handled by galaxy tools and not here:
-			## Writting 
-			#libsbml.writeSBML(rpsbml.document, path+'/RP_model_from_json'+str(pathNum)+'.xml')
-			#return rpsbml.document
+        #TODO: ask how are the JSON is organised. i.e. is there one file per pathway or multiple ones
+        with open(jsonfile) as json_data:
+            ## Load json data as a dictionnary
+            data = json.load(json_data)
+            ## 1) create a generic Model, i.e the structure and unit definitions that we will be used the most
+            rpsbml = rpSBML.rpSBML('rp_'+str(pathNum))
+            #rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum)) # TODO: add self.compXref as per Melchior
+            rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
+            ## 2) create the pathway (groups)
+            rpsbml.createPathway(pathId) ## Create the heterologous pathway
+            self.rp_paths = {}
+            rp_stpechio = {}
+            for node in data['elements']['nodes']:
+                ## ListOfSpecies
+                if node['data']['type'] == 'compound':
+                    tmp_inchi = self.convert_depiction(node['data']['SMILES'], 'smiles', {'inchi'})
+                    ### rp_strc like (compounds.txt)
+                    self.rp_strc[node['data']['id']] = {'smiles': node['data']['SMILEs'], 'inchi': tmp_inchi, 'inchikey': node['data']['id']}
+                    ### create a specie
+                    rpsbml.createSpecies(node['data']['id'].split('-')[0], self.inchikey_mnxm, None, convert_depiction(self, node['data']['SMILES'], itype='smiles', otype={'inchi'}), node['data']['id'], node['data']['SMILES'], compartment_id)
+                    if node['data']['isSource'] == 1:
+                        target_ID = node['data']['id'].split('-')[0]
+                ## Create a dictionnary containing all the reactions 
+                elif node['data']['type'] == 'reaction':
+                    step = node['data']['iteration']
+                    ### rp_transformation like (scope.scv)
+                    self.rp_transformation[node['data']['id']] = {'rule': node['data']['Reaction SMILES'], 'ec': [i for i in [node['data']['EC number']]]}
+                    ### rp_paths like (out_paths.csv)
+                    self.rp_paths[pathNum][step][1] = {'rule_id': node['data']['Rule ID'],
+                                                 'right':{},
+                                                 'left':{},
+                                                 'step': node['data']['iteration'], #node['data']['id'].split('-')[-1],
+                                                 'EC_number': node['data']['EC number'],
+                                                 'smiles': node['data']['Reaction SMILES'],
+                                                 'diameter': node['data']['Diameter'],
+                                                 'score': node['data']['Score'],
+                                                 'iteration': node['data']['Iteration'],
+                                                 'transformation_id': node['data']['id']}
+                    rp_stpechio.update(node['data']['Stoechiometry'])
+            ## Substrats and products for each reactions in the reactions dictionnary
+            for reaction in data['elements']['edges']:
+                if len(reaction['data']['target'].split('-')) == 3:
+                    self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]['left'][reaction['data']['target'].split('-')[0]] = rp_stpechio[reaction['data']['target']]
+                else:
+                    self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stpechio[reaction['data']['source']]
+            ## ListOfReactions
+            for step in self.rp_paths[pathNum]:
+                rpsbml.createReaction('RetroPath_Reaction_'+step.keys().split('-')[7], # name of the reaction, to change
+                        'B_999999', #only for genericModel
+                        'B_0', #only for genericModel
+                        step[1],
+                        self.rp_transformation[step[1]['transformation_id']]['rule'],
+                        {}, #self.reacXref,
+                        self.rp_transformation,
+                        compartment_id)
+            ## targetSink reaction    
+            targetRule = {'rule_id': None, 'left': {target_ID: 1}, 'right': [], 'step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+            rpsbml.createReaction('targetSink',
+                    'B_999999',
+                    'B_0',
+                    targetRule,
+                    None,
+                    {}, #
+                    self.rp_transformation,
+                    compartment_id,
+                    True)
+            rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
+            self.sbml_paths['rp_'+str(pathNum)] = rpsbml
+            #TODO: these will be handled by galaxy tools and not here:
+            ## Writting 
+            #libsbml.writeSBML(rpsbml.document, path+'/RP_model_from_json'+str(pathNum)+'.xml')
+            #return rpsbml.document
 
 
-	#TODO: move this to another place
+    #TODO: move this to another place
 
     ## Generate the sink from a given model and the 
     #
@@ -482,6 +493,7 @@ class rpReader:
                     writer.writerow([mnx,inchi])
 
 
+'''TODO: Need to update this test or write actual test functions
 #TODO: update this thing
 if __name__ == "__main__":
     #READ THE INPUT FILES AND PASS THEM TO rpFBA
@@ -499,4 +511,4 @@ if __name__ == "__main__":
             info = tarfile.TarInfo(rpsbml_name)
             info.size = len(data)
             tf.addfile(tarinfo=info, fileobj=fiOut)
-
+'''
