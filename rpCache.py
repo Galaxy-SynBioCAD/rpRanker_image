@@ -37,6 +37,7 @@ class rpCache:
                 'MNXM137': 'MNXM588022'}
         #personally looked at the KEGG to MNXM conversion for the thermodynamics 
         self.deprecatedMNXM_mnxm = None
+        self.mnxm_inchikey = {} #this will be used to xref for the parsing of the other files
 
     #######################################################
     ################### PRIVATE FUNCTION ##################
@@ -84,6 +85,8 @@ class rpCache:
     ####################### PUBLIC FUNCTIONS ###############
     ######################################################## 
 
+
+    ################### MetaNetX ############################
 
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
@@ -209,9 +212,6 @@ class rpCache:
                 if not row[0][0]=='#':
                     if not row[0] in mnxc_name:
                         mnxc_name[row[0]] = row[1]
-        #Mel --> not a fan of the hardcoding, if the file changes then one would need to add new entries
-        #possCID = ['mnxc', 'bigg', 'cco', 'go', 'seed', 'name']
-        #pubDB_name_xref = {}
         name_pubDB_xref = {}
         try:
             with open(compXref_path) as f:
@@ -242,39 +242,56 @@ class rpCache:
         return name_pubDB_xref
 
 
-    ## Function to parse the chemp_prop.tsv file from MetanetX
+    ## Function to parse the chemp_prop.tsv file from MetanetX. Uses the InchIkey as key to the dictionnary
     #
     #  Generate a dictionnary gaving the formula, smiles, inchi and inchikey for the components
     #
     #  @param self Object pointer
     #  @param chem_prop_path Input file path 
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
-    def mnxm_strc(self, chem_prop_path):
-        #TODO: need to reduce the size of this file. As it stands its 250MB
-        mnxm_strc = {}
+    def mnx_inchikey_strc(self, chem_prop_path):
+        inchikey_strc = {}
         with open(chem_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#':
-                    mnxm_strc[row[0]] = {'forumla':  row[2], 'smiles': row[6], 'inchi': row[5], 'inchikey': row[8]}
-                    #mnxm_strc[row[6]] = {'forumla':  row[2], 'mnxm': row[0], 'inchi': row[5], 'inchikey': row[8]}
-                    for i in mnxm_strc[row[0]]:
-                        if mnxm_strc[row[0]][i]=='' or mnxm_strc[row[0]][i]=='NA':
+                    #test all of them
+                    tmp = {'forumla':  row[2], 'smiles': row[6], 'inchi': row[5], 'inchikey': row[8], 'mnxm': row[0], 'name': row[1]}
+                    for i in tmp:
+                        if tmp[i]=='' or tmp=='NA':
                             mnxm_strc[row[0]][i] = None
-                    # if you have smiles
+                    #check to see if the inchikey is valid or not
+                    otype = set({})
+                    if not tmp['inchikey']
+                        otype.add('inchikey')
+                    #attempt to retreive the structures of the missing entries
+                    if not tmp['smiles'] and not tmp['inchi'] and 'inchikey' in otype:
+                        logging.error('Cannot determine the strucutre of this entry: '+str(tmp))
                     try:
-                        if mnxm_strc[row[0]]['smiles']:
-                            if not mnxm_strc[row[0]]['inchi']:
-                                resConv = self._convert_depiction(idepic=mnxm_strc[row[0]]['smiles'], itype='smiles', otype={'inchi, inchikey'})
-                                mnxm_strc[row[0]]['inchi'] = resConv['inchi']
-                                mnxm_strc[row[0]]['inchikey'] = resConv['inchikey']
-                        elif mnxm_strc[row[0]]['inchi']:
-                            resConv = self._convert_depiction(idepic=mnxm_strc[row[0]]['inchi'], itype='inchi', otype={'smiles, inchikey'})
-                            mnxm_strc[row[0]]['smiles'] = resConv['smiles']
-                            mnxm_strc[row[0]]['inchikey'] = resConv['inchikey']
+                        if not tmp['smiles'] and tmp['inchi']:
+                            otype.add('smiles')
+                            resConv = self._convert_depiction(idepic=tmp['inchi'], itype='inchi', otype=otype)
+                            for i in reConv:
+                                tmp[i] = resConv[i]
+                        if tmp['smiles'] and not tmp['inchi']:
+                            otype.add('inchi')
+                            resConv = self._convert_depiction(idepic=tmp['smiles'], itype='smiles', otype=otype)
+                            for i in reConv:
+                                tmp[i] = resConv[i]
+                        if tmp['smiles'] and tmp['inchi'] and not 'inchikey' in otype:
+                            resConv = self._convert_depiction(idepic=tmp['inchi'], itype='inchi', otype=otype)
+                            for i in reConv:
+                                tmp[i] = resConv[i]
                     except (NotImplementedError, Exception) as e:
-                        logging.warning('Could not convert the structures for '+str(row[0])+': '+str(mnxm_strc[row[0]]))
-        return mnxm_strc
+                        logging.warning('Could not convert some of the structures: '+str(tmp))
+                    if not tmp['inchikey']:
+                        logging.warning('Cannot find valid inchikey, skipping...')
+                        continue
+                    inchikey_strc[tmp['inchikey']] = tmp
+        return inchikey_strc
+
+
+    ####################### Equilibrator ###############################
 
 
     ## Function exctract the dG of components
@@ -395,6 +412,9 @@ class rpCache:
                 else:
                     cc_alberty[cd['CID']]['alberty'].append(cd)
         return cc_alberty
+
+    
+    ####################################### RetroRules #####################################
 
 
     ## Function to parse the rules_rall.tsv file
