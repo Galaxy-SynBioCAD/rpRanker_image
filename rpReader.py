@@ -12,6 +12,29 @@ from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, Mol
 import json
 from .rpSBML import rpSBML
 
+
+#######################################################
+################### USER DEFINED ERROR ################
+#######################################################
+
+
+## Error function for the convertion of structures
+#
+#
+class Error(Exception):
+    pass
+
+
+## Error function for the convertion of structures
+#
+#
+class DepictionError(Error):
+    def __init__(self, message):
+        #self.expression = expression
+        self.message = message
+
+
+
 ## @package InputReader
 #
 # Documentation for the input files reader of rpFBA
@@ -19,14 +42,6 @@ from .rpSBML import rpSBML
 ## \brief Class to read all the input files
 #
 # Contains all the functions that read the cache files and input files to reconstruct the heterologous pathways
-# To include in the input directory the following files are required:
-# - chemicals.csv (MetaNetX)
-# - compartments.csv (MetaNetX)
-# - compounds.txt (RP2paths output)
-# - out_paths.csv (RP2paths output)
-# - scope.csv (RetroPath2 output)
-# - xref.csv (User, if needed)
-# - sink.csv (User, if needed)
 class rpReader:
     """ WARNING: if you define inputPath, then all the files must have specific names to
         make sure that it can find the appropriate files
@@ -50,6 +65,7 @@ class rpReader:
         self.chemXref = None
         self.compXref = None
         self.rp_paths = None
+        self.sbml_paths = None
         #self.reacXref = None #for the moment we are not using it, we are adding heterologous reactions
         if not self._loadCache():
             raise ValueError
@@ -167,7 +183,7 @@ class rpReader:
                         try:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchi'})
                             self.rp_strc[row[0]]['inchi'] = resConv['inchi']
-                        except (NotImplementedError, Exception) as e:
+                        except DepictionError as e:
                             logging.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                     try:
                         self.rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
@@ -177,7 +193,7 @@ class rpReader:
                         try:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})    
                             self.rp_strc[row[0]]['inchikey'] = resConv['inchikey']
-                        except (NotImplementedError, Exception) as e:
+                        except DepictionError as e:
                             logging.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
         except (TypeError, FileNotFoundError) as e:
             logging.error('Could not read the compounds file ('+str(path)+')')
@@ -255,14 +271,12 @@ class rpReader:
                             ruleIds = random.sample(ruleIds, maxRuleIds)
                     sub_path_step = 1
                     for singleRule in ruleIds:
-                        print(singleRule)
                         tmpReac = {'rule_id': singleRule,
                                 'rule_score': self.rr_reactions[singleRule]['rule_score'],
                                 'right': {},
                                 'left': {},
                                 'path_id': int(row[0]),
                                 'step': path_step,
-                                'sub_step': sub_path_step,
                                 'transformation_id': row[1][:-2]}
                         ############ LEFT ##############
                         for l in row[3].split(':'):
@@ -298,6 +312,7 @@ class rpReader:
                         if not int(path_step) in rp_paths[int(row[0])]:
                             rp_paths[int(row[0])][int(path_step)] = {}
                         rp_paths[int(row[0])][int(path_step)][int(sub_path_step)] = tmpReac
+                        #rp_paths[int(row[0])][int(path_step)] = tmpReac
                         sub_path_step += 1
             self.rp_paths = rp_paths
         except (TypeError, FileNotFoundError) as e:
@@ -316,6 +331,7 @@ class rpReader:
         #if the output folder does not exist then create it
         #for path in self.rp_paths:
         #sbmlThermo = rpThermo.rpThermo()
+        self.sbml_paths = {}
         for pathNum in self.rp_paths:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
@@ -340,11 +356,13 @@ class rpReader:
                         rpsbml.createSpecies(meta, self.chemXref[meta], None, self.rp_strc[meta]['inchi'], self.rp_strc[meta]['inchikey'], self.rp_strc[meta]['smiles'], compartment_id)
                     except KeyError:    
                         try:
-                            rpsbml.createSpecies(meta, self.chemXref[meta], None, self.mnxm_strc[meta]['inchi'], self.mnxm_strc[meta]['inchikey'], self.mnxm_strc[meta]['smiles'], compartment_id)
+                            rpsbml.createSpecies(meta, {}, None, self.rp_strc[meta]['inchi'], self.rp_strc[meta]['inchikey'], self.rp_strc[meta]['smiles'], compartment_id)
                         except KeyError:
                             logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
                 #4) add the complete reactions and their annotations
                 for step in steps:
+                    #add the substep to the model
+                    step['sub_step'] = altPathNum
                     rpsbml.createReaction('RP'+str(step['step']), # parameter 'name' of the reaction deleted : 'RetroPath_Reaction_'+str(step['step']),
                             'B_999999', #only for genericModel
                             'B_0', #only for genericModel
@@ -368,7 +386,8 @@ class rpReader:
                 #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
                 rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
                 #self.sbml_paths['rp_'+str(path_id)] = rpsbml
-                self.sbml_paths['rp_'+str(path_id)+'_'+str(altPathNum)] = rpsbml
+                #self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(step['sub_step'])] = rpsbml
+                self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
                 altPathNum += 1
 
 
@@ -402,11 +421,15 @@ class rpReader:
             for node in data['elements']['nodes']:
                 ## ListOfSpecies
                 if node['data']['type'] == 'compound':
-                    tmp_inchi = self.convert_depiction(node['data']['SMILES'], 'smiles', {'inchi'})
+                    try:
+                        tmp_inchi = self.convert_depiction(node['data']['SMILES'], 'smiles', {'inchi'})
+                    except DepictionError as e:
+                        logging.warning('Cannot convert the smiles to inchi')
+                        logging.warning(e)
                     ### rp_strc like (compounds.txt)
                     self.rp_strc[node['data']['id']] = {'smiles': node['data']['SMILEs'], 'inchi': tmp_inchi, 'inchikey': node['data']['id']}
                     ### create a specie
-                    rpsbml.createSpecies(node['data']['id'].split('-')[0], self.inchikey_mnxm, None, convert_depiction(self, node['data']['SMILES'], itype='smiles', otype={'inchi'}), node['data']['id'], node['data']['SMILES'], compartment_id)
+                    rpsbml.createSpecies(node['data']['id'].split('-')[0], self.inchikey_mnxm, None, tmp_inchi['inchi'], node['data']['id'], node['data']['SMILES'], compartment_id)
                     if node['data']['isSource'] == 1:
                         target_ID = node['data']['id'].split('-')[0]
                 ## Create a dictionnary containing all the reactions 

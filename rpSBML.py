@@ -180,11 +180,9 @@ class rpSBML:
         groups = self.model.getPlugin('groups')
         rp_pathway = groups.getGroup(pathId)
         self._checklibSBML(rp_pathway, 'retreiving groups rp_pathway')
-        toRet = {}
-        toRet['annotation'] = rp_pathway.getAnnotation()
-        toRet['members'] = rp_pathway.getListOfMembers()
+        toRet = []
         for member in rp_pathway.getListOfMembers():
-            toRet['members'].append(member.getIdRef())
+            toRet.append(member.getIdRef())
         return toRet
  
 
@@ -194,7 +192,7 @@ class rpSBML:
     #@return toRet dictionnary with the reaction rule and rule_id as key
     def readRPrules(self, path_id='rp_pathway'):
         toRet = {}
-        for reacId in self.readRPpathway(path_id)['members']:
+        for reacId in self.readRPpathway(path_id):
             reac = rpsbml.model.getReaction(reacId)
             ibibsa_annot = rpsbml.readIBISBAAnnotation(reac.getAnnotation())
             toRet[ibibsa_annot['rule_id']] = ibibsa_annot['smiles'].replace('&gt;', '>')
@@ -206,7 +204,7 @@ class rpSBML:
     #
     def readRPspecies(self, path_id='rp_pathway'):
         reacMembers = {}
-        for reacId in self.readRPpathway(path_id)['members']:
+        for reacId in self.readRPpathway(path_id):
             reacMembers[reacId] = {}
             reac = self.model.getReaction(reacId)
             for pro in reac.getListOfProducts():
@@ -227,31 +225,22 @@ class rpSBML:
     ## Return the MIRIAM annotations of species
     #
     #
-    def readMIRIAMSpeciesAnnotation(self, annot, cid):
-        '''
-        id_annotId = {'bigg': 'bigg.metabolite',
-                'mnx': 'metanetx.chemical',
-                'chebi': 'chebi',
-                'hmdb': 'hmdb',
-                'kegg': 'kegg.compound',
-                'seed': 'seed.compound'}
-        '''
-        id_annotId = {}
-        toRet = []
-        if not cid in id_annotId:
-            logging.warning('Cannnot find '+str(cid)+' in id_annotId')
-            return toRet
+    def readMIRIAMAnnotation(self, annot):
+        toRet = {}
         bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
                 logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
                 continue
-            #if str_annot.split('/')[-2]==id_annotId[cid]:
-            #    toRet.append(str_annot.split('/')[-1])
-            if str_annot.split('/')[-2] not in id_annotId:
-                id_annotId[str_annot.split('/')[-2]] = []
-            id_annotId[str_annot.split('/')[-2]] = str_annot.split('/')[-1]
+            dbid = str_annot.split('/')[-2].split('.')[0]
+            if len(str_annot.split('/')[-1].split(':'))==2:
+                cid = str_annot.split('/')[-1].split(':')[1]
+            else:
+                cid = str_annot.split('/')[-1]
+            if not dbid in toRet: 
+                toRet[dbid] = []
+            toRet[dbid].append(cid)
         return toRet
 
 
@@ -289,16 +278,26 @@ class rpSBML:
                 toRet[ann.getName()] = {
                         'units': ann.getAttrValue('units'), 
                         'value': float(ann.getAttrValue('value'))}
-            elif ann.getName()==smiles:
+            elif ann.getName()=='path_id' or ann.getName()=='step_id' or ann.getName()=='sub_step_id':
+                try:
+                    toRet[ann.getName()] = int(ann.getAttrValue('value'))
+                except ValueError:
+                    toRet[ann.getName()] = None
+            elif ann.getName()=='rule_score':
+                try:
+                    toRet[ann.getName()] = float(ann.getAttrValue('value'))
+                except ValueError:
+                    toRet[ann.getName()] = None
+            elif ann.getName()=='smiles':
                 toRet[ann.getName()] = ann.getChild(0).toXMLString().replace('&gt;', '>')
-            elif ann.getName()=='rule_score' or ann.getName()=='path_id' or ann.getName()=='step' or ann.getName()=='sub_step':
-                toRet[ann.getName()] = float(ann.getAttrValue('value'))
             elif ann.getName()=='selenzyme':
                 toRet['selenzyme'] = {}
                 for y in range(ann.getNumChildren()):
                     selAnn = ann.getChild(y)
-                    toRet['selenzyme'][selAnn.getName()] = float(selAnn.getAttrValue('value'))
-            #elif ann.getName()=='':
+                    try:
+                        toRet['selenzyme'][selAnn.getName()] = float(selAnn.getAttrValue('value'))
+                    except ValueError:
+                        toRet['selenzyme'][selAnn.getName()] = None
             else:
                 toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet
@@ -320,7 +319,7 @@ class rpSBML:
         for i in range(reaction.getNumProducts()):
             product_ref = reaction.getProduct(i)
             product = self.model.getSpecies(product_ref.getSpecies())
-            toRet['left'][product.getName()] = int(product_ref.getStoichiometry())
+            toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
         return toRet
 
 
@@ -342,16 +341,18 @@ class rpSBML:
     ################### CONVERT BETWEEEN FORMATS ############################
     #########################################################################
     
+
     ## Really used to complete the monocomponent reactions   
     #{'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
     #
-    def outPathsDict(pathId='rp_pathway'):
+    def outPathsDict(self, pathId='rp_pathway'):
         pathway = {}
-        for member in self.readRPpathway(pathId)['members']:
+        for member in self.readRPpathway(pathId):
             #TODO: need to find a better way
             if not member=='targetSink':
+                reaction = self.model.getReaction(member)
                 ibisbaAnnot = self.readIBISBAAnnotation(reaction.getAnnotation())
-                speciesReac = self.readReactionSpecies(self.model.getReaction(member))
+                speciesReac = self.readReactionSpecies(reaction)
                 step = {'reaction_id': member,
                         'reaction_rule': ibisbaAnnot['smiles'], 
                         'rule_score': ibisbaAnnot['rule_score'],
@@ -363,6 +364,7 @@ class rpSBML:
                         'sub_step': ibisbaAnnot['sub_step_id']}
                 pathway[ibisbaAnnot['step_id']] = step
         return pathway
+
 
     #########################################################################
     ############################# COMPARE MODELS ############################
@@ -675,7 +677,7 @@ class rpSBML:
                 logging.warning('No annotation for the source of reaction: '+str(source_reaction.getId()))
                 toAddNum.append(i)
                 continue
-            if source_reaction.getId() in model_rpPathway['members']:
+            if source_reaction.getId() in model_rpPathway:
                 toAddNum.append(i)
                 continue
             #for y in range(target_model.getNumReactions()):

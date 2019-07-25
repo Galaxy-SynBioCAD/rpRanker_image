@@ -17,7 +17,6 @@ from shutil import copyfile
 # Documentation for the cache generation of rpFBA
 
 
-
 #######################################################
 ################### USER DEFINED ERROR ################
 #######################################################
@@ -124,7 +123,6 @@ class rpCache:
             self.deprecatedMNXM_mnxm['MNXM01'] = 'MNXM1'
 
 
-
     def _deprecatedMNXR(self, reac_xref_path):
         self.deprecatedMNXMR_mnxr = {}
         with open(reac_xref_path) as f:
@@ -155,7 +153,9 @@ class rpCache:
         except KeyError:
             return mnxr
 
+
     #NOTE: no need to do the same for compartments :)
+
 
     ########################################################
     ####################### PUBLIC FUNCTIONS ###############
@@ -163,6 +163,7 @@ class rpCache:
 
 
     ################### MetaNetX ############################   
+
 
     ## Function to parse the chemp_prop.tsv file from MetanetX. Uses the InchIkey as key to the dictionnary
     #
@@ -268,7 +269,6 @@ class rpCache:
         return chemXref
 
 
-
     ## Function to parse the reacXref.tsv file of MetanetX
     #
     #  Generate a dictionnary of old to new MetanetX identifiers
@@ -317,7 +317,6 @@ class rpCache:
         return reacXref
 
 
-
     ## Function to parse the compXref.tsv file of MetanetX
     #
     #  Generate a dictionnary of old to new MetanetX identifiers
@@ -356,8 +355,6 @@ class rpCache:
             logging.error('compXref file not found')
             return {}
         return name_pubDB_xref
-
-
 
 
     ####################### Equilibrator ###############################
@@ -521,7 +518,6 @@ class rpCache:
                 return {}
         return rule
 
-
     
     ## Generate complete reactions from the 
     #
@@ -620,7 +616,6 @@ class rpCache:
             logging.error('Cannot find file: '+str(path))
             return False
  
-
 
 ## Run all the functions
 #

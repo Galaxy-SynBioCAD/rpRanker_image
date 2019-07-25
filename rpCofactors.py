@@ -132,19 +132,19 @@ class rpCofactors:
         for i in diff:
             #for y in range(step[reac_side][i]): #based on the stochio, we would want to add as many as the original reaction specifies
             for y in range(diff[i]): #based on the stochio, we would want to add as many as the original reaction specifies
-                if i in self.rpReader.mnxm_strc:
-                    if 'smiles' in self.rpReader.mnxm_strc[i] and not self.rpReader.mnxm_strc[i]['smiles']==None:
+                if i in self.mnxm_strc:
+                    if 'smiles' in self.mnxm_strc[i] and not self.mnxm_strc[i]['smiles']==None:
                         reac_smiles = step['reaction_rule'].split('>>')
                         if reac_side=='left':
-                            reac_smiles[1] += '.'+self.rpReader.mnxm_strc[i]['smiles']
+                            reac_smiles[1] += '.'+self.mnxm_strc[i]['smiles']
                         else: #if it is anything else than left here, above should detect error
-                            reac_smiles[0] += '.'+self.rpReader.mnxm_strc[i]['smiles']
+                            reac_smiles[0] += '.'+self.mnxm_strc[i]['smiles']
                         step['reaction_rule'] = reac_smiles[0]+'>>'+reac_smiles[1]
                     else:
-                        logging.warning('There are no SMILES defined for '+str(i)+' in self.rpReader.mnxm_strc[i]')
+                        logging.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc[i]')
                         continue
                 else:
-                    logging.warning('Cannot find '+str(i)+' in self.rpReader.mnxm_strc')
+                    logging.warning('Cannot find '+str(i)+' in self.mnxm_strc')
                     continue
 
 
@@ -158,9 +158,11 @@ class rpCofactors:
             if self.rr_reactions[step['rule_id']]['rel_direction']==-1:
                 self.completeReac(step, 'right', self.rr_reactions[step['rule_id']]['left'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['right'], pathway_cmp_mnxm)
                 self.completeReac(step, 'left', self.rr_reactions[step['rule_id']]['right'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['left'], pathway_cmp_mnxm)
-            if self.rr_reactions[step['rule_id']]['rel_direction']==1:
+            elif self.rr_reactions[step['rule_id']]['rel_direction']==1:
                 self.completeReac(step, 'right', self.rr_reactions[step['rule_id']]['left'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['left'], pathway_cmp_mnxm)
                 self.completeReac(step, 'left', self.rr_reactions[step['rule_id']]['right'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['right'], pathway_cmp_mnxm)
+            else:
+                logging.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']]['rel_direction']))
         except KeyError:
             return False
         return True
@@ -173,18 +175,18 @@ class rpCofactors:
     #  @param self Object pointer
     #  @param rpsbml rpSBML object with a single model
     #  @return Boolean if True then you keep that model for the next step, if not then ignore it
-    def addCofactors(self, rpsbml, compartment_id):
+    def addCofactors(self, rpsbml, compartment_id='MNXC3'):
         #This keeps the IDs conversions to the pathway
         pathway_cmp_mnxm = {}
         rp_path = rpsbml.outPathsDict()
         ori_rp_path = copy.deepcopy(rp_path)
         #We reverse the loop to ID the intermediate CMP to their original ones
         for stepNum in sorted(list(rp_path), reverse=True):
-            if self.addCofactors_step(rp_path, pathway_cmp_mnxm):
+            if self.addCofactors_step(rp_path[stepNum], pathway_cmp_mnxm):
                 ###add the new cofactors to the SBML
                 #remove the original species from the monocomponent reaction
-                reactants = set(set(rp_path['left'].keys())-set(ori_rp_path['left'].keys())) 
-                products = set(set(rp_path['right'].keys())-set(ori_rp_path['right'].keys()))
+                reactants = set(set(rp_path[stepNum]['left'].keys())-set(ori_rp_path[stepNum]['left'].keys()))
+                products = set(set(rp_path[stepNum]['right'].keys())-set(ori_rp_path[stepNum]['right'].keys()))
                 for species in reactants|products:
                     #check to make sure that they do not yet exist and if not create a new one
                     if not rpsbml.speciesExists(species):
@@ -207,8 +209,8 @@ class rpCofactors:
                             pass
                         try:
                             inchikey = self.mnxm_strc[species]['inchikey']
-                            logging.warning('Cannot find the inchikey for this species: '+str(species))
                         except KeyError:
+                            logging.warning('Cannot find the inchikey for this species: '+str(species))
                             pass
                         try:
                             smiles = self.mnxm_strc[species]['smiles']
@@ -224,12 +226,12 @@ class rpCofactors:
                                 smiles,
                                 compartment_id)
                 #add the new species to the RP reactions
-                reac = rpsbml.model.getReaction(rp_path['reaction_id'])
+                reac = rpsbml.model.getReaction(rp_path[stepNum]['reaction_id'])
                 for pro in products:
-                    pro = reac.createProduct()
-                    pro.setSpecies(str(pro)+'__64__'+str(compartment_id))
-                    pro.setConstant(True)
-                    pro.setStoichiometry()
+                    prod = reac.createProduct()
+                    prod.setSpecies(str(pro)+'__64__'+str(compartment_id))
+                    prod.setConstant(True)
+                    prod.setStoichiometry(rp_path[stepNum]['right'][pro])
                 return True
             else:
                 return False
