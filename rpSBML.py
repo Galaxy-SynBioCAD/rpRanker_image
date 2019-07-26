@@ -210,19 +210,11 @@ class rpSBML:
                 reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry()
         return reacMembers
 
-
+    '''
     ## Return the MIRIAM annotations of species
     #
     #
     def readMIRIAMSpeciesAnnotation(self, annot, cid):
-        '''
-        id_annotId = {'bigg': 'bigg.metabolite',
-                'mnx': 'metanetx.chemical',
-                'chebi': 'chebi',
-                'hmdb': 'hmdb',
-                'kegg': 'kegg.compound',
-                'seed': 'seed.compound'}
-        '''
         id_annotId = {}
         toRet = []
         if not cid in id_annotId:
@@ -240,11 +232,12 @@ class rpSBML:
                 id_annotId[str_annot.split('/')[-2]] = []
             id_annotId[str_annot.split('/')[-2]] = str_annot.split('/')[-1]
         return toRet
+    '''
 
 
     ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
     #TODO: how is this different from the above function???
-    def readAnnotation(self, annot):
+    def readMIRIAMAnnotation(self, annot):
         toRet = {}
         bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
         for i in range(bag.getNumChildren()):

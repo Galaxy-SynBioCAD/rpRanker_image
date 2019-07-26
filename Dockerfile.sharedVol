@@ -1,0 +1,24 @@
+FROM conda/miniconda3
+
+WORKDIR /home/
+
+RUN apt-get --quiet update && \
+    apt-get --quiet --yes dist-upgrade && \
+    apt-get install --quiet --yes --no-install-recommends \
+    ca-certificates \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    libxext6 \
+    libxrender-dev \
+    xz-utils && \
+    conda update -n base -c defaults conda && \
+    conda install -y -c SBMLTeam python-libsbml && \
+    conda install -y -c rdkit rdkit && \
+    conda install -y -c openbabel openbabel && \
+    pip install --upgrade pip && \ 
+    pip install --no-cache-dir pytest && \
+    pip install --no-cache-dir cobra && \
+    pip install --no-cache-dir scipy && \
+    git clone --single-branch --branch master https://mdulac:towlie1988@brsforge.micalis.fr/DBT_pipeline/rpRanker.git
