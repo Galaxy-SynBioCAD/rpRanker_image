@@ -484,7 +484,7 @@ class rpThermo:
         pathway_stoichio = []
         pathway_concentration = []
         #path
-        already_calculated = {}
+        already_calculated = {} 
         for member in rp_pathway.getListOfMembers():
             reaction_dfG_prime_o = 0.0
             X_reaction = np.zeros((self.cc_preprocess['C1'].shape[0], 1))

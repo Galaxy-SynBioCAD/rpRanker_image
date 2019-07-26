@@ -106,10 +106,10 @@ class rpSBML:
 
 
     #####################################################################
-    ########################## READ/WRITE ###############################
+    ########################## INPUT/OUTPUT #############################
     #####################################################################
 
-    
+
     ## Open an SBML using libSBML 
     #
     # Situation where an SBML is passed to add the heterologous pathway
@@ -168,6 +168,11 @@ class rpSBML:
         return True
 
 
+    #####################################################################
+    ########################## READ/WRITE ###############################
+    #####################################################################
+
+    
     ## Return the reaction ID's and the pathway annotation
     #
     #
@@ -175,13 +180,11 @@ class rpSBML:
         groups = self.model.getPlugin('groups')
         rp_pathway = groups.getGroup(pathId)
         self._checklibSBML(rp_pathway, 'retreiving groups rp_pathway')
-        toRet = {}
-        toRet['annotation'] = rp_pathway.getAnnotation()
-        toRet['members'] = []
+        toRet = []
         for member in rp_pathway.getListOfMembers():
-            toRet['members'].append(member.getIdRef())
+            toRet.append(member.getIdRef())
         return toRet
-
+ 
 
     ## Read the reaction rules from the IBISBA annotation
     #
@@ -189,18 +192,18 @@ class rpSBML:
     #@return toRet dictionnary with the reaction rule and rule_id as key
     def readRPrules(self, path_id='rp_pathway'):
         toRet = {}
-        for reacId in self.readRPpathway(path_id)['members']:
+        for reacId in self.readRPpathway(path_id):
             reac = rpsbml.model.getReaction(reacId)
             ibibsa_annot = rpsbml.readIBISBAAnnotation(reac.getAnnotation())
             toRet[ibibsa_annot['rule_id']] = ibibsa_annot['smiles'].replace('&gt;', '>')
         return toRet
 
 
-    ## Return the the species annitations 
+    ## Return the species annitations 
     #
     #
-    def readRPspeciesAnnotation(self, path_id='rp_pathway'):
-        #reacMembers = {'reactants': {}, 'products': {}}
+    def readRPspecies(self, path_id='rp_pathway'):
+        reacMembers = {}
         for reacId in self.readRPpathway(path_id):
             reacMembers[reacId] = {}
             reac = self.model.getReaction(reacId)
@@ -210,31 +213,38 @@ class rpSBML:
                 reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry()
         return reacMembers
 
-    '''
+
+    ## Return the species
+    #
+    #
+    def readUniqueRPspecies(self, pathId='rp_pathway'):
+        reacMembers = readRPspecies(path_id)
+        return set(set(ori_rp_path['products'].keys())|set(ori_rp_path['reactants'].keys()))
+
+
     ## Return the MIRIAM annotations of species
     #
     #
-    def readMIRIAMSpeciesAnnotation(self, annot, cid):
-        id_annotId = {}
-        toRet = []
-        if not cid in id_annotId:
-            logging.warning('Cannnot find '+str(cid)+' in id_annotId')
-            return toRet
+    def readMIRIAMAnnotation(self, annot):
+        toRet = {}
         bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
                 logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
                 continue
-            #if str_annot.split('/')[-2]==id_annotId[cid]:
-            #    toRet.append(str_annot.split('/')[-1])
-            if str_annot.split('/')[-2] not in id_annotId:
-                id_annotId[str_annot.split('/')[-2]] = []
-            id_annotId[str_annot.split('/')[-2]] = str_annot.split('/')[-1]
+            dbid = str_annot.split('/')[-2].split('.')[0]
+            if len(str_annot.split('/')[-1].split(':'))==2:
+                cid = str_annot.split('/')[-1].split(':')[1]
+            else:
+                cid = str_annot.split('/')[-1]
+            if not dbid in toRet: 
+                toRet[dbid] = []
+            toRet[dbid].append(cid)
         return toRet
-    '''
 
 
+    '''DEPRECATED
     ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
     #TODO: how is this different from the above function???
     def readMIRIAMAnnotation(self, annot):
@@ -250,10 +260,10 @@ class rpSBML:
             #TODO: check if the MNXM and if so check against depreceated
             toRet[str_annot.split('/')[-2]].append(str_annot.split('/')[-1])
         return toRet
+    '''
 
 
     ## Takes for input a libSBML annotatio object and returns a dictionnary of the annotations
-    #
     #
     def readIBISBAAnnotation(self, annot):
         toRet = {}
@@ -263,14 +273,102 @@ class rpSBML:
             if ann=='':
                 logging.warning('This contains no attributes: '+str(ann.toXMLString()))
                 continue
-            if not ann.getName() in toRet:
-                if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o':
-                    toRet[ann.getName()] = {
-                            'units': ann.getAttrValue('units'), 
-                            'value': ann.getAttrValue('value')}
-                else:
-                    toRet[ann.getName()] = ann.getChild(0).toXMLString()
+            #if not ann.getName() in toRet:
+            if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o' or ann.getName()[0:4]=='fba_':
+                toRet[ann.getName()] = {
+                        'units': ann.getAttrValue('units'), 
+                        'value': float(ann.getAttrValue('value'))}
+            elif ann.getName()=='path_id' or ann.getName()=='step_id' or ann.getName()=='sub_step_id':
+                try:
+                    toRet[ann.getName()] = int(ann.getAttrValue('value'))
+                except ValueError:
+                    toRet[ann.getName()] = None
+            elif ann.getName()=='rule_score':
+                try:
+                    toRet[ann.getName()] = float(ann.getAttrValue('value'))
+                except ValueError:
+                    toRet[ann.getName()] = None
+            elif ann.getName()=='smiles':
+                toRet[ann.getName()] = ann.getChild(0).toXMLString().replace('&gt;', '>')
+            elif ann.getName()=='selenzyme':
+                toRet['selenzyme'] = {}
+                for y in range(ann.getNumChildren()):
+                    selAnn = ann.getChild(y)
+                    try:
+                        toRet['selenzyme'][selAnn.getName()] = float(selAnn.getAttrValue('value'))
+                    except ValueError:
+                        toRet['selenzyme'][selAnn.getName()] = None
+            else:
+                toRet[ann.getName()] = ann.getChild(0).toXMLString()
         return toRet
+
+
+    ## Function to return the products and the species associated with a reaction
+    #
+    # @return Dictionnary with right==product and left==reactants
+    def readReactionSpecies(self, reaction):
+        #TODO: check that reaction is either an sbml species; if not check that its a string and that
+        # it exists in the rpsbml model
+        toRet = {'left': {}, 'right': {}}
+        #reactants
+        for i in range(reaction.getNumReactants()):
+            reactant_ref = reaction.getReactant(i)
+            reactant = self.model.getSpecies(reactant_ref.getSpecies())
+            toRet['left'][reactant.getName()] = int(reactant_ref.getStoichiometry())
+        #products
+        for i in range(reaction.getNumProducts()):
+            product_ref = reaction.getProduct(i)
+            product = self.model.getSpecies(product_ref.getSpecies())
+            toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
+        return toRet
+
+
+    #####################################################################
+    ######################### INQUIRE ###################################
+    #####################################################################
+
+
+    ## Function to find out if the model already contains a species according to its name
+    #
+    #
+    def speciesExists(self, speciesName):
+        if speciesName in [i.getName() for i in self.model.getListOfSpecies()]:
+            return True
+        return False
+
+
+    #########################################################################
+    ################### CONVERT BETWEEEN FORMATS ############################
+    #########################################################################
+    
+
+    ## Really used to complete the monocomponent reactions   
+    #{'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
+    #
+    def outPathsDict(self, pathId='rp_pathway'):
+        pathway = {}
+        for member in self.readRPpathway(pathId):
+            #TODO: need to find a better way
+            if not member=='targetSink':
+                reaction = self.model.getReaction(member)
+                ibisbaAnnot = self.readIBISBAAnnotation(reaction.getAnnotation())
+                speciesReac = self.readReactionSpecies(reaction)
+                step = {'reaction_id': member,
+                        'reaction_rule': ibisbaAnnot['smiles'], 
+                        'rule_score': ibisbaAnnot['rule_score'],
+                        'rule_id': ibisbaAnnot['rule_id'],
+                        'right': speciesReac['right'],
+                        'left': speciesReac['left'],
+                        'path_id': ibisbaAnnot['path_id'],
+                        'step': ibisbaAnnot['step_id'],
+                        'sub_step': ibisbaAnnot['sub_step_id']}
+                pathway[ibisbaAnnot['step_id']] = step
+        return pathway
+
+
+    #########################################################################
+    ############################# COMPARE MODELS ############################
+    #########################################################################
 
 
     ## Find out if two libSBML Species or Reactions come from the same species
@@ -579,7 +677,7 @@ class rpSBML:
                 logging.warning('No annotation for the source of reaction: '+str(source_reaction.getId()))
                 toAddNum.append(i)
                 continue
-            if source_reaction.getId() in model_rpPathway['members']:
+            if source_reaction.getId() in model_rpPathway:
                 toAddNum.append(i)
                 continue
             #for y in range(target_model.getNumReactions()):
@@ -767,14 +865,13 @@ class rpSBML:
         #TODO: for yout to complete
         id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
         #WARNING: compartmentNameID as of now, needs to be a MNX ID
-        if compName in compXref: 
-            for databaseId in compXref[compName]:
-                for compartmentId in compXref[compName][databaseId]:
-                    try:
-                        annotation += '''
-          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
-                    except KeyError:
-                        continue
+        for databaseId in compXref:
+            for compartmentId in compXref[databaseId]:
+                try:
+                    annotation += '''
+      <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[databaseId])+str(compartmentId)+'''"/>'''
+                except KeyError:
+                    continue
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
@@ -932,14 +1029,13 @@ class rpSBML:
       <bqbiol:is>
         <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.reaction/', 'rhea': 'rhea/', 'reactome': 'reactome/', 'bigg': 'bigg.reaction/', 'sabiork': 'sabiork.reaction/', 'ec': 'ec-code/', 'biocyc': 'biocyc/'}
-        if reacId in reacXref:
-            for dbId in reacXref[reacId]:
-                for cid in reacXref[reacId][dbId]:
-                    try:
-                        annotation += '''
-          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
-                    except KeyError:
-                        continue
+        for dbId in reacXref:
+            for cid in reacXref[dbId]:
+                try:
+                    annotation += '''
+      <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
+                except KeyError:
+                    continue
         if not isTarget:
             try:
                 for trans_ec in rp_transformation[step['transformation_id']]['ec']:
@@ -960,6 +1056,9 @@ class rpSBML:
         <ibisba:smiles>'''+str(reaction_smiles or '')+'''</ibisba:smiles>
         <ibisba:rule_id>'''+str(step['rule_id'] or '')+'''</ibisba:rule_id>
         <ibisba:rule_score value="'''+str(step['rule_score'] or '')+'''" />
+        <ibisba:path_id value="'''+str(step['path_id'])+'''"/>
+        <ibisba:step_id value="'''+str(step['step'])+'''"/>
+        <ibisba:sub_step_id value="'''+str(step['sub_step'])+'''"/>
       </ibisba:ibisba>
     </rdf:Ibisba>
   </rdf:RDF>
@@ -982,7 +1081,8 @@ class rpSBML:
     #
     # Create a reaction. fluxBounds is a list of libSBML.UnitDefinition, length of exactly 2 with the first position that is the upper bound and the second is the lower bound. reactants_dict and reactants_dict are dictionnaries that hold the following parameters: name, compartmentId, stoichiometry
     #
-    # @param chemId Species name (as of now, can only handle MNX ids)
+    # @param chemIdDictionnary containing all the cross references that we know of, can be empty)
+    # @param chemXref Dictionnary containing all the cross references that we know of, can be empty
     # @param metaID Name for the reaction
     # @param inchi String Inchi associated with this species
     # @param smiles String SMILES associated with this species
@@ -1039,21 +1139,20 @@ class rpSBML:
       <bqbiol:is>
         <rdf:Bag>'''
         id_ident = {'mnx': 'metanetx.chemical/', 'chebi': 'chebi/CHEBI:', 'bigg': 'bigg.metabolite/', 'hmdb': 'hmdb/', 'kegg_c': 'kegg.compound/', 'kegg_d': 'kegg.drug/', 'biocyc': 'biocyc/META:', 'seed': 'seed.compound/', 'metacyc': 'metacyc/', 'sabiork': 'seed.compound/', 'reactome': 'reactome.compound/'}
-        if chemId in chemXref: 
-            for dbId in chemXref[chemId]:
-                for cid in chemXref[chemId][dbId]:
-                    try:
-                        if dbId == 'kegg' and cid[0] == 'C':
-                            annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
-                        elif dbId == 'kegg' and cid[0] == 'D':
-                            annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
-                        else:
-                            annotation += '''        
-          <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
-                    except KeyError:
-                        continue
+        for dbId in chemXref:
+            for cid in chemXref[dbId]:
+                try:
+                    if dbId == 'kegg' and cid[0] == 'C':
+                        annotation += '''        
+      <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_c']+str(cid)+'''"/>'''
+                    elif dbId == 'kegg' and cid[0] == 'D':
+                        annotation += '''        
+      <rdf:li rdf:resource="http://identifiers.org/'''+id_ident['kegg_d']+str(cid)+'''"/>'''
+                    else:
+                        annotation += '''        
+      <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
+                except KeyError:
+                    continue
         annotation += '''
         </rdf:Bag>
       </bqbiol:is>
