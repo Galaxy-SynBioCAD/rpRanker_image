@@ -174,6 +174,7 @@ class rpCache:
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
+        inchikey_mnxm = {}
         with open(rr_compounds_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
@@ -187,6 +188,7 @@ class rpCache:
                         logging.warning('Could not convert some of the structures: '+str(tmp))
                         logging.warning(e)
                     mnxm_strc[tmp['mnxm']] = tmp
+                    inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
         with open(chem_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
@@ -203,6 +205,8 @@ class rpCache:
                             mnxm_strc[mnxm]['smiles'] = tmp['smiles']
                         if not mnxm_strc[mnxm]['inchikey'] and tmp['inchikey']:
                             mnxm_strc[mnxm]['inchikey'] = tmp['inchikey']
+                            if not tmp['inchikey'] in inchikey_mnxm:
+                                inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
                     else:
                         #check to see if the inchikey is valid or not
                         otype = set({})
@@ -228,7 +232,8 @@ class rpCache:
                             logging.warning('Could not convert some of the structures: '+str(tmp))
                             logging.warning(e)
                         mnxm_strc[tmp['mnxm']] = tmp
-        return mnxm_strc
+                        inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
+        return mnxm_strc, inchikey_mnxm
 
 
     ## Function to parse the chem_xref.tsv file of MetanetX
@@ -652,8 +657,9 @@ if __name__ == "__main__":
     #mnxm_strc --> use gzip since it is a large file
     logging.info('Parsing the SMILES and InChI')
     #pickle.dump(cache.mnxm_strc(), open('cache/mnxm_strc.pickle', 'wb'))
-    pickle.dump(cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv'), 
-            gzip.open('cache/mnxm_strc.pickle.gz','wb'))
+    mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
+    pickle.dump(mnx_strc, gzip.open('cache/mnxm_strc.pickle.gz','wb'))
+    pickle.dump(inchikey_mnxm, gzip.open('cache/inchikey_mnxm.pickle.gz','wb'))
     #xref --> use gzip since it is a large file
     logging.info('Parsing the Cross-references')
     pickle.dump(cache.mnx_chemXref('input_cache/chem_xref.tsv'), gzip.open('cache/chemXref.pickle.gz','wb'))
