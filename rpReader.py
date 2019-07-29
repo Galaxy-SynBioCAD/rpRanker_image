@@ -504,7 +504,7 @@ class rpReader:
                 res = rpsbml.readMIRIAMAnnotation(i.getAnnotation())
                 #extract the MNX id's
                 try:
-                    mnx = res['metanetx.chemical'][0]
+                    mnx = res['metanetx'][0]
                 except KeyError:
                     continue
                 #mnx = i.getId().split('__')[0]
