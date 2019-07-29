@@ -421,7 +421,7 @@ class rpReader:
             ## 2) create the pathway (groups)
             rpsbml.createPathway(pathId) ## Create the heterologous pathway
             self.rp_paths = {}
-            rp_stoechio = {}
+            rp_stochio = {}
             for node in data['elements']['nodes']:
                 ## ListOfSpecies
                 if node['data']['type'] == 'compound':
@@ -453,13 +453,13 @@ class rpReader:
                                                  #'diameter': node['data']['Diameter'],
                                                  #'iteration': node['data']['Iteration'],
                                                  'smiles': node['data']['Reaction SMILES']}
-                    rp_stoechio.update(node['data']['Stoechiometry'])
+                    rp_stochio.update(node['data']['Stoechiometry'])
             ## Substrats and products for each reactions in the reactions dictionnary
             for reaction in data['elements']['edges']:
                 if len(reaction['data']['target'].split('-')) == 3:
-                    self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]['left'][reaction['data']['target'].split('-')[0]] = rp_stoechio[reaction['data']['target']]
+                    self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]['left'][reaction['data']['target'].split('-')[0]] = rp_stochio[reaction['data']['target']]
                 else:
-                    self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stoechio[reaction['data']['source']]
+                    self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stochio[reaction['data']['source']]
             ## ListOfReactions
             for step in self.rp_paths[pathNum]:
                 rpsbml.createReaction('RetroPath_Reaction_'+step.keys().split('-')[7], # name of the reaction, to change
@@ -509,7 +509,7 @@ class rpReader:
                 res = rpsbml.readAnnotation(i.getAnnotation())
                 #extract the MNX id's
                 try:
-                    mnx = res['metanetx.chemical'][0]
+                    mnx = res['metanetx'][0]
                 except KeyError:
                     continue
                 #mnx = i.getId().split('__')[0]
