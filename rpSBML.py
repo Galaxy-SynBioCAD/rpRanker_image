@@ -247,7 +247,7 @@ class rpSBML:
     '''DEPRECATED
     ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
     #TODO: how is this different from the above function???
-    def readAnnotation(self, annot):
+    def readMIRIAMAnnotation(self, annot):
         toRet = {}
         bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
         for i in range(bag.getNumChildren()):

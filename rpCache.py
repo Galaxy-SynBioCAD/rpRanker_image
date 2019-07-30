@@ -11,6 +11,7 @@ from ast import literal_eval
 import gzip
 from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 from shutil import copyfile
+import tarfile
 
 ## @package Cache
 #
@@ -165,7 +166,7 @@ class rpCache:
     ################### MetaNetX ############################   
 
 
-    ## Function to parse the chemp_prop.tsv file from MetanetX. Uses the InchIkey as key to the dictionnary
+    ## Function to parse the chemp_prop.tsv file from MetanetX and compounds.tsv from RetroRules. Uses the InchIkey as key to the dictionnary
     #
     #  Generate a dictionnary gaving the formula, smiles, inchi and inchikey for the components
     #
@@ -174,27 +175,36 @@ class rpCache:
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
-        inchikey_mnxm = {}
-        with open(rr_compounds_path) as f:
-            c = csv.reader(f, delimiter='\t')
-            for row in c:
-                if not row[0][0]=='#':
-                    tmp = {'forumla':  None, 'smiles': None, 'inchi': row[1], 'inchikey': None, 'mnxm': self._checkMNXMdeprecated(row[0]), 'name': None}
-                    try:
-                        resConv = self._convert_depiction(idepic=tmp['inchi'], itype='inchi', otype={'smiles','inchikey'})
-                        for i in resConv:
-                            tmp[i] = resConv[i]
-                    except DepictionError as e:
-                        logging.warning('Could not convert some of the structures: '+str(tmp))
-                        logging.warning(e)
-                    mnxm_strc[tmp['mnxm']] = tmp
-                    inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
+        #with open(rr_compounds_path) as f:
+        #    c = csv.reader(f, delimiter='\t')
+        #    for row in c:
+        for row in csv.DictReader(open(rr_compounds_path), delimiter='\t'):
+            #if not row[0][0]=='#':
+            tmp = {'forumla':  None, 
+                    'smiles': None, 
+                    'inchi': row['inchi'], 
+                    'inchikey': None, 
+                    'mnxm': self._checkMNXMdeprecated(row['cid']), 
+                    'name': None}
+            try:
+                resConv = self._convert_depiction(idepic=tmp['inchi'], itype='inchi', otype={'smiles','inchikey'})
+                for i in resConv:
+                    tmp[i] = resConv[i]
+            except DepictionError as e:
+                logging.warning('Could not convert some of the structures: '+str(tmp))
+                logging.warning(e)
+            mnxm_strc[tmp['mnxm']] = tmp
         with open(chem_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
                 if not row[0][0]=='#':
                     mnxm = self._checkMNXMdeprecated(row[0])
-                    tmp = {'forumla':  row[2], 'smiles': row[6], 'inchi': row[5], 'inchikey': row[8], 'mnxm': mnxm, 'name': row[1]}
+                    tmp = {'forumla':  row[2], 
+                            'smiles': row[6], 
+                            'inchi': row[5], 
+                            'inchikey': row[8], 
+                            'mnxm': mnxm, 
+                            'name': row[1]}
                     for i in tmp:
                         if tmp[i]=='' or tmp[i]=='NA':
                             tmp[i] = None
@@ -274,7 +284,7 @@ class rpCache:
         return chemXref
 
 
-    ## Function to parse the reacXref.tsv file of MetanetX
+    ## Function to parse the reacXref.tsv file of MetanetX and rxn_recipes.tsv from RetroRules
     #
     #  Generate a dictionnary of old to new MetanetX identifiers
     #
@@ -304,21 +314,22 @@ class rpCache:
                     if not dbId in reacXref[mnx][dbName]:
                         reacXref[mnx][dbName].append(dbId)
         #use this to retreive the EC number for the reactions
-        with open(rxn_recipes_path) as f:
-            c = csv.reader(f, delimiter='\t')
-            for row in c:
-                if not row[0][0]=='#' and not row[4]=='':
-                    #### WARNING: this is temporary TODO TODO TODO TODO once updated rxn_recipes
-                    #row[0] as MNX that is
-                    mnx = self._checkMNXRdeprecated(row[0])
-                    if not mnx in reacXref:
-                        reacXref[mnx] = {}
-                    dbName = 'ec'
-                    if not dbName in reacXref[mnx]:
-                        reacXref[mnx][dbName] = []
-                    for ec in row[4].split(';'):
-                        if not ec in reacXref[mnx][dbName]:
-                            reacXref[mnx][dbName].append(ec)
+        #with open(rxn_recipes_path) as f:
+        #    c = csv.reader(f, delimiter='\t')
+        #    for row in c:
+        for row in csv.DictReader(open(rxn_recipes_path), delimiter='\t'):
+            if row['EC_number']=='':
+                #### WARNING: this is temporary TODO TODO TODO TODO once updated rxn_recipes
+                #row[0] as MNX that is
+                mnx = self._checkMNXRdeprecated(row['#Reaction_ID'])
+                if not mnx in reacXref:
+                    reacXref[mnx] = {}
+                dbName = 'ec'
+                if not dbName in reacXref[mnx]:
+                    reacXref[mnx][dbName] = []
+                for ec in row['EC_number'].split(';'):
+                    if not ec in reacXref[mnx][dbName]:
+                        reacXref[mnx][dbName].append(ec)
         return reacXref
 
 
@@ -488,7 +499,7 @@ class rpCache:
     ####################################### RetroRules #####################################
 
 
-    ## Function to parse the rules_rall.tsv file
+    ## Function to parse the rules_rall.tsv from RetroRules
     #
     #  Extract from the reactions rules the ruleID, the reactionID, the direction of the rule directed to the origin reaction
     #
@@ -497,34 +508,37 @@ class rpCache:
     #  @return rule Dictionnary describing each reaction rule
     def retro_reactions(self, rules_rall_path):
         try:
-            with open(rules_rall_path, 'r') as f:
-                reader = csv.reader(f, delimiter = '\t')
-                next(reader)
-                rule = {}
-                for row in reader:
-                    #rule[row[0]]= {'rule_id': row[0], 'rule_score': row[11], 'reaction':row[1], 'rel_direction': row[13], 'left': row[5], 'right': row[7]}
-                    #NOTE: as of now all the rules are generated using MNX
-                    #but it may be that other db are used, we are handling this case
-                    #WARNING: can have multiple products so need to seperate them
-                    products = {}
-                    for i in row[8].split('.'):
-                        mnxm = self._checkMNXMdeprecated(i)
-                        if not mnxm in products:
-                            products[mnxm] = 1
-                        else:
-                            products[mnxm] += 1
-                    try:
-                        rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[12]), 'reac_id': self._checkMNXRdeprecated(row[2]), 'subs_id': self._checkMNXMdeprecated(row[6]), 'rel_direction': int(row[15]), 'left': {self._checkMNXMdeprecated(row[6]): 1}, 'right': products}
-                    except ValueError:
-                        logging.error('Problem converting rel_direction: '+str(row[13]))
-                        logging.error('Problem converting rule_score: '+str(row[11]))
+            #with open(rules_rall_path, 'r') as f:
+            #    reader = csv.reader(f, delimiter = '\t')
+            #    next(reader)
+            #    rule = {}
+            #    for row in reader:
+            rule = {}
+            for row in csv.DictReader(open(rules_rall_path), delimiter='\t'):
+                #rule[row[0]]= {'rule_id': row[0], 'rule_score': row[11], 'reaction':row[1], 'rel_direction': row[13], 'left': row[5], 'right': row[7]}
+                #NOTE: as of now all the rules are generated using MNX
+                #but it may be that other db are used, we are handling this case
+                #WARNING: can have multiple products so need to seperate them
+                products = {}
+                for i in row['Product_IDs'].split('.'):
+                    mnxm = self._checkMNXMdeprecated(i)
+                    if not mnxm in products:
+                        products[mnxm] = 1
+                    else:
+                        products[mnxm] += 1
+                try:
+                    #rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[12]), 'reac_id': self._checkMNXRdeprecated(row[2]), 'subs_id': self._checkMNXMdeprecated(row[6]), 'rel_direction': int(row[15]), 'left': {self._checkMNXMdeprecated(row[6]): 1}, 'right': products}
+                    rule['# Rule_ID'] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
+                except ValueError:
+                    logging.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
+                    logging.error('Problem converting rule_score: '+str(row['Score_normalized']))
         except FileNotFoundError as e:
                 logging.error('Could not read the rules_rall file ('+str(path)+')')
                 return {}
         return rule
 
     
-    ## Generate complete reactions from the 
+    ## Generate complete reactions from the rxn_recipes.tsv from RetroRules
     #
     def full_reac(self, rxn_recipes_path):
         #### for character matching that are returned
@@ -536,86 +550,87 @@ class rpCache:
                            '(n-1)': 0, '(n-2)': -1}
         reaction = {}
         try:
-            with open(rxn_recipes_path) as f:
-                reader = csv.reader(f, delimiter='\t')
-                next(reader)
-                for row in reader:
-                    tmp = {} # makes sure that if theres an error its not added
-                    #parse the reaction equation
-                    if not len(row[1].split('='))==2:
-                        logging.warning('There should never be more or less than a left and right of an euation')
-                        logging.warnin(row[1])
-                        continue 
-                    #reac_left = row[1].split('=')[0]
-                    #reac_right = row[1].split('=')[1]
-                    ######### LEFT ######
-                    #### MNX id
-                    tmp['left'] = {}
-                    for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row[1].split('=')[0]):
-                        #1) try to rescue if its one of the values
-                        try:
-                            tmp['left'][self._checkMNXMdeprecated(spe[1])] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                        except KeyError:
-                            #2) try to convert to int if its not
-                            try:
-                                tmp['left'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
-                            except ValueError:
-                                logging.warning('Cannot convert '+str(spe[0]))
-                                continue
-                    '''# Common name of chemicals -- Perhaps implement some day
-                    #### chem names
-                    tmp['chem_left'] = {}
-                    for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[0]):
-                        #1) try to rescue if its one of the values
-                        try:
-                            tmp['chem_left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                        except KeyError:
-                            #2) try to convert to int if its not
-                            try: 
-                                tmp['chem_left'][spe[1]] = int(spe[0])
-                            except ValueError:
-                                logging.warning('Cannot convert '+str(spe[0]))
-                                continue
-                    '''
-                    ####### RIGHT #####
-                    ####  MNX id
-                    tmp['right'] = {}
-                    for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row[1].split('=')[1]):
-                        #1) try to rescue if its one of the values
-                        try:
-                            tmp['right'][self._checkMNXMdeprecated(spe[1])] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                        except KeyError:
-                            #2) try to convert to int if its not
-                            try: 
-                                tmp['right'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
-                            except ValueError:
-                                logging.warning('Cannot convert '+str(spe[0]))
-                                continue
-                    ''' Common name of chemicals -- Perhaps implement some day
-                    #### chem names
-                    tmp['chem_right'] = {}
-                    for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[1]):
-                        #1) try to rescue if its one of the values
-                        try:
-                            tmp['chem_right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                        except KeyError:
-                            #2) try to convert to int if its not
-                            try: 
-                                tmp['chem_right'][spe[1]] = int(spe[0])
-                            except ValueError:
-                                logging.warning('Cannot convert '+str(spe[0]))
-                                continue
-                    '''
-                    ####### DIRECTION ######
+            #with open(rxn_recipes_path) as f:
+            #    reader = csv.reader(f, delimiter='\t')
+            #    next(reader)
+            #    for row in reader:
+            for row in csv.DictReader(open(rxn_recipes_path), delimiter='\t'):
+                tmp = {} # makes sure that if theres an error its not added
+                #parse the reaction equation
+                if not len(row['Equation'].split('='))==2:
+                    logging.warning('There should never be more or less than a left and right of an euation')
+                    logging.warnin(row['Equation'])
+                    continue 
+                #reac_left = row[1].split('=')[0]
+                #reac_right = row[1].split('=')[1]
+                ######### LEFT ######
+                #### MNX id
+                tmp['left'] = {}
+                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row['Equation'].split('=')[0]):
+                    #1) try to rescue if its one of the values
                     try:
-                        tmp['direction'] = int(row[3])
-                    except ValueError:
-                        logging.error('Cannot convert '+str(row[3])+' to int')
-                        continue
-                    ### add the others
-                    tmp['main_left'] = row[9].split(',')
-                    tmp['main_right'] = row[10].split(',')
-                    reaction[self._checkMNXRdeprecated(row[0])] = tmp
+                        tmp['left'][self._checkMNXMdeprecated(spe[1])] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                    except KeyError:
+                        #2) try to convert to int if its not
+                        try:
+                            tmp['left'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
+                        except ValueError:
+                            logging.warning('Cannot convert '+str(spe[0]))
+                            continue
+                '''# Common name of chemicals -- Perhaps implement some day
+                #### chem names
+                tmp['chem_left'] = {}
+                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[0]):
+                    #1) try to rescue if its one of the values
+                    try:
+                        tmp['chem_left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                    except KeyError:
+                        #2) try to convert to int if its not
+                        try: 
+                            tmp['chem_left'][spe[1]] = int(spe[0])
+                        except ValueError:
+                            logging.warning('Cannot convert '+str(spe[0]))
+                            continue
+                '''
+                ####### RIGHT #####
+                ####  MNX id
+                tmp['right'] = {}
+                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) ([\w\d]+)@\w+', row['Equation'].split('=')[1]):
+                    #1) try to rescue if its one of the values
+                    try:
+                        tmp['right'][self._checkMNXMdeprecated(spe[1])] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                    except KeyError:
+                        #2) try to convert to int if its not
+                        try: 
+                            tmp['right'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
+                        except ValueError:
+                            logging.warning('Cannot convert '+str(spe[0]))
+                            continue
+                ''' Common name of chemicals -- Perhaps implement some day
+                #### chem names
+                tmp['chem_right'] = {}
+                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[1]):
+                    #1) try to rescue if its one of the values
+                    try:
+                        tmp['chem_right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
+                    except KeyError:
+                        #2) try to convert to int if its not
+                        try: 
+                            tmp['chem_right'][spe[1]] = int(spe[0])
+                        except ValueError:
+                            logging.warning('Cannot convert '+str(spe[0]))
+                            continue
+                '''
+                ####### DIRECTION ######
+                try:
+                    tmp['direction'] = int(row['Direction'])
+                except ValueError:
+                    logging.error('Cannot convert '+str(row['Direction'])+' to int')
+                    continue
+                ### add the others
+                tmp['main_left'] = row['Main_left'].split(',')
+                tmp['main_right'] = row['Main_right'].split(',')
+                reaction[self._checkMNXRdeprecated(row['#Reaction_ID'])] = tmp
             return reaction
         except FileNotFoundError:
             logging.error('Cannot find file: '+str(path))
@@ -667,3 +682,7 @@ if __name__ == "__main__":
     pickle.dump(cache.mnx_compXref('input_cache/comp_xref.tsv'), gzip.open('cache/compXref.pickle.gz','wb'))
     #copy the other file required
     copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
+    #copy the rules_rall.tsv 
+    #with tarfile.open('cache/rules_rall.tsv.tar.xz', "w:xz") as tar:
+    #    tar.add('input_cache/rules_rall.tsv')
+

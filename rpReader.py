@@ -506,7 +506,7 @@ class rpReader:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(['Name','InChI'])
             for i in cytoplasm_species:
-                res = rpsbml.readAnnotation(i.getAnnotation())
+                res = rpsbml.readMIRIAMAnnotation(i.getAnnotation())
                 #extract the MNX id's
                 try:
                     mnx = res['metanetx'][0]
