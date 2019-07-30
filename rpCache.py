@@ -528,7 +528,7 @@ class rpCache:
                         products[mnxm] += 1
                 try:
                     #rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[12]), 'reac_id': self._checkMNXRdeprecated(row[2]), 'subs_id': self._checkMNXMdeprecated(row[6]), 'rel_direction': int(row[15]), 'left': {self._checkMNXMdeprecated(row[6]): 1}, 'right': products}
-                    rule['# Rule_ID'] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
+                    rule[row['# Rule_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
                 except ValueError:
                     logging.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
                     logging.error('Problem converting rule_score: '+str(row['Score_normalized']))
