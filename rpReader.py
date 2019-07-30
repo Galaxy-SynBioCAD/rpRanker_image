@@ -53,7 +53,7 @@ class rpReader:
     #  @param Database The database name of the user's xref
     def __init__(self):
         #cache files
-        self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
+        #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
         #TODO: remove all the rp parameters since these should not be used, 
         self.rp_strc = None #These are the structures contained within the output of rp2paths
