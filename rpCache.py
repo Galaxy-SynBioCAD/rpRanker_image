@@ -175,6 +175,7 @@ class rpCache:
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
+        inchikey_mnxm = {}
         #with open(rr_compounds_path) as f:
         #    c = csv.reader(f, delimiter='\t')
         #    for row in c:
