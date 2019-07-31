@@ -413,7 +413,6 @@ class rpReader:
     def jsonToSBML(self, json_paths, pathId='rp_pathway', maxRuleIds=10, compartment_id='MNXC3'):
         ############### JSON PARSING ################
         pathNum = 1
-        rp_paths = {}
         rp_meta = {}
         ## loop trouhg all pathways in json format already loaded as dictionnary 
         for data in json_paths:
@@ -468,32 +467,32 @@ class rpReader:
                                         #'diameter': node['data']['Diameter'],
                                         #'iteration': node['data']['Iteration'],
                                         'smiles': node['data']['Reaction SMILES']}
-                        if not int(pathNum) in rp_paths:
-                            rp_paths[int(pathNum)] = {}
-                        if not int(step) in rp_paths[int(pathNum)]:
-                            rp_paths[int(pathNum)][int(step)] = {}
-                        rp_paths[int(pathNum)][int(step)][int(sub_path_step)] = tmpReac
+                        if not int(pathNum) in self.rp_paths:
+                            self.rp_paths[int(pathNum)] = {}
+                        if not int(step) in self.rp_paths[int(pathNum)]:
+                            self.rp_paths[int(pathNum)][int(step)] = {}
+                        self.rp_paths[int(pathNum)][int(step)][int(sub_path_step)] = tmpReac
                         sub_path_step += 1
             ## Substrats and products for each reactions in the reactions dictionnary
             for reaction in data['elements']['edges']:
                 if len(reaction['data']['target'].split('-')) == 3:
                     ############ LEFT ##############
-                    for substep in rp_paths[pathNum][reaction['data']['source'].split('-')[-1]]:
+                    for substep in self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]]:
                         substep['left'][reaction['data']['target']] = rp_stoechio[reaction['data']['target']]
                 else:
                     ############ RIGHT #############
-                    for substep in rp_paths[pathNum][reaction['data']['target'].split('-')[-1]]:
+                    for substep in self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]]:
                         substep['right'][reaction['data']['source']] = rp_stoechio[reaction['data']['source']]
             pathNum += 1
         ################## GENERATING SBML ###################
-        for pathNum in rp_paths:
+        for pathNum in self.rp_paths:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
             altPathNum = 1
             for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
                 steps = []
                 for i in range(len(comb_path)):
-                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+                    steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
                 path_id = steps[0]['path_id']
                 rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
