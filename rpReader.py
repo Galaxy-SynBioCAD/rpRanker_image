@@ -417,6 +417,7 @@ class rpReader:
         ## loop trouhg all pathways in json format already loaded as dictionnary 
         for data in json_paths:
             rp_stoechio = {}
+            rp_transformation = {}
             for node in data['elements']['nodes']:
                 ## ListOfSpecies
                 if node['data']['type'] == 'compound':
