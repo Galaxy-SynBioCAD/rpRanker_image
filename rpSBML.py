@@ -379,8 +379,8 @@ class rpSBML:
     # @param libSBML Annotation object for one of the 
     # @return Boolean to determine if they are the same
     def compareAnnotations(self, source_annot, target_annot):
-        source_dict = self.readAnnotation(source_annot)
-        target_dict = self.readAnnotation(target_annot)
+        source_dict = self.readMIRIAMAnnotation(source_annot)
+        target_dict = self.readMIRIAMAnnotation(target_annot)
         #list the common keys between the two
         for com_key in set(list(source_dict.keys()))-(set(list(source_dict.keys()))-set(list(target_dict.keys()))):
             #compare the keys and if same is non-empty means that there 
@@ -391,7 +391,7 @@ class rpSBML:
 
 
     def compareAnnotations_annot_dict(self, source_annot, target_dict):
-        source_dict = self.readAnnotation(source_annot)
+        source_dict = self.readMIRIAMAnnotation(source_annot)
         #list the common keys between the two
         for com_key in set(list(source_dict.keys()))-(set(list(source_dict.keys()))-set(list(target_dict.keys()))):
             #compare the keys and if same is non-empty means that there 
@@ -574,7 +574,7 @@ class rpSBML:
                 logging.warning('Cannot find annotations for species: '+str(target_model.getSpecies(y).getId()))
                 continue
             self._checklibSBML(target_annotation, 'Getting target annotation')
-            targetModel_speciesAnnot[y] = self.readAnnotation(target_annotation)
+            targetModel_speciesAnnot[y] = self.readMIRIAMAnnotation(target_annotation)
         # second make the target model dictionnary for the species of the rp model
         toAddNum = []
         for i in range(self.model.getNumSpecies()):
@@ -661,7 +661,7 @@ class rpSBML:
                 logging.warning('No annotation for the target of reaction: '+str(target_model.getReaction(y).getId()))
                 continue
             self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
-            targetModel_reactionsAnnot[y] = self.readAnnotation(target_annotation)
+            targetModel_reactionsAnnot[y] = self.readMIRIAMAnnotation(target_annotation)
         #### WANRING: important to list the heterologous pathways in the original model and if
         # comparing the annotations returns true to not add them
         # this is a fix to a bug caused by adding EC numbers to the reactions

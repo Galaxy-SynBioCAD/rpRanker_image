@@ -17,6 +17,7 @@ RUN apt-get --quiet update && \
     conda install -y -c SBMLTeam python-libsbml && \
     conda install -y -c rdkit rdkit && \
     conda install -y -c openbabel openbabel && \
+    #conda update -y anaconda-navigator && \
     pip install --upgrade pip && \ 
     pip install --no-cache-dir pytest && \
     pip install --no-cache-dir cobra && \
