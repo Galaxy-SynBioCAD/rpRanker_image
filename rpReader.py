@@ -351,7 +351,9 @@ class rpReader:
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
                 ##### TODO: give the user more control over a generic model creation:
                 #   -> special attention to the compartment
-                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum), 'RP_model_'+str(path_id)+'_'+str(altPathNum), self.compXref[compartment_id])
+                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum), 
+                        'RP_model_'+str(path_id)+'_'+str(altPathNum), 
+                        self.compXref[compartment_id])
                 #2) create the pathway (groups)
                 rpsbml.createPathway(pathId)
                 #3) find all the unique species and add them to the model
@@ -359,10 +361,22 @@ class rpReader:
                 for meta in all_meta:
                     #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
-                        rpsbml.createSpecies(meta, self.chemXref[meta], None, self.rp_strc[meta]['inchi'], self.rp_strc[meta]['inchikey'], self.rp_strc[meta]['smiles'], compartment_id)
+                        rpsbml.createSpecies(meta, 
+                                self.chemXref[meta], 
+                                None, 
+                                self.rp_strc[meta]['inchi'], 
+                                self.rp_strc[meta]['inchikey'], 
+                                self.rp_strc[meta]['smiles'], 
+                                compartment_id)
                     except KeyError:    
                         try:
-                            rpsbml.createSpecies(meta, {}, None, self.rp_strc[meta]['inchi'], self.rp_strc[meta]['inchikey'], self.rp_strc[meta]['smiles'], compartment_id)
+                            rpsbml.createSpecies(meta, 
+                                    {}, 
+                                    None, 
+                                    self.rp_strc[meta]['inchi'], 
+                                    self.rp_strc[meta]['inchikey'], 
+                                    self.rp_strc[meta]['smiles'], 
+                                    compartment_id)
                         except KeyError:
                             logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
                 #4) add the complete reactions and their annotations
@@ -373,21 +387,16 @@ class rpReader:
                             'B_999999', #only for genericModel
                             'B_0', #only for genericModel
                             step,
+                            compartment_id,
                             self.rp_transformation[step['transformation_id']]['rule'],
-                            {}, #with new reactions, its impossible to find the same ones
-                            self.rp_transformation,
-                            compartment_id)
-                #5) adding the consumption of the target
-                targetRule = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+                            self.rp_transformation[step['transformation_id']]['ec'])
+                    #5) adding the consumption of the target
+                targetStep = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
                 rpsbml.createReaction('targetSink',
                         'B_999999',
                         'B_0',
-                        targetRule,
-                        None,
-                        {},
-                        self.rp_transformation,
-                        compartment_id,
-                        True)
+                        targetStep,
+                        compartment_id)
                 #6) Optional?? Add the flux objectives. Could be in another place, TBD
                 #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
                 rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
@@ -441,18 +450,18 @@ class rpReader:
                     rp_transformation[node['data']['id']] = {'rule': node['data']['Reaction SMILES'], 'ec': [i for i in [node['data']['EC number']]]}
                     ### rp_paths like (out_paths.csv)
                     self.rp_paths[pathNum][step][1] = {'rule_id': node['data']['Rule ID'][0], #hack, pick the first rule, usually have the biggest diameter, need to writ a function to do that
-                                                 'right':{},
-                                                 'left':{},
-                                                 'path_id': pathNum,
-                                                 'step': step,
-                                                 'sub_step': 1,
-                                                 'transformation_id': node['data']['id'],
-                                                 'rule_score': node['data']['Score'],
-                                                 ### not in the original dictionnary
-                                                 #'EC_number': node['data']['EC number'],
-                                                 #'diameter': node['data']['Diameter'],
-                                                 #'iteration': node['data']['Iteration'],
-                                                 'smiles': node['data']['Reaction SMILES']}
+                            'right':{},
+                            'left':{},
+                            'path_id': pathNum,
+                            'step': step,
+                            'sub_step': 1,
+                            'transformation_id': node['data']['id'],
+                            'rule_score': node['data']['Score'],
+                            ### not in the original dictionnary
+                            #'EC_number': node['data']['EC number'],
+                            #'diameter': node['data']['Diameter'],
+                            #'iteration': node['data']['Iteration'],
+                            'smiles': node['data']['Reaction SMILES']}
                     rp_stochio.update(node['data']['Stoechiometry'])
             ## Substrats and products for each reactions in the reactions dictionnary
             for reaction in data['elements']['edges']:
@@ -462,31 +471,203 @@ class rpReader:
                     self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stochio[reaction['data']['source']]
             ## ListOfReactions
             for step in self.rp_paths[pathNum]:
-                rpsbml.createReaction('RetroPath_Reaction_'+step.keys().split('-')[7], # name of the reaction, to change
+                #TODO: reorganise to fir with updated version
+                rpsbml.createReaction('RP'+step.keys().split('-')[7], # name of reaction
                         'B_999999', #only for genericModel
                         'B_0', #only for genericModel
                         step[1],
                         step[1]['smiles'],
                         {},
-                        rp_transformation,
+                        [], #rp_transformation #TODO: need to pass a list of EC numbers
                         compartment_id)
-            ## targetSink reaction    
+                ## targetSink reaction    
             targetRule = {'rule_id': None, 'left': {target_ID: 1}, 'right': [], 'step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+            #TODO: reorganise to fir the updated version of the function
             rpsbml.createReaction('targetSink',
                     'B_999999',
                     'B_0',
                     targetRule,
                     None,
                     {},
-                    rp_transformation,
-                    compartment_id,
-                    True)
+                    [], #rp_transformation #TODO: need to pass a list of EC numbers
+                    compartment_id)
             rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
             self.sbml_paths['rp_'+str(pathNum)] = rpsbml
             #TODO: these will be handled by galaxy tools and not here:
             ## Writting 
             #libsbml.writeSBML(rpsbml.document, path+'/RP_model_from_json'+str(pathNum)+'.xml')
             #return rpsbml.document
+
+
+    #############################################################################################
+    ############################### validation data tsv #########################################
+    #############################################################################################
+
+
+    def parseValidation(self, inFile):
+        data = {}
+        try:
+            for row in csv.DictReader(open(inFile), delimiter='\t'):
+                ######## pathId ######
+                try:
+                    pathID = int(row['pathway_ID'])
+                except ValueError:
+                    logging.error('Cannot convert pathway ID: '+str(row['pathway_ID']))
+                    continue
+                if not pathID in data:
+                    data[pathID] = {}
+                    data[pathID]['steps'] = {}
+                ####### step #########
+                try:
+                    stepID = int(row['step'])
+                except ValueError:
+                    logging.error('Cannot convert step ID: '+str(row['step']))
+                    continue
+                if stepID==0:
+                    continue
+                elif stepID==1:
+                    data[pathID]['organism'] = row['organism'].replace(' ', '')
+                    data[pathID]['reference'] = row['reference'].replace(' ', '')
+                data[pathID]['steps'][stepID] = {}
+                ##### substrates #########
+                data[pathID]['steps'][stepID]['substrates'] = []
+                if len(row['substrate_name'].split(';'))==len(row['substrate_structure'].split(';'))==len(row['substrate_dbref'].split(';')):
+                    for name, inchi, dbrefs in zip(row['substrate_name'].split(';'), 
+                            row['substrate_structure'].split(';'), 
+                            row['substrate_dbref'].split(';')):
+                        tmp = {}
+                        tmp['inchi'] = inchi.replace(' ', '')
+                        tmp['name'] = name
+                        tmp['dbref'] = {}
+                        for dbref in dbrefs.split('|'):
+                            if len(dbref.split(':'))==2:
+                                db_name = dbref.split(':')[0].replace(' ', '').lower()
+                                db_cid = dbref.split(':')[1].replace(' ', '')
+                                if not db_name in tmp['dbref']:
+                                    tmp['dbref'][db_name] = []
+                                tmp['dbref'][db_name].append(db_cid)
+                            else:
+                                logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
+                        data[pathID]['steps'][stepID]['substrates'].append(tmp)
+                else:
+                    logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['substrate_name'])+' <--> '+str(row['substrate_structure'])+' <--> '+str(row['substrate_dbref']))
+                ##### products #########
+                data[pathID]['steps'][stepID]['products'] = []
+                if len(row['product_name'].split(';'))==len(row['product_structure'].split(';'))==len(row['product_dbref'].split(';')):
+                    for name, inchi, dbrefs in zip(row['product_name'].split(';'), 
+                            row['product_structure'].split(';'), 
+                            row['product_dbref'].split(';')):
+                        tmp = {}
+                        tmp['inchi'] = inchi.replace(' ', '')
+                        tmp['name'] = name
+                        tmp['dbref'] = {}
+                        for dbref in dbrefs.split('|'):
+                            if len(dbref.split(':'))==2:
+                                db_name = dbref.split(':')[0].replace(' ', '').lower()
+                                db_cid = dbref.split(':')[1].replace(' ', '')
+                                if not db_name in tmp['dbref']:
+                                    tmp['dbref'][db_name] = []
+                                tmp['dbref'][db_name].append(db_cid)
+                            else:
+                                logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
+                        data[pathID]['steps'][stepID]['products'].append(tmp)
+                else:
+                    logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['product_name'])+' <--> '+str(row['product_structure'])+' <--> '+str(row['product_dbref']))
+                data[pathID]['steps'][stepID]['ec_numbers'] = [i.replace(' ', '') for i in row['EC_number'].split(';')]
+                data[pathID]['steps'][stepID]['enzyme_id'] = [i.replace(' ', '') for i in row['enzyme_identifier'].split(';')]
+                data[pathID]['steps'][stepID]['enzyme_name'] = row['enzyme_name'].split(';')
+        except FileNotFoundError:
+            logging.error('Cannot open the file: '+str(inFile))
+        return data
+
+
+    def validationToSBML(self, inFile, compartment_id='MNXC3'): 
+        data = self.parseValidation(inFile)
+        self.sbml_paths = {}
+        #TODO: need to exit at this loop
+        for path_id in data:
+            rpsbml = rpSBML('measured_'+str(path_id))
+            #1) create a generic Model, ie the structure and unit definitions that we will use the most
+            ##### TODO: give the user more control over a generic model creation:
+            #   -> special attention to the compartment
+            rpsbml.genericModel('measured_'+str(path_id), 'measured_'+str(path_id), self.compXref[compartment_id])
+            #find all the chemical species and add them to an SBML
+            #2) create the pathway (groups)
+            rpsbml.createPathway(path_id)
+            #3) find all the unique species and add them to the model
+            allChem = []
+            for stepNum in data[path_id]['steps']:
+                #because of the nature of the input we need to remove duplicates
+                for i in data[path_id]['steps'][stepNum]['substrates']+data[path_id]['steps'][stepNum]['products']:
+                    if not i in allChem:
+                        allChem.append(i)
+            #add them to the SBML
+            for chem in allChem:
+                #PROBLEM: as it stands one expects the meta to be MNX
+                if 'mnx' in chem['dbref']:
+                    #must list the different models
+                    meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
+                else:
+                    logging.warning('All species must be referenced by a MNX id or will be ignored')
+                    break
+                #try to conver the inchi into the other structures
+                smiles = None
+                inchikey = None
+                try:
+                    resConv = self._convert_depiction(idepic=chem['inchi'], itype='inchi', otype={'smiles','inchikey'})
+                    smiles = resConv['smiles']
+                    inchikey = resConv['inchikey']
+                except DepictionError as e:
+                    logging.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
+                #create a new species
+                try:
+                    rpsbml.createSpecies(meta, 
+                            self.chemXref[meta], 
+                            None, 
+                            chem['inchi'], 
+                            inchikey, 
+                            smiles, 
+                            compartment_id)
+                except KeyError:
+                    try:
+                        rpsbml.createSpecies(meta, 
+                                {}, 
+                                None, 
+                                chem['inchi'], 
+                                inchikey, 
+                                smiles, 
+                                compartment_id)
+                    except KeyError:
+                        logging.error('Could not create the following metabolite: '+str(meta))
+                        break
+            #4) add the complete reactions and their annotations
+            #need to convert the validation to step for reactions
+            for stepNum in data[path_id]['steps']:
+                toSend = {'left': {}, 'right': {}, 'rule_id': None, 'rule_score': None, 'path_id': path_id, 'step': stepNum, 'sub_step': None}
+                for chem in data[path_id]['steps'][stepNum]['substrates']:
+                    if 'mnx' in chem['dbref']:
+                        meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
+                        toSend['left'][meta] = 1
+                    else:
+                        logging.error('Need all the species to have a MNX ID')
+                        break
+                for chem in data[path_id]['steps'][stepNum]['products']:
+                    if 'mnx' in chem['dbref']:
+                        meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
+                        toSend['left'][meta] = 1
+                    else:
+                        logging.error('Need all the species to have a MNX ID')
+                        break
+                #if all are full add it
+                rpsbml.createReaction('M'+str(stepNum),
+                        'B_999999', #only for genericModel
+                        'B_0', #only for genericModel
+                        toSend,
+                        compartment_id,
+                        None,
+                        data[path_id]['steps'][stepNum]['ec_numbers'])
+                rpsbml.createFluxObj('rpFBA_obj', 'M'+str(max(data[path_id]['steps'])), 1, True)
+            self.sbml_paths['measured_'+str(path_id)] = rpsbml
 
 
     #TODO: move this to another place

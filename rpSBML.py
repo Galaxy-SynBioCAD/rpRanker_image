@@ -964,11 +964,10 @@ class rpSBML:
             fluxUpperBound,
             fluxLowerBound,
             step,
-            reaction_smiles,
-            reacXref,
-            rp_transformation,
-            compartmentId=None,
-            isTarget=False,
+            compartmentId='MNXC3',
+            reaction_smiles=None,
+            ecs=[],
+            reacXref={},
             hetero_group=None,
             metaID=None):
         reac = self.model.createReaction()
@@ -1036,14 +1035,9 @@ class rpSBML:
       <rdf:li rdf:resource="http://identifiers.org/'''+str(id_ident[dbId])+str(cid)+'''"/>'''
                 except KeyError:
                     continue
-        if not isTarget:
-            try:
-                for trans_ec in rp_transformation[step['transformation_id']]['ec']:
-                    annotation += '''
-              <rdf:li rdf:resource="http://identifiers.org/ec-code/'''+str(trans_ec)+'''"/>'''
-            except KeyError:
-                #TODO: consider ignoring this since if we pass the target this should be ignored
-                logging.warning('There is no element: '+str(step['transformation_id'])+' in rp_transformation')
+        for ec in ecs:
+            annotation += '''
+      <rdf:li rdf:resource="http://identifiers.org/ec-code/'''+str(ec)+'''"/>'''
         ############################## IBISBA #########################
         #return the EC number associated with the original reaction 
         #print(step)
@@ -1093,7 +1087,7 @@ class rpSBML:
     # @param dG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
     def createSpecies(self, 
             chemId,
-            chemXref, 
+            chemXref={}, 
             metaID=None, 
             inchi=None,
             inchiKey=None,
