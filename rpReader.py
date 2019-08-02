@@ -10,6 +10,8 @@ import sys
 import random
 from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 import json
+import copy
+
 from .rpSBML import rpSBML
 
 
@@ -504,6 +506,9 @@ class rpReader:
     #############################################################################################
 
 
+    ##
+    #
+    #
     def parseValidation(self, inFile):
         data = {}
         try:
@@ -516,12 +521,14 @@ class rpReader:
                     continue
                 if not pathID in data:
                     data[pathID] = {}
+                    data[pathID]['isValid'] = True
                     data[pathID]['steps'] = {}
                 ####### step #########
                 try:
                     stepID = int(row['step'])
                 except ValueError:
                     logging.error('Cannot convert step ID: '+str(row['step']))
+                    data[pathID]['isValid'] = False
                     continue
                 if stepID==0:
                     continue
@@ -531,7 +538,19 @@ class rpReader:
                 data[pathID]['steps'][stepID] = {}
                 ##### substrates #########
                 data[pathID]['steps'][stepID]['substrates'] = []
-                if len(row['substrate_name'].split(';'))==len(row['substrate_structure'].split(';'))==len(row['substrate_dbref'].split(';')):
+                lenDBref = len(row['substrate_dbref'].split(';'))
+                for i in row['substrate_dbref'].split(';'):
+                    if i=='':
+                        lenDBref -= 1
+                lenStrc = len(row['substrate_structure'].split(';'))
+                for i in row['substrate_structure'].split(';'):
+                    if i=='':
+                        lenStrc -= 1
+                lenSub = len(row['substrate_name'].split(';'))
+                for i in row['substrate_name'].split(';'):
+                    if i=='':
+                        lenSub -= 1
+                if lenSub==lenStrc==lenSub:
                     for name, inchi, dbrefs in zip(row['substrate_name'].split(';'), 
                             row['substrate_structure'].split(';'), 
                             row['substrate_dbref'].split(';')):
@@ -548,12 +567,27 @@ class rpReader:
                                 tmp['dbref'][db_name].append(db_cid)
                             else:
                                 logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
+                                data[pathID]['isValid'] = False
                         data[pathID]['steps'][stepID]['substrates'].append(tmp)
                 else:
                     logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['substrate_name'])+' <--> '+str(row['substrate_structure'])+' <--> '+str(row['substrate_dbref']))
+                    data[pathID]['isValid'] = False
+                    continue
                 ##### products #########
                 data[pathID]['steps'][stepID]['products'] = []
-                if len(row['product_name'].split(';'))==len(row['product_structure'].split(';'))==len(row['product_dbref'].split(';')):
+                lenDBref = len(row['product_dbref'].split(';'))
+                for i in row['product_dbref'].split(';'):
+                    if i=='':
+                        lenDBref -= 1
+                lenStrc = len(row['product_structure'].split(';'))
+                for i in row['product_structure'].split(';'):
+                    if i=='':
+                        lenStrc -= 1
+                lenSub = len(row['product_name'].split(';'))
+                for i in row['product_name'].split(';'):
+                    if i=='':
+                        lenSub -= 1
+                if lenSub==lenStrc==lenDBref:
                     for name, inchi, dbrefs in zip(row['product_name'].split(';'), 
                             row['product_structure'].split(';'), 
                             row['product_dbref'].split(';')):
@@ -569,18 +603,30 @@ class rpReader:
                                     tmp['dbref'][db_name] = []
                                 tmp['dbref'][db_name].append(db_cid)
                             else:
+                                data[pathID]['isValid'] = False
                                 logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
                         data[pathID]['steps'][stepID]['products'].append(tmp)
                 else:
                     logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['product_name'])+' <--> '+str(row['product_structure'])+' <--> '+str(row['product_dbref']))
+                    data[pathID]['isValid'] = False
                 data[pathID]['steps'][stepID]['ec_numbers'] = [i.replace(' ', '') for i in row['EC_number'].split(';')]
                 data[pathID]['steps'][stepID]['enzyme_id'] = [i.replace(' ', '') for i in row['enzyme_identifier'].split(';')]
                 data[pathID]['steps'][stepID]['enzyme_name'] = row['enzyme_name'].split(';')
         except FileNotFoundError:
             logging.error('Cannot open the file: '+str(inFile))
-        return data
+        #now loop through all of them and remove the invalid paths
+        toRet = copy.deepcopy(data)
+        for path_id in data.keys():
+            if toRet[path_id]['isValid']==False:
+                del toRet[path_id]
+            else:
+                del toRet[path_id]['isValid']
+        return toRet
 
 
+    ##
+    #
+    #
     def validationToSBML(self, inFile, compartment_id='MNXC3'): 
         data = self.parseValidation(inFile)
         self.sbml_paths = {}
@@ -654,7 +700,7 @@ class rpReader:
                 for chem in data[path_id]['steps'][stepNum]['products']:
                     if 'mnx' in chem['dbref']:
                         meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
-                        toSend['left'][meta] = 1
+                        toSend['right'][meta] = 1
                     else:
                         logging.error('Need all the species to have a MNX ID')
                         break

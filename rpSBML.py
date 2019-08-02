@@ -193,9 +193,10 @@ class rpSBML:
     def readRPrules(self, path_id='rp_pathway'):
         toRet = {}
         for reacId in self.readRPpathway(path_id):
-            reac = rpsbml.model.getReaction(reacId)
-            ibibsa_annot = rpsbml.readIBISBAAnnotation(reac.getAnnotation())
-            toRet[ibibsa_annot['rule_id']] = ibibsa_annot['smiles'].replace('&gt;', '>')
+            reac = self.model.getReaction(reacId)
+            ibibsa_annot = self.readIBISBAAnnotation(reac.getAnnotation())
+            if not ibibsa_annot['rule_id']=='' and not ibibsa_annot['smiles']=='':
+                toRet[ibibsa_annot['rule_id']] = ibibsa_annot['smiles'].replace('&gt;', '>')
         return toRet
 
 
@@ -206,11 +207,13 @@ class rpSBML:
         reacMembers = {}
         for reacId in self.readRPpathway(path_id):
             reacMembers[reacId] = {}
+            reacMembers[reacId]['products'] = {}
+            reacMembers[reacId]['reactants'] = {}
             reac = self.model.getReaction(reacId)
             for pro in reac.getListOfProducts():
-                reacMembers['products'][pro.getSpecies()] = pro.getStoichiometry()
+                reacMembers[reacId]['products'][pro.getSpecies()] = pro.getStoichiometry()
             for rea in reac.getListOfReactants():
-                reacMembers['reactants'][rea.getSpecies()] = rea.getStoichiometry()
+                reacMembers[reacId]['reactants'][rea.getSpecies()] = rea.getStoichiometry()
         return reacMembers
 
 
@@ -218,8 +221,16 @@ class rpSBML:
     #
     #
     def readUniqueRPspecies(self, pathId='rp_pathway'):
-        reacMembers = readRPspecies(path_id)
-        return set(set(ori_rp_path['products'].keys())|set(ori_rp_path['reactants'].keys()))
+        rpSpecies = self.readRPspecies()
+        toRet = []
+        for i in rpSpecies:
+            for y in rpSpecies[i]:
+                for z in rpSpecies[i][y]:
+                    if not z in toRet:
+                        toRet.append(z)
+        return toRet
+        #reacMembers = self.readRPspecies(path_id)
+        #return set(set(ori_rp_path['products'].keys())|set(ori_rp_path['reactants'].keys()))
 
 
     ## Return the MIRIAM annotations of species
@@ -242,25 +253,6 @@ class rpSBML:
                 toRet[dbid] = []
             toRet[dbid].append(cid)
         return toRet
-
-
-    '''DEPRECATED
-    ## Takes a libSBML Reactions or Species object and returns a dictionnary for all its elements
-    #TODO: how is this different from the above function???
-    def readMIRIAMAnnotation(self, annot):
-        toRet = {}
-        bag = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
-        for i in range(bag.getNumChildren()):
-            str_annot = bag.getChild(i).getAttrValue(0)
-            if str_annot=='':
-                logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
-                continue
-            if not str_annot.split('/')[-2] in toRet:
-                toRet[str_annot.split('/')[-2]] = []
-            #TODO: check if the MNXM and if so check against depreceated
-            toRet[str_annot.split('/')[-2]].append(str_annot.split('/')[-1])
-        return toRet
-    '''
 
 
     ## Takes for input a libSBML annotatio object and returns a dictionnary of the annotations
@@ -409,6 +401,39 @@ class rpSBML:
             if bool(set(source_dict[com_key]) & set(target_dict[com_key])):
                 return True
         return False
+
+
+    ## Function to compare two SBML's RP pathways
+    #
+    #
+    def compareRPpathways(self, measured_sbml):
+        rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
+        measured_pathways = sorted(measured_sbml.readRPpathways(), key=lambda x : int(x.replace('M', '')))
+        #check that they are the same size #TODO: consider if the pathway is a subpart if an output of RP
+        toRet = []
+        if len(rp_pathways)==len(measured_pathways):
+            for rp_step, meas_step in zip(rp_pathways, measured_pathways):
+                rp_reaction = self.model.getReaction(rp_step)
+                meas_reaction = measured_sbml.model.getReaction(meas_step)
+                rp_reaction_species = self.readReactionSpecies(rp_reaction)
+                rp_reaction_species = {'left': list(rp_reaction_species['left'].keys()), 'right': list(rp_reaction_species['right'].keys())}
+                meas_reaction_species = measured_sbml.readReactionSpecies(meas_reaction)
+                meas_reaction_species = {'left': list(meas_reaction_species['left'].keys()), 'right': list(meas_reaction_species['right'].keys())}
+                is_meas = True
+                for m_l in meas_reaction_species['left']: 
+                    if not m_l in rp_reaction_species['left']:
+                        is_meas = False
+                        break
+                for m_r in meas_reaction_species['right']: 
+                    if not m_r in rp_reaction_species['right']:
+                        is_meas = False
+                        break
+                if is_meas:
+                    toRet.append('RP'+str(rp_pathways))
+        else:
+            logging.error('The pathways are not the same length')
+            return False
+        return toRet
 
 
     #########################################################################
