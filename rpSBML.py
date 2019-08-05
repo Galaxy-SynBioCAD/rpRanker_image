@@ -382,6 +382,9 @@ class rpSBML:
         return False
 
 
+    ## Compare an annotation and a dictionnary structured
+    #
+    #
     def compareAnnotations_annot_dict(self, source_annot, target_dict):
         source_dict = self.readMIRIAMAnnotation(source_annot)
         #list the common keys between the two
@@ -392,7 +395,10 @@ class rpSBML:
                 return True
         return False
 
-
+    
+    ## Compare two dictionnaries sutructured as dict
+    #
+    #
     def compareAnnotations_dict_dict(self, source_dict, target_dict):
         #list the common keys between the two
         for com_key in set(list(source_dict.keys()))-(set(list(source_dict.keys()))-set(list(target_dict.keys()))):
@@ -403,37 +409,131 @@ class rpSBML:
         return False
 
 
+
+
+
+    
+    
+    def compareRPspecies(meas_dict, rp_path):
+        for step_id in rp_path:
+            for spe_name in rp_path[step_id]['reactants']:
+                isSpe = False
+                name = ''
+                for meas_spe_name in meas_dict['reactants']:
+                    if self.compareAnnotations(meas_dict['reactants'][meas_spe_name], rp_path[step_id]['reactants'][spe_name]):
+                        name = meas_dict['reactants'][meas_spe_name]
+                        isSpe = True
+                        break
+            for spe_name in rp_path[step_id]['products']:
+                isSpe = False
+                name
+                for meas_spe_name in meas_dict['products']:
+                    if self.compareAnnotations(meas_dict['products'][meas_spe_name], rp_path[step_id]['products'][spe_name]):
+                        isSpe = True
+                        break
+
+
     ## Function to compare two SBML's RP pathways
     #
+    # The name of the reactions must be in order where
     #
     def compareRPpathways(self, measured_sbml):
-        rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
-        measured_pathways = sorted(measured_sbml.readRPpathways(), key=lambda x : int(x.replace('M', '')))
+        #build dict with the native SBML reaction with annotations and the species annotations
+        rp = self.readRPspecies()
+        for step_id in rp:
+            for spe_name in rp[step_id]['reactants']:
+                rp[step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+            for spe_name in rp[step_id]['products']:
+                rp[step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+        meas = measured_sbml.readRPspecies()
+        for step_id in meas:
+            for spe_name in meas[step_id]['reactants']:
+                meas[step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+            for spe_name in meas[step_id]['products']:
+                meas[step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+        #################################
+        rp_meas = {}
+        for step_id in rp:             
+            #compare the reaction annotations
+            found = False
+            for meas_reac in measured_sbml.model.readRPpathway():
+                if self.compareAnnotations(self.model.getReaction(step_id).getAnnotation(), measured_sbml.model.getReaction(meas_reac).getAnnotation()):
+                    found = True
+                    break
+            if not found:
+                for meas_step_id in meas:
+                    for spe_name in rp[step_id]['reactants']:
+                        rp[step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+                    for spe_name in rp[step_id]['products']:
+                        rp[step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+                    meas[step_id][]
+
+            #if not found compare the species
+            #if not found:    
+            #    for meas_step_id in meas:    
+            #        if self.compareAnnotations(rp[step_id]['annotation'], measured_sbml.model.getReaction(meas_reac).getAnnotation()):
+                    
+                #compare the species
+                #= measured_sbml.readRPspecies()
+                #rp_reaction = self.model.getReaction(step_id)
+                #rp[step_id]['annotation'] = rp_reaction.getAnnotation()
+                #rp[step_id]['species'] = self.readReactionSpecies(rp_reaction)
+                for spe_name in rp[step_id]['species']['substrates']:
+                    rp[step_id]['species']['substrates'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+                for spe_name in rp[step_id]['species']['products']:
+                    rp[step_id]['species']['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+
+
+
+                meas = self.readReactionSpecies(measured_sbml.model.readRPpathway())
+                for spe_name in rp[step_id]['species']['left']:
+                    if self.compareAnnotations(rp[step_id]['species']['left'][spe_name], measured_sbml.model.getSpecies(spe_name).getAnnotation()):
+                        found = True
+                        continue
+                for spe_name in rp[step_id]['species']['right']:
+                    if self.compareAnnotations(rp[step_id]['species']['left'][spe_name], measured_sbml.model.getSpecies(spe_name).getAnnotation()):
+                        found = True
+                        continue
+            #if at least one is not detected then look for the to see if you can find an RP reaction that contains all the species of 
+            #a measured reaction NOTE; make sure that only
+
+
+             
+        """
+        #''.join(i for i in s if i.isdigit())
+        #rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
+        #measured_pathways = sorted(measured_sbml.readRPpathways(), key=lambda x : int(x.replace('M', '')))
         #check that they are the same size #TODO: consider if the pathway is a subpart if an output of RP
         toRet = []
         if len(rp_pathways)==len(measured_pathways):
             for rp_step, meas_step in zip(rp_pathways, measured_pathways):
                 rp_reaction = self.model.getReaction(rp_step)
                 meas_reaction = measured_sbml.model.getReaction(meas_step)
-                rp_reaction_species = self.readReactionSpecies(rp_reaction)
-                rp_reaction_species = {'left': list(rp_reaction_species['left'].keys()), 'right': list(rp_reaction_species['right'].keys())}
-                meas_reaction_species = measured_sbml.readReactionSpecies(meas_reaction)
-                meas_reaction_species = {'left': list(meas_reaction_species['left'].keys()), 'right': list(meas_reaction_species['right'].keys())}
-                is_meas = True
-                for m_l in meas_reaction_species['left']: 
-                    if not m_l in rp_reaction_species['left']:
-                        is_meas = False
-                        break
-                for m_r in meas_reaction_species['right']: 
-                    if not m_r in rp_reaction_species['right']:
-                        is_meas = False
-                        break
-                if is_meas:
-                    toRet.append('RP'+str(rp_pathways))
+                #compare the reaction annotations
+                if compareAnnotations(rp_reaction.getAnnotation(), meas_reaction.getAnnotation()):
+                    return True
+                else:
+                    #remove the stoichiometry. We will not be using it to compare
+                    #if the annotations are not the same, check that the measured species are contained within the rp one
+                    #rp_reaction_species = self.readReactionSpecies(rp_reaction)
+                    #rp_reaction_species = {'left': list(rp_reaction_species['left'].keys()), 'right': list(rp_reaction_species['right'].keys())}
+                    #meas_reaction_species = measured_sbml.readReactionSpecies(meas_reaction)
+                    #meas_reaction_species = {'left': list(meas_reaction_species['left'].keys()), 'right': list(meas_reaction_species['right'].keys())}
+                    #NOTE: we chack that the measured step species are contained within the current SBML.
+                    #This is because we assume that there are a number of steps that are missing
+                    for m_l in list(measured_sbml.readReactionSpecies(meas_reaction)['left'].keys()):
+                        for rp_l in list(self.readReactionSpecies(rp_reaction)['left'].keys()): 
+                            if not compareAnnotations(self.model.getReaction(rp_l).getAnnotation(), measured_sbml.model.getReaction(m_l).getAnnotation()):
+                                return False
+                    for m_r in list(measured_sbml.readReactionSpecies(meas_reaction)['right'].keys()):
+                        for rp_r in list(self.readReactionSpecies(rp_reaction)['right'].keys()):
+                            if not compareAnnotations(self.model.getReaction(rp_r).getAnnotation(), measured_sbml.model.getReaction(m_r).getAnnotation()):
+                                return False
+            return True
         else:
             logging.error('The pathways are not the same length')
             return False
-        return toRet
+        """
 
 
     #########################################################################
