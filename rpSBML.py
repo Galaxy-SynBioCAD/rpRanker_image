@@ -362,7 +362,6 @@ class rpSBML:
     ############################# COMPARE MODELS ############################
     #########################################################################
 
-
     ## Find out if two libSBML Species or Reactions come from the same species
     #
     # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
@@ -370,7 +369,22 @@ class rpSBML:
     #
     # @param libSBML Annotation object for one of the 
     # @return Boolean to determine if they are the same
-    def compareAnnotations(self, source_annot, target_annot):
+    def compareIBISBAAnnotations(self, source_annot, target_annot):
+        source_dict = self.readIBISBAAnnotation(source_annot)
+        target_dict = self.readIBISBAAnnotation(target_annot)
+        #list the common keys between the two
+        for same_key in list(set(list(source_dict.keys())).intersection(list(target_dict.keys()))):
+            if source_dict[same_key]==target_dict[same_key]:
+                return True
+        return False
+    ## Find out if two libSBML Species or Reactions come from the same species
+    #
+    # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
+    # function return True, and if none are found then return False
+    #
+    # @param libSBML Annotation object for one of the 
+    # @return Boolean to determine if they are the same
+    def compareMIRIAMAnnotations(self, source_annot, target_annot):
         source_dict = self.readMIRIAMAnnotation(source_annot)
         target_dict = self.readMIRIAMAnnotation(target_annot)
         #list the common keys between the two
@@ -410,95 +424,98 @@ class rpSBML:
 
 
 
-
-
-    
-    
-    def compareRPspecies(meas_dict, rp_path):
-        for step_id in rp_path:
-            for spe_name in rp_path[step_id]['reactants']:
-                isSpe = False
-                name = ''
-                for meas_spe_name in meas_dict['reactants']:
-                    if self.compareAnnotations(meas_dict['reactants'][meas_spe_name], rp_path[step_id]['reactants'][spe_name]):
-                        name = meas_dict['reactants'][meas_spe_name]
-                        isSpe = True
-                        break
-            for spe_name in rp_path[step_id]['products']:
-                isSpe = False
-                name
-                for meas_spe_name in meas_dict['products']:
-                    if self.compareAnnotations(meas_dict['products'][meas_spe_name], rp_path[step_id]['products'][spe_name]):
-                        isSpe = True
-                        break
-
-
     ## Function to compare two SBML's RP pathways
     #
-    # The name of the reactions must be in order where
+    # Function that compares the annotations of reactions and if not found, the annotations of all
+    # species in that reaction to try to recover the correct ones. Because we are working with
+    # intermediate cofactors for the RP generated pathways, the annotation crossreference will
+    # not work. Best is to use the cross-reference to the original reaction
     #
     def compareRPpathways(self, measured_sbml):
-        #build dict with the native SBML reaction with annotations and the species annotations
-        rp = self.readRPspecies()
-        for step_id in rp:
-            for spe_name in rp[step_id]['reactants']:
-                rp[step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-            for spe_name in rp[step_id]['products']:
-                rp[step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-        meas = measured_sbml.readRPspecies()
-        for step_id in meas:
-            for spe_name in meas[step_id]['reactants']:
-                meas[step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
-            for spe_name in meas[step_id]['products']:
-                meas[step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
-        #################################
-        rp_meas = {}
-        for step_id in rp:             
-            #compare the reaction annotations
-            found = False
-            for meas_reac in measured_sbml.model.readRPpathway():
-                if self.compareAnnotations(self.model.getReaction(step_id).getAnnotation(), measured_sbml.model.getReaction(meas_reac).getAnnotation()):
+        #return all the species annotations of the RP pathways
+        meas_rp_species = measured_sbml.readRPspecies()
+        for meas_step_id in measured_sbml.readRPpathway():
+            for spe_name in meas_rp_species[meas_step_id]['reactants']:
+                meas_rp_species[meas_step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+            for spe_name in meas_rp_species[meas_step_id]['products']:
+                meas_rp_species[meas_step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+        rp_rp_species = self.readRPspecies()
+        for rp_step_id in self.readRPspecies():
+            for spe_name in rp_rp_species[rp_step_id]['reactants']:
+                rp_rp_species[rp_step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+            for spe_name in rp_rp_species[rp_step_id]['products']:
+                rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+        #remove the targetSink from RP
+        try:
+            del rp_rp_species['targetSink']
+        except KeyError:
+            pass
+        ############## compare using the reactions ###################
+        measReac_rpReac = {}
+        found = False
+        for meas_step_id in measured_sbml.readRPpathway():
+            measReac_rpReac[meas_step_id] = []
+            for rp_step_id in rp_rp_species:
+                #print('########## measReac_rpReac['+str(meas_step_id)+'] <--> rp_rp_species['+str(rp_step_id)+']  ############')
+                #print(self.model.getReaction(rp_step_id).getAnnotation().toXMLString())
+                #print(measured_sbml.model.getReaction(meas_step_id).getAnnotation().toXMLString())
+                if self.compareMIRIAMAnnotations(self.model.getReaction(rp_step_id).getAnnotation(), measured_sbml.model.getReaction(meas_step_id).getAnnotation()):
                     found = True
-                    break
-            if not found:
-                for meas_step_id in meas:
-                    for spe_name in rp[step_id]['reactants']:
-                        rp[step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-                    for spe_name in rp[step_id]['products']:
-                        rp[step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-                    meas[step_id][]
+                    #print('FOUND USING REACTION')
+                    measReac_rpReac[meas_step_id].append(rp_step_id)
+                else:
+                    ############## compare using the species ###################
+                    # if reaction annotation fails, then compare the species directly
+                    # We test to see if the meas reaction elements all exist in rp reaction
+                    all_meas_found = {}
+                    for pro_rea in meas_rp_species[meas_step_id]:
+                        all_meas_found[pro_rea] = {}
+                        for spe in meas_rp_species[meas_step_id][pro_rea]:
+                            all_meas_found[pro_rea][spe] = False
+                    # compare annotations of the species 
+                    #print('------ Reactants -----------')
+                    for meas_spe_id in meas_rp_species[meas_step_id]['reactants']:
+                        for rp_spe_id in rp_rp_species[rp_step_id]['reactants']:
+                            #print(meas_rp_species[meas_step_id]['reactants'][meas_spe_id].toXMLString())
+                            #print(rp_rp_species[rp_step_id]['reactants'][rp_spe_id].toXMLString())
+                            if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
+                                all_meas_found['reactants'][meas_spe_id] = True
+                                break
+                            else:
+                                if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
+                                    all_meas_found['reactants'][meas_spe_id] = True
+                                    break
+                    #print('------ Products -----------')
+                    for meas_spe_id in meas_rp_species[meas_step_id]['products']:
+                        for rp_spe_id in rp_rp_species[rp_step_id]['products']:
+                            #print(meas_rp_species[meas_step_id]['products'][meas_spe_id].toXMLString())
+                            #print(rp_rp_species[rp_step_id]['products'][rp_spe_id].toXMLString())
+                            if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
+                                all_meas_found['products'][meas_spe_id] = True
+                                break
+                            else:
+                                if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
+                                    all_meas_found['products'][meas_spe_id] = True
+                                    break
+                    #now check if all the booleans are the same
+                    #print('##--##--##--##--##--##--##--##--##--##')
+                    #print(all_meas_found)
+                    tmp = {}
+                    for i in rp_rp_species[rp_step_id]:
+                        tmp[i] = list(rp_rp_species[rp_step_id][i].keys())
+                    #print(tmp)
+                    #print('##--##--##--##--##--##--##--##--##--##')
+                    found = True
+                    for pro_rea in all_meas_found:
+                        for spe in all_meas_found[pro_rea]:
+                            if not all_meas_found[pro_rea][spe]:
+                                found = False
 
-            #if not found compare the species
-            #if not found:    
-            #    for meas_step_id in meas:    
-            #        if self.compareAnnotations(rp[step_id]['annotation'], measured_sbml.model.getReaction(meas_reac).getAnnotation()):
-                    
-                #compare the species
-                #= measured_sbml.readRPspecies()
-                #rp_reaction = self.model.getReaction(step_id)
-                #rp[step_id]['annotation'] = rp_reaction.getAnnotation()
-                #rp[step_id]['species'] = self.readReactionSpecies(rp_reaction)
-                for spe_name in rp[step_id]['species']['substrates']:
-                    rp[step_id]['species']['substrates'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-                for spe_name in rp[step_id]['species']['products']:
-                    rp[step_id]['species']['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+                    if found:
+                        #print('FOUND USING SPECIES')
+                        measReac_rpReac[meas_step_id].append(rp_step_id)
+        return found, measReac_rpReac
 
-
-
-                meas = self.readReactionSpecies(measured_sbml.model.readRPpathway())
-                for spe_name in rp[step_id]['species']['left']:
-                    if self.compareAnnotations(rp[step_id]['species']['left'][spe_name], measured_sbml.model.getSpecies(spe_name).getAnnotation()):
-                        found = True
-                        continue
-                for spe_name in rp[step_id]['species']['right']:
-                    if self.compareAnnotations(rp[step_id]['species']['left'][spe_name], measured_sbml.model.getSpecies(spe_name).getAnnotation()):
-                        found = True
-                        continue
-            #if at least one is not detected then look for the to see if you can find an RP reaction that contains all the species of 
-            #a measured reaction NOTE; make sure that only
-
-
-             
         """
         #''.join(i for i in s if i.isdigit())
         #rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
@@ -510,7 +527,7 @@ class rpSBML:
                 rp_reaction = self.model.getReaction(rp_step)
                 meas_reaction = measured_sbml.model.getReaction(meas_step)
                 #compare the reaction annotations
-                if compareAnnotations(rp_reaction.getAnnotation(), meas_reaction.getAnnotation()):
+                if compareMIRIAMAnnotations(rp_reaction.getAnnotation(), meas_reaction.getAnnotation()):
                     return True
                 else:
                     #remove the stoichiometry. We will not be using it to compare
@@ -523,11 +540,11 @@ class rpSBML:
                     #This is because we assume that there are a number of steps that are missing
                     for m_l in list(measured_sbml.readReactionSpecies(meas_reaction)['left'].keys()):
                         for rp_l in list(self.readReactionSpecies(rp_reaction)['left'].keys()): 
-                            if not compareAnnotations(self.model.getReaction(rp_l).getAnnotation(), measured_sbml.model.getReaction(m_l).getAnnotation()):
+                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_l).getAnnotation(), measured_sbml.model.getReaction(m_l).getAnnotation()):
                                 return False
                     for m_r in list(measured_sbml.readReactionSpecies(meas_reaction)['right'].keys()):
                         for rp_r in list(self.readReactionSpecies(rp_reaction)['right'].keys()):
-                            if not compareAnnotations(self.model.getReaction(rp_r).getAnnotation(), measured_sbml.model.getReaction(m_r).getAnnotation()):
+                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_r).getAnnotation(), measured_sbml.model.getReaction(m_r).getAnnotation()):
                                 return False
             return True
         else:
@@ -600,7 +617,7 @@ class rpSBML:
                 if not target_annotation:
                     logging.warning('No annotation for the target of compartment: '+str(target_compartment.getId()))
                     continue
-                if self.compareAnnotations(source_annotation, target_annotation):
+                if self.compareMIRIAMAnnotations(source_annotation, target_annotation):
                     sourceCompartmentID_targetCompartmentID[source_compartment.getId()] = target_compartment.getId() 
                     found = True
                     break
@@ -722,7 +739,7 @@ class rpSBML:
                 #    logging.warning('Cannot find target number: '+str(y))
                 #    continue
             for y in targetModel_speciesAnnot:
-                #if self.compareAnnotations(source_annotation, targetModel_speciesAnnot[y]):
+                #if self.compareMIRIAMAnnotations(source_annotation, targetModel_speciesAnnot[y]):
                 if self.compareAnnotations_annot_dict(source_annotation, targetModel_speciesAnnot[y]):
                     #save the speciesID as being the same
                     #sourceSpeciesID_targetSpeciesID[self.model.species[i].getId()] = target_model.species[y].getId()
@@ -814,8 +831,8 @@ class rpSBML:
                 #    logging.warning('No annotation for the target of reaction: '+str(target_reaction.getId()))
                 #    continue
             for y in targetModel_reactionsAnnot:
-                #if self.compareAnnotations(source_annotation, target_annotation):
-                #if self.compareAnnotations(source_annotation, targetModel_reactionsAnnot[y]):
+                #if self.compareMIRIAMAnnotations(source_annotation, target_annotation):
+                #if self.compareMIRIAMAnnotations(source_annotation, targetModel_reactionsAnnot[y]):
                 if self.compareAnnotations_annot_dict(source_annotation, targetModel_reactionsAnnot[y]):
                     #sourceReactionsID_targetReactionsID[self.model.reactions[i].getId()] = target_model.reactions[y].getId()
                     sourceReactionsID_targetReactionsID[source_reaction.getId()] = target_model.getReaction(y).getId()

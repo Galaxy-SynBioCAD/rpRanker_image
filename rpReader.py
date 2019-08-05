@@ -59,7 +59,7 @@ class rpReader:
         #input files
         #TODO: remove all the rp parameters since these should not be used, 
         self.rp_strc = None #These are the structures contained within the output of rp2paths
-        self.rp_transformation = None
+        self.rp_transformation = {}
         self.deprecatedMNXM_mnxm = None
         self.deprecatedMNXR_mnxr = None
         self.mnxm_strc = None #There are the structures from MNXM
@@ -67,8 +67,8 @@ class rpReader:
         self.rr_reactions = None
         self.chemXref = None
         self.compXref = None
-        self.rp_paths = None
-        self.sbml_paths = None
+        self.rp_paths = {}
+        self.sbml_paths = {}
         #self.reacXref = None #for the moment we are not using it, we are adding heterologous reactions
         if not self._loadCache():
             raise ValueError
@@ -412,6 +412,103 @@ class rpReader:
     ############################# JSON input ############################## 
     #######################################################################
 
+    ''' OLD BILAL
+    ## Function to generate an SBLM model from a json file
+    #
+    #  Read the json files of a folder describing pathways and generate an SBML file for each
+    #
+    #  @param self Object pointer
+    #  @return rpsbml.document the SBML document
+    #  TODO: remove the default MNXC3 compartment ID
+    #  TODO: change the ID of all species to take a normal string and not sepcial caracters
+    def jsonToSBML(self, json_dict, pathId='rp_pathway', compartment_id='MNXC3'):
+        pathNum = 1
+        ## loop trouhg all pathways in json format already loaded as dictionnary 
+        ## 1) create a generic Model, i.e the structure and unit definitions that will be used the most
+        rpsbml = rpSBML('rp_'+str(pathNum))
+        #rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum)) # TODO: add self.compXref as per Melchior
+        rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
+        ## 2) create the pathway (groups)
+        rpsbml.createPathway(pathId) ## Create the heterologous pathway
+        rp_stochio = {}
+        for node in json_dict['elements']['nodes']:
+            ## ListOfSpecies
+            if node['data']['type']=='compound':
+                ### create a specie
+                rpsbml.createSpecies(node['data']['id'], 
+                                    self.inchikey_mnxm, 
+                                    None, 
+                                    node['data']['InChI'], 
+                                    node['data']['id'], 
+                                    node['data']['SMILES'], 
+                                    compartment_id)
+                #if node['data']['isSource']==1:
+                #    target_ID = node['data']['id']
+            ## Create a dictionnary containing all the reactions 
+            elif node['data']['type']=='reaction':
+                step = node['data']['Iteration']
+                ### rp_transformation like (scope.scv)
+                #self.rp_transformation[node['data']['id']] = {
+                #        'rule': node['data']['Reaction SMILES'], 
+                #        'ec': [i for i in node['data']['EC number']]}
+                ### rp_paths like (out_paths.csv)
+                #hack, pick the first rule, usually have the biggest diameter,
+                #need to write a function to do that
+                if not pathNum in self.rp_paths:
+                    self.rp_paths[pathNum] = {}
+                if not step in self.rp_paths[pathNum]:
+                    self.rp_paths[pathNum][step] = {}
+                if node['data']['Rule ID']:
+                    rule_id = node['data']['Rule ID'][0]
+                else:
+                    rule_id = None
+                self.rp_paths[pathNum][step][1] = {'rule_id': rule_id, 
+                        'right': {},
+                        'left': {},
+                        'path_id': pathNum,
+                        'step': step,
+                        'sub_step': 1,
+                        'transformation_id': node['data']['id'],
+                        'rule_score': node['data']['Score'],
+                        'smiles': node['data']['Reaction SMILES']}
+                rp_stochio.update(node['data']['Stoechiometry'])
+        ## Substrats and products for each reactions in the reactions dictionnary
+        for reaction in json_dict['elements']['edges']:
+            if len(reaction['data']['target'].split('-'))==3:
+                #self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]\['left'][reaction['data']['target'].split('-')[0]] = rp_stochio[reaction['data']['target']]
+                self.rp_paths[pathNum][]
+            else:
+                self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stochio[reaction['data']['source']]
+        ## ListOfReactions
+        for step in self.rp_paths[pathNum]:
+            #TODO: reorganise to fir with updated version
+            rpsbml.createReaction('RP'+step.keys().split('-')[7], # name of reaction
+                    'B_999999', #only for genericModel
+                    'B_0', #only for genericModel
+                    step[1],
+                    step[1]['smiles'],
+                    {},
+                    [], #rp_transformation #TODO: need to pass a list of EC numbers
+                    compartment_id)
+            ## targetSink reaction    
+        targetRule = {'rule_id': None, 'left': {target_ID: 1}, 'right': [], 'step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+        #TODO: reorganise to fir the updated version of the function
+        rpsbml.createReaction('targetSink',
+                'B_999999',
+                'B_0',
+                targetRule,
+                None,
+                {},
+                [], #rp_transformation #TODO: need to pass a list of EC numbers
+                compartment_id)
+        rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
+        self.sbml_paths['rp_'+str(pathNum)] = rpsbml
+        #TODO: these will be handled by galaxy tools and not here:
+        ## Writting 
+        #libsbml.writeSBML(rpsbml.document, path+'/RP_model_from_json'+str(pathNum)+'.xml')
+        #return rpsbml.document
+    '''
+
 
     ## Function to generate an SBLM model from a json file
     #
@@ -421,85 +518,67 @@ class rpReader:
     #  @return rpsbml.document the SBML document
     #  TODO: remove the default MNXC3 compartment ID
     #  TODO: change the ID of all species to take a normal string and not sepcial caracters
-    def jsonToSBML(self, json_paths, pathId='rp_pathway', compartment_id='MNXC3'):
+    def jsonToSBML(self, json_dict, pathId='rp_pathway', compartment_id='MNXC3'):
         pathNum = 1
-        ## loop trouhg all pathways in json format already loaded as dictionnary 
-        for data in json_paths:
-            ## 1) create a generic Model, i.e the structure and unit definitions that we will be used the most
-            rpsbml = rpSBML.rpSBML('rp_'+str(pathNum))
-            #rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum)) # TODO: add self.compXref as per Melchior
-            rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
-            ## 2) create the pathway (groups)
-            rpsbml.createPathway(pathId) ## Create the heterologous pathway
-            self.rp_paths = {}
-            rp_stochio = {}
-            for node in data['elements']['nodes']:
-                ## ListOfSpecies
-                if node['data']['type'] == 'compound':
-                    try:
-                        tmp_inchi = self.convert_depiction(node['data']['SMILES'], 'smiles', {'inchi'})
-                    except DepictionError as e:
-                        logging.warning('Cannot convert the smiles to inchi')
-                        logging.warning(e)
-                    ### create a specie
-                    rpsbml.createSpecies(node['data']['id'].split('-')[0], self.inchikey_mnxm, None, tmp_inchi['inchi'], node['data']['id'], node['data']['SMILES'], compartment_id)
-                    if node['data']['isSource'] == 1:
-                        target_ID = node['data']['id'].split('-')[0]
-                ## Create a dictionnary containing all the reactions 
-                elif node['data']['type'] == 'reaction':
-                    step = node['data']['iteration']
-                    ### rp_transformation like (scope.scv)
-                    rp_transformation[node['data']['id']] = {'rule': node['data']['Reaction SMILES'], 'ec': [i for i in [node['data']['EC number']]]}
-                    ### rp_paths like (out_paths.csv)
-                    self.rp_paths[pathNum][step][1] = {'rule_id': node['data']['Rule ID'][0], #hack, pick the first rule, usually have the biggest diameter, need to writ a function to do that
-                            'right':{},
-                            'left':{},
-                            'path_id': pathNum,
-                            'step': step,
-                            'sub_step': 1,
-                            'transformation_id': node['data']['id'],
-                            'rule_score': node['data']['Score'],
-                            ### not in the original dictionnary
-                            #'EC_number': node['data']['EC number'],
-                            #'diameter': node['data']['Diameter'],
-                            #'iteration': node['data']['Iteration'],
-                            'smiles': node['data']['Reaction SMILES']}
-                    rp_stochio.update(node['data']['Stoechiometry'])
-            ## Substrats and products for each reactions in the reactions dictionnary
-            for reaction in data['elements']['edges']:
-                if len(reaction['data']['target'].split('-')) == 3:
-                    self.rp_paths[pathNum][reaction['data']['source'].split('-')[-1]][1]['left'][reaction['data']['target'].split('-')[0]] = rp_stochio[reaction['data']['target']]
+        #create the SBML
+        rpsbml = rpSBML('rp_'+str(pathNum))
+        rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
+        rpsbml.createPathway(pathId) 
+        ### gather the data
+        all_reac = {}
+        rp_paths = {}
+        stochio = {}
+        for node in json_dict['elements']['nodes']:
+            # add the species to the SBML directly
+            if node['data']['type']=='compound':
+                rpsbml.createSpecies(node['data']['id'].replace('-', ''), 
+                                    self.inchikey_mnxm, 
+                                    None, 
+                                    node['data']['InChI'], 
+                                    node['data']['id'], 
+                                    node['data']['SMILES'], 
+                                    compartment_id)
+            ## Create a dictionnary containing all the reactions 
+            elif node['data']['type']=='reaction':
+                #note sure about this... need to ask 
+                step = node['data']['Iteration']
+                #hack, pick the first rule, usually have the biggest diameter
+                all_reac[node['data']['id']] = {'rule_id': node['data']['id'], 
+                        'right': {},
+                        'left': {},
+                        'path_id': pathNum,
+                        'step': step,
+                        'sub_step': 1,
+                        'transformation_id': node['data']['id'],
+                        'rule_score': node['data']['Score'],
+                        'smiles': node['data']['Reaction SMILES'],
+                        'ec': [i for i in node['data']['EC number']]}
+                stochio[node['data']['id']] = node['data']['Stoechiometry']
+        for reaction_node in json_dict['elements']['edges']:
+            #source @@@ CHECK THIS
+            if not len(reaction_node['data']['source'].split('-'))==3:
+                if not reaction_node['data']['source'] in all_reac:
+                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                 else:
-                    self.rp_paths[pathNum][reaction['data']['target'].split('-')[-1]][1]['right'][reaction['data']['source'].split('-')[0]] = rp_stochio[reaction['data']['source']]
-            ## ListOfReactions
-            for step in self.rp_paths[pathNum]:
-                #TODO: reorganise to fir with updated version
-                rpsbml.createReaction('RP'+step.keys().split('-')[7], # name of reaction
-                        'B_999999', #only for genericModel
-                        'B_0', #only for genericModel
-                        step[1],
-                        step[1]['smiles'],
-                        {},
-                        [], #rp_transformation #TODO: need to pass a list of EC numbers
-                        compartment_id)
-                ## targetSink reaction    
-            targetRule = {'rule_id': None, 'left': {target_ID: 1}, 'right': [], 'step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
-            #TODO: reorganise to fir the updated version of the function
-            rpsbml.createReaction('targetSink',
-                    'B_999999',
-                    'B_0',
-                    targetRule,
-                    None,
+                    all_reac[reaction_node['data']['source']]['left'][reaction_node['data']['target'].replace('-', '')] = stochio[reaction_node['data']['source']][reaction_node['data']['target']]
+            #target
+            if not len(reaction_node['data']['target'].split('-'))==3:
+                if not reaction_node['data']['target'] in all_reac:
+                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                else:
+                    all_reac[reaction_node['data']['target']]['right'][reaction_node['data']['source'].replace('-', '')] = stochio[reaction_node['data']['target']][reaction_node['data']['source']]
+        # now that all the information has been gathered pass it to the SBML
+        for rule_id in all_reac:
+            rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']), 
+                    'B_999999', #only for genericModel
+                    'B_0', #only for genericModel
+                    {'left': all_reac[rule_id]['left'], 'right': all_reac[rule_id]['right']},
+                    compartment_id,
+                    all_reac[rule_id]['smiles'],
+                    all_reac[rule_id]['ec'],
                     {},
-                    [], #rp_transformation #TODO: need to pass a list of EC numbers
-                    compartment_id)
-            rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
-            self.sbml_paths['rp_'+str(pathNum)] = rpsbml
-            #TODO: these will be handled by galaxy tools and not here:
-            ## Writting 
-            #libsbml.writeSBML(rpsbml.document, path+'/RP_model_from_json'+str(pathNum)+'.xml')
-            #return rpsbml.document
-
+                    pathId)
+        return rpsbml
 
     #############################################################################################
     ############################### validation data tsv #########################################
