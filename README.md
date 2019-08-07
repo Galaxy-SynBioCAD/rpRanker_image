@@ -160,7 +160,7 @@ Or pass your own dictionnary of rpSBML objects, then calculate the flux using:
 ```
 rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
 for rpsbml_name in rpsbml_paths:
-    rptools.runFBA(rpsbml_paths[rpsbml_name], gem_model) 
+    rptools.runFBA(rpsbml_paths[rpsbml_name], path_to_gem_model) 
 ```
 
 gen_model is a genome scale model (GEM) but one can pass any SBML file to it. However, for it to work one needs to have an SBML model that include the same chemical species as the sink provided to RP2 or RP3.
@@ -207,6 +207,14 @@ json_data = open(path_to_json)
 json_dict = json.load(json_data)
 rpreader = rpRanker.rpReader()
 rpsbml = rpreader.jsonToSBML(json_dict)
+rpcofactors = rpRanker.rpCofactors()
+rpcofactors.addCofactors(rpsbml)
 rptools = rpRanker.tools()
-rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+rptools.runFBA(rpsbml_paths[rpsbml, path_to_gem_model)
+target_reaction = rpsbml.model.getReaction('targetSink')
+ibisba_annot_dict = rpsbml.readIBISBAAnnotation(target_reaction.getAnnotation())
+ibisba_annot_dict['fba_rpFBA_obj'] <-- thats the RP target flux
 ```
+
+fba_rpFBA_obj is the RP target flux using it as an objective. However, if the GEM model contains an objective using the FBC package or indeed if another objective was manually added, one can access the fluxes of the target under different objective function by selecting its name.
+
