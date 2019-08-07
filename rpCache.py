@@ -4,7 +4,7 @@ import gzip
 import os
 import json
 import pickle
-import sqlite3
+#import sqlite3
 import re
 import itertools
 from ast import literal_eval
@@ -216,8 +216,10 @@ class rpCache:
                             mnxm_strc[mnxm]['smiles'] = tmp['smiles']
                         if not mnxm_strc[mnxm]['inchikey'] and tmp['inchikey']:
                             mnxm_strc[mnxm]['inchikey'] = tmp['inchikey']
-                            if not tmp['inchikey'] in inchikey_mnxm:
-                                inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
+                        #### inchikey_mnxm ###
+                        if not tmp['inchikey'] in inchikey_mnxm:
+                            inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
+                        inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
                     else:
                         #check to see if the inchikey is valid or not
                         otype = set({})
@@ -243,7 +245,10 @@ class rpCache:
                             logging.warning('Could not convert some of the structures: '+str(tmp))
                             logging.warning(e)
                         mnxm_strc[tmp['mnxm']] = tmp
-                        inchikey_mnxm[tmp['inchikey']] = {'mnx':tmp['mnxm']}
+                        #### inchikey_mnxm ###
+                        if not tmp['inchikey'] in inchikey_mnxm:
+                            inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
+                        inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
         return mnxm_strc, inchikey_mnxm
 
 

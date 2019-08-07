@@ -22,14 +22,13 @@ NOTE: one must import rpRanker on the root of the rpRanker folder
 
 ### Cache
 
-The ranker requires pre-parsing a number of files before this is able to be run:
+The ranker requires pre-parsing a number of files (listed in input_cache README.md) from equilibrator, retrorules and MetaNetX by running:
 
 ```
 python rpCache.py
 ```
 
-The program expects there to be a folder with a collection of files from equilibrator, retrorules and MetaNetX. It generates a folder with a collection of pickle files that are then used.
-
+It generates a folder with a collection of pickle files that are then used.
 
 ### Parse and Generate SBML's
 
@@ -40,7 +39,7 @@ import rpRanker
 rpreader = rpRanker.rpReader()
 ```
 
-For RetroPath2.0:
+#### RetroPath2.0
 
 ```
 rpreader.compounds(rp2paths_compounds_file)
@@ -52,13 +51,15 @@ rpreader.sbml_paths
 
 max_rule_ids (default 10) represents the maximal allowed subpaths to be returned. Indeed RetroPath2.0 may have multiple rules associated with each reaction. rpReader takes that into consideration by enumerating all the possible pathways that may be formed from the possible different cofactors associated with the reactions rules. To avoid a combinatorial explotion, the rules with the highest score are used. The results are contained within the rpreader.sbml_paths parameter.
 
-For RetroPath3.0 with a single JSON:
+#### RetroPath3.0 
+
+For a single JSON file:
 
 ```
 rpsbml = rpreader.jsonToSBML(json_dict)
 ```
 
-The input must be a parsed JSON as a dictionnary. It returns a rpSBML object.
+The input must be a parsed JSON as a dictionnary (not a file). It returns a rpSBML object.
 
 For RetroPath3.0 with a collection of JSON's (batch mode):
 
@@ -197,3 +198,15 @@ rpreader.genSink(rpsbml, path_to_csv, compartmentId)
 ```
 
 path_to_csv is the path to the output CSV sink file, while compartmentId is the compartment from which the sink will be generated.
+
+### Mathilde
+
+```
+import rpRanker
+json_data = open(path_to_json)
+json_dict = json.load(json_data)
+rpreader = rpRanker.rpReader()
+rpsbml = rpreader.jsonToSBML(json_dict)
+rptools = rpRanker.tools()
+rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+```

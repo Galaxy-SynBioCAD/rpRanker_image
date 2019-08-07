@@ -427,7 +427,6 @@ class rpReader:
             pathNum += 1
             
 
-
     ## Function to generate an SBLM model from a json file
     #
     #  Read the json files of a folder describing pathways and generate an SBML file for each
@@ -447,19 +446,26 @@ class rpReader:
         all_reac = {}
         rp_paths = {}
         stochio = {}
+        inchikey_cid = {}
         for node in json_dict['elements']['nodes']:
             # add the species to the SBML directly
             if node['data']['type']=='compound':
                 try:
-                    rpsbml.createSpecies(node['data']['id'].replace('-', ''), 
-                                        self.chemXref[self.inchikey_mnxm[node['data']['id']]['mnx']],
+                    #hack, pick the smallest mnx ID if there are multiple ones
+                    cid = sorted(self.inchikey_mnxm[node['data']['id']]['mnx'], key=lambda x: int(x[4:]))[0]
+                except KeyError:
+                    cid = node['data']['id'].replace('-', '') 
+                inchikey_cid[node['data']['id'].replace('-', '')] = cid
+                try:
+                    rpsbml.createSpecies(cid, 
+                                        self.chemXref[cid],
                                         None, 
                                         node['data']['InChI'], 
                                         node['data']['id'], 
                                         node['data']['SMILES'], 
                                         compartment_id)
                 except KeyError:
-                    rpsbml.createSpecies(node['data']['id'].replace('-', ''), 
+                    rpsbml.createSpecies(cid, 
                                         {},
                                         None, 
                                         node['data']['InChI'], 
@@ -481,49 +487,36 @@ class rpReader:
                         'transformation_id': node['data']['id'],
                         'rule_score': node['data']['Score'],
                         'smiles': node['data']['Reaction SMILES'],
-                        'ec': filter(None, [i for i in node['data']['EC number']])}
+                        'ec': list(filter(None, [i for i in node['data']['EC number']]))}
                 stochio[node['data']['id']] = node['data']['Stoechiometry']
         for reaction_node in json_dict['elements']['edges']:
             if not len(reaction_node['data']['source'].split('-'))==3:
                 if not reaction_node['data']['source'] in all_reac:
                     logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                 else:
+                    rid = reaction_node['data']['source']
                     try:
-                        all_reac[reaction_node['data']['source']]['right'][reaction_node['data']['target'].replace('-', '')] = stochio[reaction_node['data']['source']][reaction_node['data']['target']]
+                        cid = inchikey_cid[reaction_node['data']['target'].replace('-', '')]
                     except KeyError:
-                        #if there is a keyerror then the stochio is 1.0
-                        all_reac[reaction_node['data']['source']]['right'][reaction_node['data']['target'].replace('-', '')] = 1.0
+                        cid = reaction_node['data']['target'].replace('-', '')
+                    try:
+                        all_reac[rid]['right'][cid] = stochio[rid][cid]
+                    except KeyError:
+                        all_reac[rid]['right'][cid] = 1.0
             #target
             if not len(reaction_node['data']['target'].split('-'))==3:
                 if not reaction_node['data']['target'] in all_reac:
                     logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                 else:
+                    rid = reaction_node['data']['target']
                     try:
-                        all_reac[reaction_node['data']['target']]['left'][reaction_node['data']['source'].replace('-', '')] = stochio[reaction_node['data']['target']][reaction_node['data']['source']]
+                        cid = inchikey_cid[reaction_node['data']['source'].replace('-', '')]
                     except KeyError:
-                        #if there is a KeyError then the stochio is 1.0
-                        all_reac[reaction_node['data']['target']]['left'][reaction_node['data']['source'].replace('-', '')] = 1.0
-            ''' This produces multiple reactants --> should not happen for monocomponent reactions
-            if not len(reaction_node['data']['source'].split('-'))==3:
-                if not reaction_node['data']['source'] in all_reac:
-                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
-                else:
+                        cid = reaction_node['data']['source'].replace('-', '')
                     try:
-                        all_reac[reaction_node['data']['source']]['left'][reaction_node['data']['target'].replace('-', '')] = stochio[reaction_node['data']['source']][reaction_node['data']['target']]
+                        all_reac[rid]['left'][cid] = stochio[rid][cid]
                     except KeyError:
-                        #if there is a keyerror then the stochio is 1.0
-                        all_reac[reaction_node['data']['source']]['left'][reaction_node['data']['target'].replace('-', '')] = 1.0
-            #target
-            if not len(reaction_node['data']['target'].split('-'))==3:
-                if not reaction_node['data']['target'] in all_reac:
-                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
-                else:
-                    try:
-                        all_reac[reaction_node['data']['target']]['right'][reaction_node['data']['source'].replace('-', '')] = stochio[reaction_node['data']['target']][reaction_node['data']['source']]
-                    except KeyError:
-                        #if there is a KeyError then the stochio is 1.0
-                        all_reac[reaction_node['data']['target']]['right'][reaction_node['data']['source'].replace('-', '')] = 1.0
-            '''
+                        all_reac[rid]['left'][cid] = 1.0
         # now that all the information has been gathered pass it to the SBML
         for rule_id in all_reac:
             rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']), 
