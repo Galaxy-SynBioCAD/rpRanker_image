@@ -1,4 +1,5 @@
 from .rpSBML import rpSBML
+from .rpFBA import rpFBA
 from io import BytesIO
 import tarfile
 import libsbml
@@ -120,13 +121,13 @@ class tools:
 
 
     def runFBA(self, inSBMLtar, inModel):
-        rpsbml_paths = readrpSBMLtar(inSBMLtar)
+        rpsbml_paths = self.readrpSBMLtar(inSBMLtar)
         for rpsbml_name in rpsbml_paths:
             #read the input sbml model
-            input_rpsbml = rpRanker.rpSBML('inputMergeModel')
+            input_rpsbml = rpSBML('inputMergeModel')
             input_rpsbml.readSBML(inModel)
             rpsbml_paths[rpsbml_name].mergeModels(input_rpsbml.model)
-            rpfba = rpRanker.rpFBA(input_rpsbml)
+            rpfba = rpFBA(input_rpsbml)
             rpfba.allObj()
             ##### pass FBA results to the original model ####
             groups = rpfba.rpsbml.model.getPlugin('groups')

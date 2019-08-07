@@ -1,4 +1,4 @@
-#rpRanker
+# rpRanker
 
 ## Docker Base image
 
@@ -75,7 +75,7 @@ rptools = rpRanker.tools()
 rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
-Or pass your own dictionnary of rpSBML objects:
+Or pass your own dictionnary of rpSBML objects and add the cofactors:
 
 ```
 rpcofactors = rpRanker.rpCofactors()
@@ -98,7 +98,7 @@ rptools = rpRanker.tools()
 rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
-Or pass your own dictionnary of rpSBML objects:
+Or pass your own dictionnary of rpSBML objects and calculate the thermodynamics:
 
 ```
 rpthermo = rpRanker.rpThermo()
@@ -121,7 +121,7 @@ rptools = rpRanker.tools()
 rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
-Or pass your own dictionnary of rpSBML objects, then pass:
+Or pass your own dictionnary of rpSBML objects, then query the Selenzyme web tool:
 
 ```
 rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
@@ -144,12 +144,15 @@ rptools = rpRanker.tools()
 rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
-Or pass your own dictionnary of rpSBML objects, then call the rpCofactors:
+Or pass your own dictionnary of rpSBML objects, then calculate the flux using:
 
 ```
-rptools.runFBA(path_to_tar, gem_model) 
-    rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
+for rpsbml_name in rpsbml_paths:
+    rptools.runFBA(rpsbml_paths[rpsbml_name], gem_model) 
 ```
+
+gen_model is a genome scale model (GEM) but one can pass any SBML file to it. However, for it to work one needs to have an SBML model that include the same chemical species as the sink provided to RP2 or RP3.
 
 To export the results as a TAR one can use the tools package:
 
@@ -157,7 +160,30 @@ To export the results as a TAR one can use the tools package:
 rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
 ``` 
 
+### Report
 
+Open the collections of rpSBML's as a dictionnary:
 
+```
+rptools = rpRanker.tools()
+rptools.readrpSBMLtar(path_to_tar)
+``` 
 
+Or pass your own dictionnary of rpSBML objects, then generate the csv:
 
+```
+tools.writeReport(rpreader.sbml_paths, path_to_csv)
+```
+
+### Generate Sink
+
+Generate the sink (for RetroPath2.0) from a GEM model:
+
+```
+rpsbml = rpSBML('tmp')
+rpsbml.readSBML(params.inSBML)
+rpreader = rpRanker.rpReader()
+rpreader.genSink(rpsbml, path_to_csv, compartmentId)
+```
+
+path_to_csv is the path to the output CSV sink file, while compartmentId is the compartment from which the sink will be generated.
