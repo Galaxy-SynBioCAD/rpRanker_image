@@ -1,6 +1,6 @@
 #rpRanker
 
-## Base image
+## Docker Base image
 
 Create the base image for all the RetroPath2.0 tools using the rpRanker scripts
 
@@ -8,5 +8,156 @@ Create the base image for all the RetroPath2.0 tools using the rpRanker scripts
 docker build -t ibisba/rpbase -f Dockerfile .
 ```
 
-Essemble of packages that handle SBML types  
+## Native run
+
+### Cache
+
+The ranker requires pre-parsing a number of files before this is able to be run:
+
+```
+python rpCache.py
+```
+
+The program expects there to be a folder with a collection of files from equilibrator, retrorules and MetaNetX. It generates a folder with a collection of pickle files that are then used.
+
+
+### Parse and Generate SBML's
+
+To analyse the output of RetroPath2.0 (combined with RP2paths) and RetroPath3.0, first parse the outputs to SBML's using rpReader:
+
+```
+import rpRanker
+rpreader = rpRanker.rpReader()
+```
+
+For RetroPath2.0:
+
+```
+rpreader.compounds(rp2paths_compounds_file)
+rpreader.transformation(rp2paths_scope)
+rpreader.outPaths(rp2paths_out_paths, max_rule_ids)
+rpreader.pathsToSBML()
+rpreader.sbml_paths
+```
+
+max_rule_ids (default 10) represents the maximal allowed subpaths to be returned. Indeed RetroPath2.0 may have multiple rules associated with each reaction. rpReader takes that into consideration by enumerating all the possible pathways that may be formed from the possible different cofactors associated with the reactions rules. To avoid a combinatorial explotion, the rules with the highest score are used. The results are contained within the rpreader.sbml_paths parameter.
+
+For RetroPath3.0 with a single JSON:
+
+```
+rpsbml = rpreader.jsonToSBML(json_dict)
+```
+
+The input must be a parsed JSON as a dictionnary. It returns a rpSBML object.
+
+For RetroPath3.0 with a collection of JSON's (batch mode):
+
+```
+rpreader.collectionJSON(collection_json_dict)
+rpreader.sbml_paths
+```
+
+The input is a dictionnary of JSON dictionnaries and the results are contained within the rpreader.sbml_paths parameter.
+
+To export the results as a TAR one can use the tools package:
+
+```
+tools = rpRanker.tools()
+tools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+``` 
+
+### Add the cofactors
+
+Open the collections of rpSBML's as a dictionnary:
+
+```
+rptools = rpRanker.tools()
+rptools.readrpSBMLtar(path_to_tar)
+``` 
+
+Or pass your own dictionnary of rpSBML objects:
+
+```
+rpcofactors = rpRanker.rpCofactors()
+for rpsbml_name in rpsbml_paths:
+    rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+```
+
+To export the results as a TAR one can use the tools package:
+
+```
+rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+``` 
+
+### Thermodynamics
+
+Open the collections of rpSBML's as a dictionnary:
+
+```
+rptools = rpRanker.tools()
+rptools.readrpSBMLtar(path_to_tar)
+``` 
+
+Or pass your own dictionnary of rpSBML objects:
+
+```
+rpthermo = rpRanker.rpThermo()
+for rpsbml_name in rpsbml_paths:
+    rpthermo.pathway_drG_prime(rpsbml.paths[rpsbml_name])
+```
+
+To export the results as a TAR one can use the tools package:
+
+```
+rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+``` 
+
+### Selenzyme
+
+Open the collections of rpSBML's as a dictionnary:
+
+```
+rptools = rpRanker.tools()
+rptools.readrpSBMLtar(path_to_tar)
+``` 
+
+Or pass your own dictionnary of rpSBML objects, then pass:
+
+```
+rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
+for rpsbml_name in rpsbml_paths:
+    rptools.rpSelenzyme(rpreader.sbml_paths[rpsbml_name], selenzyme_rest_url)
+```
+
+To export the results as a TAR one can use the tools package:
+
+```
+tools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+``` 
+
+### FBA
+
+Open the collections of rpSBML's as a dictionnary:
+
+```
+rptools = rpRanker.tools()
+rptools.readrpSBMLtar(path_to_tar)
+``` 
+
+Or pass your own dictionnary of rpSBML objects, then call the rpCofactors:
+
+```
+rptools.runFBA(path_to_tar, gem_model) 
+    rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+```
+
+To export the results as a TAR one can use the tools package:
+
+```
+rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+``` 
+
+
+
+
 

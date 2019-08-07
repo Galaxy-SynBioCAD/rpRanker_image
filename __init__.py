@@ -4,5 +4,6 @@ from .rpCofactors import rpCofactors
 from .rpSBML import rpSBML
 from .rpFBA import rpFBA
 from .rpThermo import rpThermo
+from .tools import tools
 from . import component_contribution
 #from .component_contribution import *

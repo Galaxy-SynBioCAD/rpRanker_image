@@ -1,73 +1,139 @@
-#list of functions that are usefull but not directly related to the rpFBA
-#import cobra
-import csv
-#import libsbml
-import rpSBML
-import pickle
-import gzip
+from .rpSBML import rpSBML
+from io import BytesIO
+import tarfile
+import libsbml
+import sys
 import os
 
-## Generate the sink from a given model and the 
-#
-# NOTE: this only works for MNX models, since we are parsing the id
-# TODO: change this to read the annotations and extract the MNX id's
-#
-def genSink(sbml_model, file_out, compartment_id='MNXC3'):
-    ### open the cache ###
-    dirname = os.path.dirname(os.path.abspath( __file__ ))
-    smiles_inchi = pickle.load(gzip.open(dirname+'/cache/smiles_inchi.pickle.gz', 'rb'))
-    rpsbml = rpSBML.rpSBML('tmp')
-    rpsbml.readModel(sbml_model)
-    cytoplasm_species = []
-    for i in rpsbml.model.getListOfSpecies():
-        if i.getCompartment()==compartment_id:
-            cytoplasm_species.append(i)
-    with open(file_out, mode='w') as f:
-        writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-        writer.writerow(['Name','InChI'])
-        for i in cytoplasm_species:
-            res = rpsbml.readAnnotation(i.getAnnotation())
-            #extract the MNX id's
-            try:
-                mnx = res['metanetx.chemical'][0]
-            except KeyError:
-                continue
-            #mnx = i.getId().split('__')[0]
-            try:
-                inchi = meta_inchi[mnx]
-            except KeyError:
-                inchi = None
-            if mnx and inchi:
-                writer.writerow([mnx,inchi])
+class tools:
+    def __init__(self):
+        self.pathId = 'rp_pathway'
 
-'''
-def genSink(path_cobraModel, path_chem_prop, file_out_name=None, compartment=None):
-    """Function to extract from an SBML MNX model the available compounds
-    and generating the sink for RetroPath2.0. There is the option to
-    generate the sink from a particular model compartment
-    """
-    #open the model file and extract all the metabolites; make sure they are unique
-    model = cobra.io.read_sbml_model(path_cobraModel)
-    if compartment:
-        meta = set([i.id.split('__')[0] for i in model.metabolites if i.id.split('__')[2]==compartment])
-    else:
-        meta = set([i.id.split('__')[0] for i in model.metabolites])
-    #open the MNX list of all chemical species
-    meta_inchi = {}
-    with open(path_chem_prop) as f:
-        reader = csv.reader(f, delimiter='\t')
-        for row in reader:
-            if not row[0][0]=='#' and row[0][:3]=='MNX' and not row[5]=='':
-                meta_inchi[row[0]] = row[5]
-    #write the results to a new file
-    if not file_out_name:
-        file_out_name = 'sink.csv'
-    with open(file_out_name, mode='w') as f:
-        writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-        writer.writerow(['Name','InChI'])
-        for m in meta:
+
+    ## Function that takes into input a TAR collection of sbml's and opens them in memory
+    #
+    #
+    def readrpSBMLtar(self, inputTar):
+        rpsbml_paths = {}
+        tar = tarfile.open(inputTar)
+        for member in tar.getmembers():
+            rpsbml_paths[member.name] = rpSBML(member.name,libsbml.readSBMLFromString(tar.extractfile(member).read().decode("utf-8")))
+        return rpsbml_paths
+
+
+    ## Function to write a collection of SBML's to TAR.XZ
+    #
+    #
+    def writerpSBMLtar(self, rpsbml_paths, outTar):
+        with tarfile.open(outTar, 'w:xz') as tf:
+            for rpsbml_name in rpsbml_paths:
+                data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
+                fiOut = BytesIO(data)
+                info = tarfile.TarInfo(rpsbml_name)
+                info.size = len(data)
+                tf.addfile(tarinfo=info, fileobj=fiOut)
+
+
+    ## given a reaction SMILES query Selenzyme for the Uniprot ID's and its associated score
+    #
+    #
+    #def selenzymeREST(reaction_smile, url='http://selenzyme.synbiochem.co.uk/REST'):
+    def selenzymeREST(self, reaction_smile, url):
+        #columns = ['smarts', 'Seq. ID', 'Score', 'Organism Source', 'Description']
+        r = requests.post( os.path.join(url, 'Query') , json={'smarts': reaction_smile} )
+        res = json.loads( r.content.decode('utf-8') )
+        uniprotID_score = {}
+        if res['data'] is not None:
+            val = json.loads( res['data'] )
+        else:
+            raise ValueError
+        if 'Seq. ID' in val and len(val['Seq. ID'])>0:
+            for ix in sorted(val['Seq. ID'], key=lambda z: int(z)):
+                uniprotID_score[val['Seq. ID'][ix]] = val['Score'][ix]
+        else:
+            raise ValueError
+        return uniprotID_score
+
+
+    ## Extract the reaction SMILES from an SBML, query selenzyme and write the results back to the SBML
+    #
+    #
+    def rpSelenzyme(self, rpsbml, url, pathId='rp_pathway'):
+        groups = rpsbml.model.getPlugin('groups')
+        rp_pathway = groups.getGroup(pathId)
+        for member in rp_pathway.getListOfMembers():
+            reaction = rpsbml.model.getReaction(member.getIdRef())
+            annot = reaction.getAnnotation()
+            bag_ibisba = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
+            bag_miriam = annot.getChild('RDF').getChild('Description').getChild('is').getChild('Bag')
+            sel = bag_ibisba.getChild('selenzyme')
+            if sel.toXMLString()=='':
+                annot_string = '''
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+      <rdf:Ibisba rdf:about="toadd">
+        <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
+          <ibisba:selenzyme>
+          </ibisba:selenzyme>
+        </ibisba:ibisba>
+      </rdf:Ibisba>
+    </rdf:RDF>'''
+                tmp_annot = libsbml.XMLNode.convertStringToXMLNode(annot_string)
+                bag_ibisba.addChild(tmp_annot.getChild('Ibisba').getChild('ibisba').getChild('selenzyme'))
+                sel = bag_ibisba.getChild('selenzyme')
+            react_smiles = bag_ibisba.getChild('smiles').getChild(0).toString()
             try:
-                writer.writerow([m, meta_inchi[m]])
-            except KeyError:
-                print('Cannot find '+str(m)+' in '+str(path_chem_prop))
-'''
+                uniprotID_score = selenzymeREST(react_smiles.replace('&gt;', '>'), url)
+            except ValueError:
+                continue
+            for uniprot in uniprotID_score:
+                ##### IBIBSA ###
+                annot_string = '''
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+      <rdf:Ibisba rdf:about="toadd">
+        <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
+          <ibisba:selenzyme>
+            <ibisba:'''+str(uniprot)+''' value="'''+str(uniprotID_score[uniprot])+'''" />
+          </ibisba:selenzyme>
+        </ibisba:ibisba>
+      </rdf:Ibisba>
+    </rdf:RDF>'''
+                tmp_annot = libsbml.XMLNode.convertStringToXMLNode(annot_string)
+                sel.addChild(tmp_annot.getChild('Ibisba').getChild('ibisba').getChild('selenzyme').getChild(uniprot))
+                ''' to loop through all of them use this
+                for i in range(sel.getNumChildren()):
+                    print(sel.getChild(i).toXMLString())
+                '''
+                ##### MIRIAM ###
+                # NO idea why I have to create such a large tmp annotation to add to a current one
+                annot_string = '''
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:bqbiol="http://biomodels.net/biology-qualifiers/">
+      <rdf:Description rdf:about="TOADD">
+      <bqbiol:is>
+      <rdf:Bag>
+       <rdf:li rdf:resource="https://identifiers.org/uniprot/'''+str(uniprot)+'''" />
+      </rdf:Bag>
+      </bqbiol:is>
+      </rdf:Description>
+    </rdf:RDF>'''
+                q = libsbml.XMLNode.convertStringToXMLNode(annot_string)
+                bag_miriam.addChild(q.getChild('Description').getChild('is').getChild('Bag').getChild('li'))
+
+
+    def runFBA(self, inSBMLtar, inModel):
+        rpsbml_paths = readrpSBMLtar(inSBMLtar)
+        for rpsbml_name in rpsbml_paths:
+            #read the input sbml model
+            input_rpsbml = rpRanker.rpSBML('inputMergeModel')
+            input_rpsbml.readSBML(inModel)
+            rpsbml_paths[rpsbml_name].mergeModels(input_rpsbml.model)
+            rpfba = rpRanker.rpFBA(input_rpsbml)
+            rpfba.allObj()
+            ##### pass FBA results to the original model ####
+            groups = rpfba.rpsbml.model.getPlugin('groups')
+            rp_pathway = groups.getGroup('rp_pathway')
+            for member in rp_pathway.getListOfMembers():
+                reacFBA = rpfba.rpsbml.model.getReaction(member.getIdRef())
+                reacIN = rpsbml_paths[rpsbml_name].model.getReaction(member.getIdRef())
+                reacIN.setAnnotation(reacFBA.getAnnotation())
+            #rpsbml_paths[rpsbml_name] = rpsbml_paths[rpsbml_name]
+            input_rpsbml = None
