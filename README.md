@@ -8,7 +8,17 @@ Create the base image for all the RetroPath2.0 tools using the rpRanker scripts
 docker build -t ibisba/rpbase -f Dockerfile .
 ```
 
+## Requirements
+
+* [libsbml](http://sbml.org/Software/libSBML) - SBML reader/writer
+* [rdkit](https://www.rdkit.org/) - Chemoinformatics software
+* [openbabel](http://openbabel.org/wiki/Main_Page) - Chemical toolbox
+* [pycobra](https://modal.lille.inria.fr/pycobra/) - FBA simulation toolbox
+* [scipy](https://www.scipy.org/) - Scientific package
+
 ## Native run
+
+NOTE: one must import rpRanker on the root of the rpRanker folder
 
 ### Cache
 
