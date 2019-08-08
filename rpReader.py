@@ -500,9 +500,11 @@ class rpReader:
                     except KeyError:
                         cid = reaction_node['data']['target'].replace('-', '')
                     try:
-                        all_reac[rid]['right'][cid] = stochio[rid][cid]
+                        #all_reac[rid]['right'][cid] = stochio[rid][cid]
+                        all_reac[rid]['left'][cid] = stochio[rid][cid]
                     except KeyError:
-                        all_reac[rid]['right'][cid] = 1.0
+                        #all_reac[rid]['right'][cid] = 1.0
+                        all_reac[rid]['left'][cid] = 1.0
             #target
             if not len(reaction_node['data']['target'].split('-'))==3:
                 if not reaction_node['data']['target'] in all_reac:
@@ -514,9 +516,11 @@ class rpReader:
                     except KeyError:
                         cid = reaction_node['data']['source'].replace('-', '')
                     try:
-                        all_reac[rid]['left'][cid] = stochio[rid][cid]
+                        #all_reac[rid]['left'][cid] = stochio[rid][cid]
+                        all_reac[rid]['right'][cid] = stochio[rid][cid]
                     except KeyError:
-                        all_reac[rid]['left'][cid] = 1.0
+                        #all_reac[rid]['left'][cid] = 1.0
+                        all_reac[rid]['right'][cid] = 1.0
         # now that all the information has been gathered pass it to the SBML
         for rule_id in all_reac:
             rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']), 
@@ -538,7 +542,7 @@ class rpReader:
     ##
     #
     #
-    def parseValidation(self, inFile):
+    def parseValidation(self, inFile, mnxHeader=False):
         data = {}
         try:
             for row in csv.DictReader(open(inFile), delimiter='\t'):
@@ -650,7 +654,17 @@ class rpReader:
                 del toRet[path_id]
             else:
                 del toRet[path_id]['isValid']
-        return toRet
+        #reorganise the results around the target products mnx
+        if not mnxHeader:
+            return toRet
+        else:
+            toRetTwo = {}
+            for pathId in toRet:
+                final_pro_mnx = toRet[pathId]['steps'][max(toRet[pathId]['steps'])]['products'][0]['dbref']['mnx'][0]
+                if not final_pro_mnx in toRetTwo:
+                    toRetTwo[final_pro_mnx] = {}
+                toRetTwo[final_pro_mnx][pathId] = toRet[pathId]
+            return toRetTwo
 
 
     ##

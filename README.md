@@ -28,7 +28,7 @@ The ranker requires pre-parsing a number of files (listed in input_cache README.
 python rpCache.py
 ```
 
-It generates a folder with a collection of pickle files that are then used.
+It generates a folder with a collection of pickle files used by the program.
 
 ### Parse and Generate SBML's
 
@@ -38,6 +38,8 @@ To analyse the output of RetroPath2.0 (combined with RP2paths) and RetroPath3.0,
 import rpRanker
 rpreader = rpRanker.rpReader()
 ```
+
+Then depending on your RP version follow the instructions:
 
 #### RetroPath2.0
 
@@ -49,7 +51,7 @@ rpreader.pathsToSBML()
 rpreader.sbml_paths
 ```
 
-max_rule_ids (default 10) represents the maximal allowed subpaths to be returned. Indeed RetroPath2.0 may have multiple rules associated with each reaction. rpReader takes that into consideration by enumerating all the possible pathways that may be formed from the possible different cofactors associated with the reactions rules. To avoid a combinatorial explotion, the rules with the highest score are used. The results are contained within the rpreader.sbml_paths parameter.
+max_rule_ids (default 10) represents the maximal allowed subpaths to be returned. Indeed RetroPath2.0 may have multiple rules associated with each reaction. rpReader takes that into consideration by enumerating all the possible pathways that may be formed from the possible different cofactors associated with the reactions rules. To avoid a combinatorial explosion, the rules with the highest score are used. The results are contained within the rpreader.sbml_paths parameter.
 
 #### RetroPath3.0 
 
@@ -65,7 +67,6 @@ For RetroPath3.0 with a collection of JSON's (batch mode):
 
 ```
 rpreader.collectionJSON(collection_json_dict)
-rpreader.sbml_paths
 ```
 
 The input is a dictionnary of JSON dictionnaries and the results are contained within the rpreader.sbml_paths parameter.
@@ -83,7 +84,7 @@ Open the collections of rpSBML's as a dictionnary:
 
 ```
 rptools = rpRanker.tools()
-rptools.readrpSBMLtar(path_to_tar)
+rpsbml_paths = rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
 Or pass your own dictionnary of rpSBML objects and add the cofactors:
@@ -97,7 +98,7 @@ for rpsbml_name in rpsbml_paths:
 To export the results as a TAR one can use the tools package:
 
 ```
-rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+rptools.writerpSBMLtar(rpsbml_paths, path_to_tar)
 ``` 
 
 ### Thermodynamics
@@ -106,7 +107,7 @@ Open the collections of rpSBML's as a dictionnary:
 
 ```
 rptools = rpRanker.tools()
-rptools.readrpSBMLtar(path_to_tar)
+rpsbml_paths = rptools.readrpSBMLtar(path_to_tar)
 ``` 
 
 Or pass your own dictionnary of rpSBML objects and calculate the thermodynamics:
@@ -120,7 +121,7 @@ for rpsbml_name in rpsbml_paths:
 To export the results as a TAR one can use the tools package:
 
 ```
-rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+rptools.writerpSBMLtar(rpsbml_paths, path_to_tar)
 ``` 
 
 ### Selenzyme
@@ -129,13 +130,12 @@ Open the collections of rpSBML's as a dictionnary:
 
 ```
 rptools = rpRanker.tools()
-rptools.readrpSBMLtar(path_to_tar)
+rpsbml_paths = readrpSBMLtar(path_to_tar)
 ``` 
 
 Or pass your own dictionnary of rpSBML objects, then query the Selenzyme web tool:
 
 ```
-rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
 for rpsbml_name in rpsbml_paths:
     rptools.rpSelenzyme(rpreader.sbml_paths[rpsbml_name], selenzyme_rest_url)
 ```
@@ -143,7 +143,7 @@ for rpsbml_name in rpsbml_paths:
 To export the results as a TAR one can use the tools package:
 
 ```
-tools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+tools.writerpSBMLtar(rpsbml_paths, path_to_tar)
 ``` 
 
 ### FBA
@@ -152,13 +152,12 @@ Open the collections of rpSBML's as a dictionnary:
 
 ```
 rptools = rpRanker.tools()
-rptools.readrpSBMLtar(path_to_tar)
+rpsbml_paths = readrpSBMLtar(path_to_tar)
 ``` 
 
 Or pass your own dictionnary of rpSBML objects, then calculate the flux using:
 
 ```
-rpsbml_paths = readrpSBMLtar(rpreader.sbml_paths)
 for rpsbml_name in rpsbml_paths:
     rptools.runFBA(rpsbml_paths[rpsbml_name], path_to_gem_model) 
 ```
@@ -168,7 +167,7 @@ gen_model is a genome scale model (GEM) but one can pass any SBML file to it. Ho
 To export the results as a TAR one can use the tools package:
 
 ```
-rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
+rptools.writerpSBMLtar(rpsbml_paths, path_to_tar)
 ``` 
 
 ### Report
@@ -176,14 +175,7 @@ rptools.writerpSBMLtar(rpreader.sbml_paths, path_to_tar)
 Open the collections of rpSBML's as a dictionnary:
 
 ```
-rptools = rpRanker.tools()
-rptools.readrpSBMLtar(path_to_tar)
-``` 
-
-Or pass your own dictionnary of rpSBML objects, then generate the csv:
-
-```
-tools.writeReport(rpreader.sbml_paths, path_to_csv)
+tools.writeReport(path_to_tar, path_to_csv)
 ```
 
 ### Generate Sink
