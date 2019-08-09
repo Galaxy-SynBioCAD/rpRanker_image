@@ -445,6 +445,8 @@ class rpSBML:
                 rp_rp_species[rp_step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
             for spe_name in rp_rp_species[rp_step_id]['products']:
                 rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+        if not len(meas_rp_species)==len(rp_rp_species):
+            return False, {}
         #remove the targetSink from RP
         try:
             del rp_rp_species['targetSink']
