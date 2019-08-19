@@ -49,13 +49,13 @@ class DepictionError(Error):
 # Contains all the functions that read the cache files and input files to reconstruct the heterologous pathways
 class rpReader:
     ## InputReader constructor
-    # 
+    #
     #  @param self The object pointer
     def __init__(self):
         #cache files
         #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
-        #TODO: remove all the rp parameters since these should not be used, 
+        #TODO: remove all the rp parameters since these should not be used,
         self.rp_strc = None #These are the structures contained within the output of rp2paths
         self.rp_transformation = {}
         self.deprecatedMNXM_mnxm = None
@@ -73,7 +73,7 @@ class rpReader:
 
 
     #######################################################################
-    ############################# PRIVATE FUNCTIONS ####################### 
+    ############################# PRIVATE FUNCTIONS #######################
     #######################################################################
 
 
@@ -167,7 +167,7 @@ class rpReader:
 
     ###############################################################
     ############################ RP2paths entry functions #########
-    ############################################################### 
+    ###############################################################
 
     ## Function to parse the compounds.txt file
     #
@@ -200,7 +200,7 @@ class rpReader:
                         #TODO: consider using the inchi writing instead of the SMILES notation to find the inchikey
                     except KeyError:
                         try:
-                            resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})    
+                            resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})
                             self.rp_strc[row[0]]['inchikey'] = resConv['inchikey']
                         except DepictionError as e:
                             logging.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
@@ -327,8 +327,8 @@ class rpReader:
             logging.error('Could not read the out_paths file ('+str(path)+') ')
             return {}
 
-    
-    ## Convert the 
+
+    ## Convert the
     # TODO: switch this from generic to defined, with defined bounds
     # TODO: remove the default MNXC3 compartment ID
     #
@@ -355,8 +355,8 @@ class rpReader:
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
                 ##### TODO: give the user more control over a generic model creation:
                 #   -> special attention to the compartment
-                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum), 
-                        'RP_model_'+str(path_id)+'_'+str(altPathNum), 
+                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum),
+                        'RP_model_'+str(path_id)+'_'+str(altPathNum),
                         self.compXref[compartment_id])
                 #2) create the pathway (groups)
                 rpsbml.createPathway(pathId)
@@ -365,21 +365,21 @@ class rpReader:
                 for meta in all_meta:
                     #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
-                        rpsbml.createSpecies(meta, 
-                                self.chemXref[meta], 
-                                None, 
-                                self.rp_strc[meta]['inchi'], 
-                                self.rp_strc[meta]['inchikey'], 
-                                self.rp_strc[meta]['smiles'], 
+                        rpsbml.createSpecies(meta,
+                                self.chemXref[meta],
+                                None,
+                                self.rp_strc[meta]['inchi'],
+                                self.rp_strc[meta]['inchikey'],
+                                self.rp_strc[meta]['smiles'],
                                 compartment_id)
-                    except KeyError:    
+                    except KeyError:
                         try:
-                            rpsbml.createSpecies(meta, 
-                                    {}, 
-                                    None, 
-                                    self.rp_strc[meta]['inchi'], 
-                                    self.rp_strc[meta]['inchikey'], 
-                                    self.rp_strc[meta]['smiles'], 
+                            rpsbml.createSpecies(meta,
+                                    {},
+                                    None,
+                                    self.rp_strc[meta]['inchi'],
+                                    self.rp_strc[meta]['inchikey'],
+                                    self.rp_strc[meta]['smiles'],
                                     compartment_id)
                         except KeyError:
                             logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
@@ -411,17 +411,17 @@ class rpReader:
 
 
     #######################################################################
-    ############################# JSON input ############################## 
+    ############################# JSON input ##############################
     #######################################################################
 
 
     ## Pass a dictionnary of JSON dict and convert them to SBML
     #
     # This function parses the JSON format output from RetroPath3.0 and generates the SBML
-    # 
+    #
     # @param self Object pointer
     # @param collJson dictionnary of pathways from JSON format
-    def collectionJSON(self, collJson): 
+    def collectionJSON(self, collJson):
         pathNum = 1
         sub_path = 1
         #According to the rule applied there should be subpaths ==> in this case we ignore that
@@ -430,7 +430,7 @@ class rpReader:
             rpsbml = self.jsonToSBML(collJson[i], pathNum)
             self.sbml_paths['rp_'+str(pathNum)+'_'+str(sub_path)] = rpsbml
             pathNum += 1
-            
+
 
     ## Function to generate an SBLM model from a JSON file
     #
@@ -446,7 +446,7 @@ class rpReader:
         #create the SBML
         rpsbml = rpSBML('rp_'+str(pathNum))
         rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
-        rpsbml.createPathway(pathId) 
+        rpsbml.createPathway(pathId)
         ### gather the data
         all_reac = {}
         rp_paths = {}
@@ -459,31 +459,34 @@ class rpReader:
                     #hack, pick the smallest mnx ID if there are multiple ones
                     cid = sorted(self.inchikey_mnxm[node['data']['id']]['mnx'], key=lambda x: int(x[4:]))[0]
                 except KeyError:
-                    cid = node['data']['id'].replace('-', '') 
+                    cid = node['data']['id'].replace('-', '')
                 inchikey_cid[node['data']['id'].replace('-', '')] = cid
                 try:
-                    rpsbml.createSpecies(cid, 
+                    rpsbml.createSpecies(cid,
                                         self.chemXref[cid],
-                                        None, 
-                                        node['data']['InChI'], 
-                                        node['data']['id'], 
-                                        node['data']['SMILES'], 
+                                        None,
+                                        node['data']['InChI'],
+                                        node['data']['id'],
+                                        node['data']['SMILES'],
                                         compartment_id)
                 except KeyError:
-                    rpsbml.createSpecies(cid, 
+                    rpsbml.createSpecies(cid,
                                         {},
-                                        None, 
-                                        node['data']['InChI'], 
-                                        node['data']['id'], 
-                                        node['data']['SMILES'], 
+                                        None,
+                                        node['data']['InChI'],
+                                        node['data']['id'],
+                                        node['data']['SMILES'],
                                         compartment_id)
-            ## Create a dictionnary containing all the reactions 
+                if int(node['data']['isSource']) == 1:
+                    source_name = cid
+                    source_stochio = 1
+            ## Create a dictionnary containing all the reactions
             elif node['data']['type']=='reaction':
-                #note sure about this... need to ask 
+                #note sure about this... need to ask
                 step = node['data']['Iteration']
                 #hack, pick the first rule, usually have the biggest diameter
                 r_id = sorted(node['data']['Rule ID'], key=lambda x: int(x.split('-')[-2]), reverse=True)[0]
-                all_reac[node['data']['id']] = {'rule_id': r_id, 
+                all_reac[node['data']['id']] = {'rule_id': r_id,
                         'right': {},
                         'left': {},
                         'path_id': pathNum,
@@ -534,7 +537,7 @@ class rpReader:
                     target_name = cid
         # now that all the information has been gathered pass it to the SBML
         for rule_id in all_reac:
-            rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']), 
+            rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']),
                     'B_999999', #only for genericModel
                     'B_0', #only for genericModel
                     #{'left': all_reac[rule_id]['left'], 'right': all_reac[rule_id]['right']},
@@ -544,12 +547,12 @@ class rpReader:
                     all_reac[rule_id]['ec'],
                     {})
         targetStep = {'rule_id': None,
-                    'left': {target_name: target_stochio},
-                    'right': {}, 
-                    'step': None, 
-                    'sub_step': None, 
-                    'path_id': None, 
-                    'transformation_id': None, 
+                    'left': {source_name: source_stochio},
+                    'right': {},
+                    'step': None,
+                    'sub_step': None,
+                    'path_id': None,
+                    'transformation_id': None,
                     'rule_score': None}
         rpsbml.createReaction('targetSink',
                 'B_999999', #only for generic model
@@ -568,13 +571,13 @@ class rpReader:
 
     ## Function to parse the TSV of measured heterologous pathways to SBML
     #
-    # Given the TSV of measured pathways, parse them to a dictionnary, readable to next be parsed 
+    # Given the TSV of measured pathways, parse them to a dictionnary, readable to next be parsed
     # to SBML
     #
     # @param self object pointer
     # @param inFile The input JSON file
     # @param mnxHeader Reorganise the results around the target MNX products
-    # @return Dictionnary of SBML 
+    # @return Dictionnary of SBML
     def parseValidation(self, inFile, mnxHeader=False):
         data = {}
         try:
@@ -617,8 +620,8 @@ class rpReader:
                     if i=='':
                         lenSub -= 1
                 if lenSub==lenStrc==lenSub:
-                    for name, inchi, dbrefs in zip(row['substrate_name'].split(';'), 
-                            row['substrate_structure'].split(';'), 
+                    for name, inchi, dbrefs in zip(row['substrate_name'].split(';'),
+                            row['substrate_structure'].split(';'),
                             row['substrate_dbref'].split(';')):
                         tmp = {}
                         tmp['inchi'] = inchi.replace(' ', '')
@@ -654,8 +657,8 @@ class rpReader:
                     if i=='':
                         lenSub -= 1
                 if lenSub==lenStrc==lenDBref:
-                    for name, inchi, dbrefs in zip(row['product_name'].split(';'), 
-                            row['product_structure'].split(';'), 
+                    for name, inchi, dbrefs in zip(row['product_name'].split(';'),
+                            row['product_structure'].split(';'),
                             row['product_dbref'].split(';')):
                         tmp = {}
                         tmp['inchi'] = inchi.replace(' ', '')
@@ -706,8 +709,8 @@ class rpReader:
     #
     # @param self Object pointer
     # @param inFile Input file
-    # @param compartment_id compartment of the 
-    def validationToSBML(self, inFile, compartment_id='MNXC3'): 
+    # @param compartment_id compartment of the
+    def validationToSBML(self, inFile, compartment_id='MNXC3'):
         data = self.parseValidation(inFile)
         self.sbml_paths = {}
         #TODO: need to exit at this loop
@@ -747,21 +750,21 @@ class rpReader:
                     logging.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                 #create a new species
                 try:
-                    rpsbml.createSpecies(meta, 
-                            self.chemXref[meta], 
-                            None, 
-                            chem['inchi'], 
-                            inchikey, 
-                            smiles, 
+                    rpsbml.createSpecies(meta,
+                            self.chemXref[meta],
+                            None,
+                            chem['inchi'],
+                            inchikey,
+                            smiles,
                             compartment_id)
                 except KeyError:
                     try:
-                        rpsbml.createSpecies(meta, 
-                                {}, 
-                                None, 
-                                chem['inchi'], 
-                                inchikey, 
-                                smiles, 
+                        rpsbml.createSpecies(meta,
+                                {},
+                                None,
+                                chem['inchi'],
+                                inchikey,
+                                smiles,
                                 compartment_id)
                     except KeyError:
                         logging.error('Could not create the following metabolite: '+str(meta))
@@ -798,7 +801,7 @@ class rpReader:
 
     #TODO: move this to another place
 
-    ## Generate the sink from a given model and the 
+    ## Generate the sink from a given model and the
     #
     # NOTE: this only works for MNX models, since we are parsing the id
     # TODO: change this to read the annotations and extract the MNX id's
