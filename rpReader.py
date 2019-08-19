@@ -494,6 +494,8 @@ class rpReader:
                         'smiles': node['data']['Reaction SMILES'],
                         'ec': list(filter(None, [i for i in node['data']['EC number']]))}
                 stochio[node['data']['id']] = node['data']['Stoechiometry']
+        target_name = None #used for the targetSink
+        target_stochio = None
         for reaction_node in json_dict['elements']['edges']:
             if not len(reaction_node['data']['source'].split('-'))==3:
                 if not reaction_node['data']['source'] in all_reac:
@@ -514,6 +516,7 @@ class rpReader:
             if not len(reaction_node['data']['target'].split('-'))==3:
                 if not reaction_node['data']['target'] in all_reac:
                     logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                    return False
                 else:
                     rid = reaction_node['data']['target']
                     try:
@@ -523,9 +526,12 @@ class rpReader:
                     try:
                         #all_reac[rid]['left'][cid] = stochio[rid][cid]
                         all_reac[rid]['right'][cid] = stochio[rid][cid]
+                        target_stochio = stochio[rid][cid]
                     except KeyError:
                         #all_reac[rid]['left'][cid] = 1.0
                         all_reac[rid]['right'][cid] = 1.0
+                        target_stochio = 1.0
+                    target_name = cid
         # now that all the information has been gathered pass it to the SBML
         for rule_id in all_reac:
             rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']), 
@@ -537,22 +543,22 @@ class rpReader:
                     all_reac[rule_id]['smiles'],
                     all_reac[rule_id]['ec'],
                     {})
-		targetStep = {'rule_id': None, 
-					'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 
-					'right': [], 
-					'step': None, 
-					'sub_step': None, 
-					'path_id': None, 
-					'transformation_id': None, 
-					'rule_score': None}
-		rpsbml.createReaction('targetSink',
-				'B_999999', #only for generic model
-				'B_0', #only for generic model
-				targetStep,
-				compartment_id)
-		#6) Optional?? Add the flux objectives. Could be in another place, TBD
-		#rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
-		rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
+        targetStep = {'rule_id': None,
+                    'left': {target_name: target_stochio},
+                    'right': {}, 
+                    'step': None, 
+                    'sub_step': None, 
+                    'path_id': None, 
+                    'transformation_id': None, 
+                    'rule_score': None}
+        rpsbml.createReaction('targetSink',
+                'B_999999', #only for generic model
+                'B_0', #only for generic model
+                targetStep,
+                compartment_id)
+        #6) Optional?? Add the flux objectives. Could be in another place, TBD
+        #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
+        rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
         return rpsbml
 
     #############################################################################################
