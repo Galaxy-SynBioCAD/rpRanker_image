@@ -433,19 +433,23 @@ class rpSBML:
     #
     def compareRPpathways(self, measured_sbml):
         #return all the species annotations of the RP pathways
-        meas_rp_species = measured_sbml.readRPspecies()
-        for meas_step_id in measured_sbml.readRPpathway():
-            for spe_name in meas_rp_species[meas_step_id]['reactants']:
-                meas_rp_species[meas_step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
-            for spe_name in meas_rp_species[meas_step_id]['products']:
-                meas_rp_species[meas_step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
-        rp_rp_species = self.readRPspecies()
-        for rp_step_id in self.readRPspecies():
-            for spe_name in rp_rp_species[rp_step_id]['reactants']:
-                rp_rp_species[rp_step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-            for spe_name in rp_rp_species[rp_step_id]['products']:
-                rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
-        if not len(meas_rp_species)==len(rp_rp_species):
+        try:
+            meas_rp_species = measured_sbml.readRPspecies()
+            for meas_step_id in measured_sbml.readRPpathway():
+                for spe_name in meas_rp_species[meas_step_id]['reactants']:
+                    meas_rp_species[meas_step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+                for spe_name in meas_rp_species[meas_step_id]['products']:
+                    meas_rp_species[meas_step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+            rp_rp_species = self.readRPspecies()
+            for rp_step_id in self.readRPspecies():
+                for spe_name in rp_rp_species[rp_step_id]['reactants']:
+                    rp_rp_species[rp_step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+                for spe_name in rp_rp_species[rp_step_id]['products']:
+                    rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+        except AttributeError:
+            logging.error('TODO: debug, for some reason some are passed as None here')
+            return False, {}
+        if not len(meas_rp_species)==len(rp_rp_species)+1: #add one for the targetSink
             return False, {}
         #remove the targetSink from RP
         try:

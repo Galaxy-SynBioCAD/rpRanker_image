@@ -13,9 +13,9 @@ from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, Mol
 from shutil import copyfile
 import tarfile
 
-## @package Cache
+## @package rpCache
 #
-# Documentation for the cache generation of rpFBA
+# These are a collection of functions that parse description files of reactions (MNX), chemical species (MNX) and model compartments (MNX) to be used by rpRanker. Furthermore, it parses euilibrator files to calculate the thermodynamics of reactions. This includes pre-calculated values as well as on the fly. Lastly reaction rule files are parsed to reconstruct full reactions from monocomponent reactions.
 
 
 #######################################################
@@ -25,13 +25,11 @@ import tarfile
 
 ## Error function for the convertion of structures
 #
-#
 class Error(Exception):
     pass
 
 
 ## Error function for the convertion of structures
-#
 #
 class DepictionError(Error):
     def __init__(self, message):
@@ -39,7 +37,7 @@ class DepictionError(Error):
         self.message = message
 
 
-## \brief Class to generate the cache
+## Class to generate the cache
 #
 # Contains all the functions that parse different files, used to calculate the thermodynamics and the FBA of the 
 #the other steps. These should be called only when the files have changes
@@ -57,7 +55,6 @@ class rpCache:
                 'MNXM145523': 'MNXM57',
                 'MNXM57425': 'MNXM9',
                 'MNXM137': 'MNXM588022'}
-        #personally looked at the KEGG to MNXM conversion for the thermodynamics 
         self.deprecatedMNXM_mnxm = {}
         self.deprecatedMNXR_mnxr = {}
 
@@ -72,9 +69,8 @@ class rpCache:
     # Usage example:
     # - convert_depiction(idepic='CCO', otype={'inchi', 'smiles', 'inchikey'})
     # - convert_depiction(idepic='InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3', itype='inchi', otype={'inchi', 'smiles', 'inchikey'})
-    #
-    #  @param self The onject pointer
-    #  @param idepic string depiction to be converted, str
+    #  @param self The object pointer
+    #  @param idepic String depiction to be converted, str
     #  @param itype type of depiction provided as input, str
     #  @param otype types of depiction to be generated, {"", "", ..}
     #  @return odepic generated depictions, {"otype1": "odepic1", ..}
@@ -105,11 +101,12 @@ class rpCache:
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
     #
-    #  Generate a dictionnary of old to new MetanetX identifiers
+    #  Generate a dictionnary of old to new MetanetX identifiers to make sure that we always use the freshest id's.
+    # This can include more than one old id per new one and thus returns a dictionnary. Private function
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
-    #  @return a The dictionnary of identifiers  
+    #  @return Dictionnary of identifiers  
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def _deprecatedMNXM(self, chem_xref_path):
         self.deprecatedMNXM_mnxm = {}
@@ -124,6 +121,14 @@ class rpCache:
             self.deprecatedMNXM_mnxm['MNXM01'] = 'MNXM1'
 
 
+    ## Function to parse the reac_xref.tsv file of MetanetX
+    #
+    #  Generate a dictionnary of old to new MetanetX identifiers to make sure that we always use the freshest id's.
+    # This can include more than one old id per new one and thus returns a dictionnary. Private function
+    #
+    #  @param self Object pointer
+    #  @param reac_xref_path Input file path
+    #  @return Dictionnary of identifiers  
     def _deprecatedMNXR(self, reac_xref_path):
         self.deprecatedMNXMR_mnxr = {}
         with open(reac_xref_path) as f:
@@ -135,7 +140,9 @@ class rpCache:
                         self.deprecatedMNXR_mnxr[mnx[1]] = row[1]
 
 
-    ##
+    ## Function to create a dictionnary of old to new chemical id's 
+    #
+    #  Generate a one-to-one dictionnary of old id's to new ones. Private function
     #
     # TODO: check other things about the mnxm emtry like if it has the right structure etc...
     def _checkMNXMdeprecated(self, mnxm):
@@ -145,7 +152,7 @@ class rpCache:
             return mnxm
 
 
-    ##
+    ## Function to create a dictionnary of old to new reaction id's
     #
     # TODO: check other things about the mnxm emtry like if it has the right structure etc...
     def _checkMNXRdeprecated(self, mnxr):
@@ -254,7 +261,7 @@ class rpCache:
 
     ## Function to parse the chem_xref.tsv file of MetanetX
     #
-    #  Generate a dictionnary of old to new MetanetX identifiers
+    #  Generate a dictionnary of all cross references for a given chemical id (MNX) to other database id's
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
@@ -292,7 +299,7 @@ class rpCache:
 
     ## Function to parse the reacXref.tsv file of MetanetX and rxn_recipes.tsv from RetroRules
     #
-    #  Generate a dictionnary of old to new MetanetX identifiers
+    #  Generate a dictionnary of all cross references for a given reaction id (MNX) to other database id's 
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
@@ -341,7 +348,7 @@ class rpCache:
 
     ## Function to parse the compXref.tsv file of MetanetX
     #
-    #  Generate a dictionnary of old to new MetanetX identifiers
+    #  Generate a dictionnary of compartments id's (MNX) to other database id's
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
@@ -384,11 +391,10 @@ class rpCache:
 
     ## Function exctract the dG of components
     #
-    #
+    #  This function parses a file from component analysis and uses KEGG id's. This means that to use precalculated
+    # values in this file a given ID must have a KEGG id listed here
     #
     #  @param self Object pointer
-    #  @param self.deprecatedMNXM_mnxm Dictionnary of old/new MNX identifiers
-    #  @param chem_xref_path chem_xref.tsv file path
     #  @param cc_compounds_path cc_compounds.json.gz file path
     #  @param alberty_path alberty.json file path
     #  @param compounds_path compounds.csv file path
@@ -546,6 +552,12 @@ class rpCache:
     
     ## Generate complete reactions from the rxn_recipes.tsv from RetroRules
     #
+    #  These are the compplete reactions from which the reaction rules are generated from. This is used to
+    # reconstruct the full reactions from monocomponent reactions
+    #
+    #  @param self The pointer object
+    #  @param rxn_recipes_path Path to the recipes file
+    #  @return Boolean that determines the success or failure of the function
     def full_reac(self, rxn_recipes_path):
         #### for character matching that are returned
         DEFAULT_STOICHIO_RESCUE = {"4n": 4, "3n": 3, "2n": 2, 'n': 1,
@@ -647,7 +659,6 @@ class rpCache:
 #
 #  Run all the files required to generate the cache. Requires : mvc.db, chem_xref.tsv, chem_prop.tsv, cc_compounds.json.gz and alberty.json
 #
-#  @param self Object pointer
 #TODO: change the input_cache to a compressed file with a given checksum to assure that it is fine
 #TODO: consider checksumming the individual files that are generated from here
 if __name__ == "__main__":

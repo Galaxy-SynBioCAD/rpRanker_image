@@ -14,6 +14,10 @@ import copy
 
 from .rpSBML import rpSBML
 
+## @package rpReader
+#
+# Collection of functions that convert the outputs from various sources to the SBML format (rpSBML) for further analyses
+
 
 #######################################################
 ################### USER DEFINED ERROR ################
@@ -36,23 +40,17 @@ class DepictionError(Error):
         self.message = message
 
 
+#WARNING: if you define inputPath, then all the files must have specific names to
+#make sure that it can find the appropriate files
 
-## @package InputReader
-#
-# Documentation for the input files reader of rpFBA
 
-## \brief Class to read all the input files
+## Class to read all the input files
 #
 # Contains all the functions that read the cache files and input files to reconstruct the heterologous pathways
 class rpReader:
-    """ WARNING: if you define inputPath, then all the files must have specific names to
-        make sure that it can find the appropriate files
-    """
     ## InputReader constructor
     # 
     #  @param self The object pointer
-    #  @param inputPath The path to the folder that contains all the input/output files required
-    #  @param Database The database name of the user's xref
     def __init__(self):
         #cache files
         #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
@@ -81,7 +79,10 @@ class rpReader:
 
     ## Private function to load the required cache parameters
     #
+    #  Opens the previously generated cache to the object memory
     #
+    # @param The oject pointer
+    # @return Boolean detemining the success of the function or not
     def _loadCache(self):
         dirname = os.path.dirname(os.path.abspath( __file__ ))
         try:
@@ -119,7 +120,7 @@ class rpReader:
         except FileNotFoundError as e:
             logging.error(e)
             return False
-        '''
+        ''' Not used as of now
         try:
             self.reacXref = pickle.load(gzip.open(dirname+'/cache/reacXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
@@ -213,8 +214,6 @@ class rpReader:
     #
     #  @param self Object pointer
     #  @param path The scope.csv file path
-    #  @return rp_transformation Dictionnary discribing each transformation
-    #  @return mnxm_strc dictionnary describing the inchi for each smile
     def transformation(self, path):
         try:
             with open(path) as f:
@@ -328,13 +327,16 @@ class rpReader:
             logging.error('Could not read the out_paths file ('+str(path)+') ')
             return {}
 
-
-    ## TODO: switch this from generic to defined, with defined bounds
+    
+    ## Convert the 
+    # TODO: switch this from generic to defined, with defined bounds
+    # TODO: remove the default MNXC3 compartment ID
     #
     # rp_paths structure is the following {1: {1: {1: {'rule_id': '', 'right': {}, 'left': {}, 'path_id': int, 'step': int, 'sub_step': int, 'transformation_id': ''}, ...}, ...}, ...}
     # a single step looks like this {'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
     #
-    #TODO: remove the default MNXC3 compartment ID
+    #  @param pathId Name given to the heterologous pathway, default is 'rp_pathway'
+    #  @param compartment_id ID of the compartment to add the reaction, default is 'MNXC3'
     def pathsToSBML(self, pathId='rp_pathway', compartment_id='MNXC3'):
         #if the output folder does not exist then create it
         #for path in self.rp_paths:
@@ -415,7 +417,10 @@ class rpReader:
 
     ## Pass a dictionnary of JSON dict and convert them to SBML
     #
-    #
+    # This function parses the JSON format output from RetroPath3.0 and generates the SBML
+    # 
+    # @param self Object pointer
+    # @param collJson dictionnary of pathways from JSON format
     def collectionJSON(self, collJson): 
         pathNum = 1
         sub_path = 1
@@ -427,15 +432,15 @@ class rpReader:
             pathNum += 1
             
 
-    ## Function to generate an SBLM model from a json file
+    ## Function to generate an SBLM model from a JSON file
     #
     #  Read the json files of a folder describing pathways and generate an SBML file for each
+    #  TODO: remove the default MNXC3 compartment ID
+    #  TODO: change the ID of all species to take a normal string and not sepcial caracters
+    #  WARNING: We are only using a single rule (technically with the highest diameter)
     #
     #  @param self Object pointer
     #  @return rpsbml.document the SBML document
-    #  TODO: remove the default MNXC3 compartment ID
-    #  TODO: change the ID of all species to take a normal string and not sepcial caracters
-    # WARNING: We are only using a single rule (technically with the highest diameter)
     def jsonToSBML(self, json_dict, pathNum=1, pathId='rp_pathway', compartment_id='MNXC3'):
         #pathNum = 1
         #create the SBML
@@ -532,6 +537,22 @@ class rpReader:
                     all_reac[rule_id]['smiles'],
                     all_reac[rule_id]['ec'],
                     {})
+		targetStep = {'rule_id': None, 
+					'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 
+					'right': [], 
+					'step': None, 
+					'sub_step': None, 
+					'path_id': None, 
+					'transformation_id': None, 
+					'rule_score': None}
+		rpsbml.createReaction('targetSink',
+				'B_999999', #only for generic model
+				'B_0', #only for generic model
+				targetStep,
+				compartment_id)
+		#6) Optional?? Add the flux objectives. Could be in another place, TBD
+		#rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
+		rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
         return rpsbml
 
     #############################################################################################
@@ -539,9 +560,15 @@ class rpReader:
     #############################################################################################
 
 
-    ##
+    ## Function to parse the TSV of measured heterologous pathways to SBML
     #
+    # Given the TSV of measured pathways, parse them to a dictionnary, readable to next be parsed 
+    # to SBML
     #
+    # @param self object pointer
+    # @param inFile The input JSON file
+    # @param mnxHeader Reorganise the results around the target MNX products
+    # @return Dictionnary of SBML 
     def parseValidation(self, inFile, mnxHeader=False):
         data = {}
         try:
@@ -667,9 +694,13 @@ class rpReader:
             return toRetTwo
 
 
-    ##
+    ## Parse the validation TSV to SBML
     #
+    # Parse the TSV file to SBML format and adds them to the self.sbml_paths
     #
+    # @param self Object pointer
+    # @param inFile Input file
+    # @param compartment_id compartment of the 
     def validationToSBML(self, inFile, compartment_id='MNXC3'): 
         data = self.parseValidation(inFile)
         self.sbml_paths = {}
