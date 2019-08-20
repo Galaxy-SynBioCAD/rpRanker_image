@@ -98,7 +98,7 @@ class rpCofactors:
                 noMain_fullReac = {i:f_reac[i] for i in f_reac if i not in toRem}
             except KeyError:
                 logging.warning('could not find intermediate compound name')
-                logging.warning(f_reac)
+                #logging.warning(f_reac)
                 #logging.warning(toRem)
                 raise KeyError
         else:
