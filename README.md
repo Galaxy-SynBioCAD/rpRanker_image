@@ -91,8 +91,9 @@ Or pass your own dictionnary of rpSBML objects and add the cofactors:
 
 ```
 rpcofactors = rpRanker.rpCofactors()
-for rpsbml_name in rpsbml_paths:
-    rpcofactors.addCofactors(rpsbml.paths[rpsbml_name])
+for rpsbml_name in rpsbml_paths.keys():
+    if not rpcofactors.addCofactors(rpsbml_paths[rpsbml_name]):
+	del rpsbml_paths[rpsbml_name]
 ```
 
 To export the results as a TAR one can use the tools package:

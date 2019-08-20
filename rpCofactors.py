@@ -97,9 +97,10 @@ class rpCofactors:
                 toRem = [pathway_cmp_mnxm[i] for i in list(step[reac_side].keys()-f_reac.keys())]
                 noMain_fullReac = {i:f_reac[i] for i in f_reac if i not in toRem}
             except KeyError:
-                logging.warning('could not find intermediate compound name')
-                #logging.warning(f_reac)
-                #logging.warning(toRem)
+                #INFO: this happens if the step does not match the original reaction
+                # and usually happens since there can be more than one reaction rule associated
+                # with a reaction when the original reaction species do not match
+                logging.error('Could not find intermediate compound name')
                 raise KeyError
         else:
             logging.warning('Direction can only be right or left')
@@ -148,7 +149,7 @@ class rpCofactors:
                             reac_smiles[0] += '.'+self.mnxm_strc[i]['smiles']
                         step['reaction_rule'] = reac_smiles[0]+'>>'+reac_smiles[1]
                     else:
-                        logging.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc[i]')
+                        logging.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc')
                         continue
                 else:
                     logging.warning('Cannot find '+str(i)+' in self.mnxm_strc')
@@ -253,4 +254,5 @@ class rpCofactors:
                     prod.setStoichiometry(rp_path[stepNum]['right'][pro])
                 return True
             else:
+                #if the cofactors cannot be found delete it from the list
                 return False
