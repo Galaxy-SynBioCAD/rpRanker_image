@@ -202,7 +202,7 @@ rpsbml = rpreader.jsonToSBML(json_dict)
 rpcofactors = rpRanker.rpCofactors()
 rpcofactors.addCofactors(rpsbml)
 rptools = rpRanker.tools()
-rptools.runFBA(rpsbml_paths[rpsbml, path_to_gem_model)
+rptools.runFBA(rpsbml, path_to_gem_model)
 target_reaction = rpsbml.model.getReaction('targetSink')
 ibisba_annot_dict = rpsbml.readIBISBAAnnotation(target_reaction.getAnnotation())
 ibisba_annot_dict['fba_rpFBA_obj'] <-- thats the RP target flux

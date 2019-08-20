@@ -462,9 +462,6 @@ class rpSBML:
         for meas_step_id in measured_sbml.readRPpathway():
             measReac_rpReac[meas_step_id] = []
             for rp_step_id in rp_rp_species:
-                #print('########## measReac_rpReac['+str(meas_step_id)+'] <--> rp_rp_species['+str(rp_step_id)+']  ############')
-                #print(self.model.getReaction(rp_step_id).getAnnotation().toXMLString())
-                #print(measured_sbml.model.getReaction(meas_step_id).getAnnotation().toXMLString())
                 if self.compareMIRIAMAnnotations(self.model.getReaction(rp_step_id).getAnnotation(), measured_sbml.model.getReaction(meas_step_id).getAnnotation()):
                     found = True
                     #print('FOUND USING REACTION')
@@ -511,12 +508,12 @@ class rpSBML:
                         tmp[i] = list(rp_rp_species[rp_step_id][i].keys())
                     #print(tmp)
                     #print('##--##--##--##--##--##--##--##--##--##')
+                    print(all_meas_found)
                     found = True
                     for pro_rea in all_meas_found:
                         for spe in all_meas_found[pro_rea]:
                             if not all_meas_found[pro_rea][spe]:
                                 found = False
-
                     if found:
                         #print('FOUND USING SPECIES')
                         measReac_rpReac[meas_step_id].append(rp_step_id)

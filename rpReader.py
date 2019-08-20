@@ -328,7 +328,7 @@ class rpReader:
             return {}
 
     
-    ## Convert the 
+    ## Convert RetroPath2.0 pathways to SBML (rpSBML's) 
     # TODO: switch this from generic to defined, with defined bounds
     # TODO: remove the default MNXC3 compartment ID
     #

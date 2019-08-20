@@ -39,6 +39,11 @@ class rpCofactors:
     def _loadCache(self):
         dirname = os.path.dirname(os.path.abspath( __file__ ))
         try:
+            self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
+        except FileNotFoundError as e:
+            logging.error(e)
+            return False
+        try:
             self.full_reactions = pickle.load(open(dirname+'/cache/full_reactions.pickle', 'rb'))
         except FileNotFoundError as e:
             logging.error(e)
@@ -92,7 +97,9 @@ class rpCofactors:
                 toRem = [pathway_cmp_mnxm[i] for i in list(step[reac_side].keys()-f_reac.keys())]
                 noMain_fullReac = {i:f_reac[i] for i in f_reac if i not in toRem}
             except KeyError:
-                logging.warning('could not find internediate compound name')
+                logging.warning('could not find intermediate compound name')
+                logging.warning(f_reac)
+                #logging.warning(toRem)
                 raise KeyError
         else:
             logging.warning('Direction can only be right or left')
@@ -197,26 +204,38 @@ class rpCofactors:
                         try:
                             xref = self.chemXref[species]
                         except KeyError:
-                            #TODO: although there should not be any 
-                            #intermediate species here consider
-                            #removing this warning
-                            logging.warning('Cannot find the xref for this species: '+str(species))
-                            pass
+                            try: 
+                                xref = self.chemXref[self.deprecatedMNXM_mnxm[species]]
+                            except KeyError:
+                                #TODO: although there should not be any 
+                                #intermediate species here consider
+                                #removing this warning
+                                logging.warning('Cannot find the xref for this species: '+str(species))
+                                pass
                         try:
                             inchi = self.mnxm_strc[species]['inchi']
                         except KeyError:
-                            logging.warning('Cannot find the inchi for this species: '+str(species))
-                            pass
+                            try:
+                                inchi = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['inchi']
+                            except KeyError:
+                                logging.warning('Cannot find the inchi for this species: '+str(species))
+                                pass
                         try:
                             inchikey = self.mnxm_strc[species]['inchikey']
                         except KeyError:
-                            logging.warning('Cannot find the inchikey for this species: '+str(species))
-                            pass
+                            try:
+                                inchikey = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['inchikey']
+                            except KeyError:
+                                logging.warning('Cannot find the inchikey for this species: '+str(species))
+                                pass
                         try:
                             smiles = self.mnxm_strc[species]['smiles']
                         except KeyError:
-                            logging.warning('Cannot find the smiles for this species: '+str(species))
-                            pass
+                            try:
+                                smiles = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['smiles']
+                            except KeyError:
+                                logging.warning('Cannot find the smiles for this species: '+str(species))
+                                pass
                         #add the new species to rpsbml
                         rpsbml.createSpecies(species, 
                                 xref, 
