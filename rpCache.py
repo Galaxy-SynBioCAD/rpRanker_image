@@ -1,5 +1,4 @@
 import csv
-import logging
 import gzip
 import os
 import json
@@ -12,6 +11,8 @@ import gzip
 from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 from shutil import copyfile
 import tarfile
+
+import logging
 
 ## @package rpCache
 #
@@ -48,6 +49,8 @@ class rpCache:
     # @param inputPath The path to the folder that contains all the input/output files required
     def __init__(self):
         #given by Thomas
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Started instance of rpCache')
         self.convertMNXM = {'MNXM162231': 'MNXM6',
                 'MNXM84': 'MNXM15',
                 'MNXM96410': 'MNXM14',
@@ -199,8 +202,8 @@ class rpCache:
                 for i in resConv:
                     tmp[i] = resConv[i]
             except DepictionError as e:
-                logging.warning('Could not convert some of the structures: '+str(tmp))
-                logging.warning(e)
+                self.logger.warning('Could not convert some of the structures: '+str(tmp))
+                self.logger.warning(e)
             mnxm_strc[tmp['mnxm']] = tmp
         with open(chem_prop_path) as f:
             c = csv.reader(f, delimiter='\t')
@@ -242,15 +245,15 @@ class rpCache:
                         elif tmp['smiles']:
                             itype = 'smiles'
                         else:
-                            logging.warning('No valid entry for the convert_depiction function')
+                            self.logger.warning('No valid entry for the convert_depiction function')
                             continue
                         try:
                             resConv = self._convert_depiction(idepic=tmp[itype], itype=itype, otype=otype)
                             for i in resConv:
                                 tmp[i] = resConv[i]
                         except DepictionError as e:
-                            logging.warning('Could not convert some of the structures: '+str(tmp))
-                            logging.warning(e)
+                            self.logger.warning('Could not convert some of the structures: '+str(tmp))
+                            self.logger.warning(e)
                         mnxm_strc[tmp['mnxm']] = tmp
                         #### inchikey_mnxm ###
                         if not tmp['inchikey'] in inchikey_mnxm:
@@ -356,6 +359,7 @@ class rpCache:
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def mnx_compXref(self, compXref_path):
         name_pubDB_xref = {}
+        compName_mnxc = {}
         try:
             with open(compXref_path) as f:
                 c = csv.reader(f, delimiter='\t')
@@ -371,6 +375,7 @@ class rpCache:
                         else:
                             dbName = row[0].split(':')[0]
                             dbCompId = ''.join(row[0].split(':')[1:])
+                            dbCompId = dbCompId.lower()
                         if dbName=='deprecated':
                             dbName = 'mnx'
                         #create the dicts
@@ -380,10 +385,13 @@ class rpCache:
                             name_pubDB_xref[mnxc][dbName] = []
                         if not dbCompId in name_pubDB_xref[mnxc][dbName]:
                             name_pubDB_xref[mnxc][dbName].append(dbCompId)
+                        #create the reverse dict
+                        if not dbCompId in compName_mnxc:
+                            compName_mnxc[dbCompId] = mnxc
         except FileNotFoundError:
-            logging.error('compXref file not found')
+            self.logger.error('compXref file not found')
             return {}
-        return name_pubDB_xref
+        return name_pubDB_xref, compName_mnxc
 
 
     ####################### Equilibrator ###############################
@@ -425,7 +433,7 @@ class rpCache:
                 mnx = row[0].split(':') 
                 if mnx[0]=='kegg' and mnx[1][0]=='C':
                     if mnx[1] in kegg_mnxm:
-                        logging.warning(
+                        self.logger.warning(
                             'Replaced '+str(mnx[1])+': '+str(kegg_mnxm[mnx[1]])+' from '+str(row[1])
                         )
                     else:
@@ -455,7 +463,7 @@ class rpCache:
                     except KeyError:
                         pass
                 except KeyError:
-                    logging.warning('Cannot find: '+str(cd))
+                    self.logger.warning('Cannot find: '+str(cd))
                     notFound_cc.append(cd['CID'])
                     continue
             '''
@@ -488,7 +496,7 @@ class rpCache:
                         except KeyError:
                             pass
                     except KeyError:
-                        logging.warning('Cannot find: '+str(cd))
+                        self.logger.warning('Cannot find: '+str(cd))
                         notFound_alberty.append(cd['cid'])
                         continue
                 '''
@@ -542,10 +550,10 @@ class rpCache:
                     #rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[12]), 'reac_id': self._checkMNXRdeprecated(row[2]), 'subs_id': self._checkMNXMdeprecated(row[6]), 'rel_direction': int(row[15]), 'left': {self._checkMNXMdeprecated(row[6]): 1}, 'right': products}
                     rule[row['# Rule_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
                 except ValueError:
-                    logging.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
-                    logging.error('Problem converting rule_score: '+str(row['Score_normalized']))
+                    self.logger.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
+                    self.logger.error('Problem converting rule_score: '+str(row['Score_normalized']))
         except FileNotFoundError as e:
-                logging.error('Could not read the rules_rall file ('+str(path)+')')
+                self.logger.error('Could not read the rules_rall file ('+str(path)+')')
                 return {}
         return rule
 
@@ -576,8 +584,8 @@ class rpCache:
                 tmp = {} # makes sure that if theres an error its not added
                 #parse the reaction equation
                 if not len(row['Equation'].split('='))==2:
-                    logging.warning('There should never be more or less than a left and right of an euation')
-                    logging.warnin(row['Equation'])
+                    self.logger.warning('There should never be more or less than a left and right of an euation')
+                    self.logger.warnin(row['Equation'])
                     continue 
                 #reac_left = row[1].split('=')[0]
                 #reac_right = row[1].split('=')[1]
@@ -593,7 +601,7 @@ class rpCache:
                         try:
                             tmp['left'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
                         except ValueError:
-                            logging.warning('Cannot convert '+str(spe[0]))
+                            self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
                 '''# Common name of chemicals -- Perhaps implement some day
                 #### chem names
@@ -607,7 +615,7 @@ class rpCache:
                         try: 
                             tmp['chem_left'][spe[1]] = int(spe[0])
                         except ValueError:
-                            logging.warning('Cannot convert '+str(spe[0]))
+                            self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
                 '''
                 ####### RIGHT #####
@@ -622,7 +630,7 @@ class rpCache:
                         try: 
                             tmp['right'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
                         except ValueError:
-                            logging.warning('Cannot convert '+str(spe[0]))
+                            self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
                 ''' Common name of chemicals -- Perhaps implement some day
                 #### chem names
@@ -636,14 +644,14 @@ class rpCache:
                         try: 
                             tmp['chem_right'][spe[1]] = int(spe[0])
                         except ValueError:
-                            logging.warning('Cannot convert '+str(spe[0]))
+                            self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
                 '''
                 ####### DIRECTION ######
                 try:
                     tmp['direction'] = int(row['Direction'])
                 except ValueError:
-                    logging.error('Cannot convert '+str(row['Direction'])+' to int')
+                    self.logger.error('Cannot convert '+str(row['Direction'])+' to int')
                     continue
                 ### add the others
                 tmp['main_left'] = row['Main_left'].split(',')
@@ -651,7 +659,7 @@ class rpCache:
                 reaction[self._checkMNXRdeprecated(row['#Reaction_ID'])] = tmp
             return reaction
         except FileNotFoundError:
-            logging.error('Cannot find file: '+str(path))
+            self.logger.error('Cannot find file: '+str(path))
             return False
  
 
@@ -667,36 +675,38 @@ if __name__ == "__main__":
     #dirname = os.path.dirname(os.path.abspath( __file__ ))
     cache = rpCache()
     #generate the deprecated
-    logging.info('Generating deprecatedMNXM_mnxm')
+    #self.logger.info('Generating deprecatedMNXM_mnxm')
     cache._deprecatedMNXM('input_cache/chem_xref.tsv')
     cache._deprecatedMNXR('input_cache/reac_xref.tsv')
     pickle.dump(cache.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
     pickle.dump(cache.deprecatedMNXR_mnxr, open('cache/deprecatedMNXR_mnxr.pickle', 'wb'))
     #mnxm_dG
-    logging.info('Generating mnxm_dG')
+    #self.logger.info('Generating mnxm_dG')
     pickle.dump(cache.kegg_dG('input_cache/cc_compounds.json.gz',
         'input_cache/alberty.json',
         'input_cache/compounds.csv'),
         open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
-    logging.info('Generating rr_reactions')
+    #self.logger.info('Generating rr_reactions')
     rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
-    logging.info('Generating full_reactions')
+    #self.logger.info('Generating full_reactions')
     pickle.dump(cache.full_reac('input_cache/rxn_recipes.tsv'), 
             open('cache/full_reactions.pickle', 'wb'))
     #mnxm_strc --> use gzip since it is a large file
-    logging.info('Parsing the SMILES and InChI')
+    #self.logger.info('Parsing the SMILES and InChI')
     #pickle.dump(cache.mnxm_strc(), open('cache/mnxm_strc.pickle', 'wb'))
     mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     pickle.dump(mnx_strc, gzip.open('cache/mnxm_strc.pickle.gz','wb'))
     pickle.dump(inchikey_mnxm, gzip.open('cache/inchikey_mnxm.pickle.gz','wb'))
     #xref --> use gzip since it is a large file
-    logging.info('Parsing the Cross-references')
+    #self.logger.info('Parsing the Cross-references')
     pickle.dump(cache.mnx_chemXref('input_cache/chem_xref.tsv'), gzip.open('cache/chemXref.pickle.gz','wb'))
     pickle.dump(cache.mnx_reacXref('input_cache/reac_xref.tsv', 'input_cache/rxn_recipes.tsv'), gzip.open('cache/reacXref.pickle.gz','wb'))
-    pickle.dump(cache.mnx_compXref('input_cache/comp_xref.tsv'), gzip.open('cache/compXref.pickle.gz','wb'))
+    name_pubDB_xref, compName_mnxc = cache.mnx_compXref('input_cache/comp_xref.tsv')
+    pickle.dump(name_pubDB_xref, gzip.open('cache/compXref.pickle.gz','wb'))
+    pickle.dump(compName_mnxc, gzip.open('cache/nameCompXref.pickle.gz','wb'))
     #copy the other file required
     copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
     #copy the rules_rall.tsv 

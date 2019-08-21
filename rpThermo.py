@@ -1,5 +1,4 @@
 import numpy as np
-import logging
 import pybel
 import json
 from scipy.special import logsumexp
@@ -12,6 +11,8 @@ import libsbml
 #import component_contribution
 from . import component_contribution
 
+import logging
+
 class rpThermo:
     """Combination of equilibrator and group_contribution analysis to calculate the thermodymaics of the individual
     metabolic pathways output from RP2paths and thus RetroPath2.0
@@ -23,6 +24,8 @@ class rpThermo:
             temperature=298.15):
         #self.compound_dict = compound_dict
         #TODO: put this in its own function
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Started instance of rpThermo')
         #### set the physiological parameters
         self.pH = pH
         self.pMg = pMg
@@ -68,12 +71,12 @@ class rpThermo:
         try:
             self.cc_preprocess = np.load(dirname+'/cache/cc_preprocess.npz')
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.kegg_dG = pickle.load(open(dirname+'/cache/kegg_dG.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         return True
 
@@ -119,7 +122,7 @@ class rpThermo:
                 try:
                     pmap_species = self.kegg_dG[cid]['component_contribution'][0]['pmap']['species']
                 except KeyError:
-                    logging.warning('Component_contribution cannot find any species')
+                    self.logger.warning('Component_contribution cannot find any species')
                     raise KeyError
                 #if compound_index==None and group_vector==None and pmap_species==None:
                     #exit the component_conribution condition if all are none
@@ -130,13 +133,13 @@ class rpThermo:
                 if len(self.kegg_dG[cid]['alberty'])==1:
                     return None, None, self.kegg_dG[cid]['alberty'][0]['species']
                 else:
-                    logging.warning('Alberty and component_contribution species are empty')
+                    self.logger.warning('Alberty and component_contribution species are empty')
                     raise KeyError
             else:
-                logging.warning('There are no valid dictionnary of precalculated dG for '+str(cid))
+                self.logger.warning('There are no valid dictionnary of precalculated dG for '+str(cid))
                 raise KeyError
         else:
-            logging.warning('There are no '+str(cid)+' in self.kegg_dG')
+            self.logger.warning('There are no '+str(cid)+' in self.kegg_dG')
             raise KeyError
 
 
@@ -165,18 +168,18 @@ class rpThermo:
         elif srct_type=='inchi':
             molecule = pybel.readstring('inchi', srct_string)
         else:
-            logging.error('Must input a valid molecular structure string')
+            self.logger.error('Must input a valid molecular structure string')
             raise LookupError
         inchi = molecule.write('inchi').strip()
         inchi_key = molecule.write("inchikey").strip()
         if not inchi_key:
-            logging.error('Molecule with no explicit structure: '+str(srct_string))
+            self.logger.error('Molecule with no explicit structure: '+str(srct_string))
             raise LookupError
         #compute pKas
         try:
             p_kas, major_ms_smiles = component_contribution.chemaxon.get_dissociation_constants(inchi)
         except:
-            logging.error('ChemAxon has encountered an error')
+            self.logger.error('ChemAxon has encountered an error')
             raise LookupError
         p_kas = sorted([pka for pka in p_kas if self.min_pH<pka<self.max_pH], reverse=True)
         molecule = pybel.readstring('smi', major_ms_smiles)
@@ -195,7 +198,7 @@ class rpThermo:
         try:
             g = self.decomposer.smiles_to_groupvec(molecule.write('smiles')).as_array()
         except component_contribution.inchi2gv.GroupDecompositionError as gde:
-            logging.error('Cannot decompose SMILES: '+str(srct_string))
+            self.logger.error('Cannot decompose SMILES: '+str(srct_string))
             #return None, None, None
             raise LookupError
         ### using equilibrator training data
@@ -275,7 +278,7 @@ class rpThermo:
             else:
                 physioParameter = 1.0
         except KeyError:
-            logging.warning('Cannot find precalculated cmp_dfG_prime_o')
+            self.logger.warning('Cannot find precalculated cmp_dfG_prime_o')
             raise KeyError
         total = scaled_transforms[0]
         for i in range(1, len(scaled_transforms)):
@@ -289,7 +292,7 @@ class rpThermo:
             for g_ind, g_count in group_vector:
                 G[g_ind, 0] += stoichio*g_count
         else:
-            logging.warning('Cannot generate uncerstainty for '+str(kegg_cid))
+            self.logger.warning('Cannot generate uncerstainty for '+str(kegg_cid))
         dG0_prime = -self.RT*total
         return dG0_prime, X, G, physioParameter
 
@@ -361,7 +364,7 @@ class rpThermo:
             #TODO: sort them to have the lowest KEGG CID used
             elif len(cid)>1:
                 cid = sorted(cid)[0]
-                logging.warning('There are more than one results, using the first one '+str(sorted(cid)))
+                self.logger.warning('There are more than one results, using the first one '+str(sorted(cid)))
             else:
                 cid = None
             if cid:
@@ -386,7 +389,7 @@ class rpThermo:
                                 self.calculated_dG[smiles]['X'] = X
                                 self.calculated_dG[smiles]['G'] = G
                             except (KeyError, LookupError):
-                                logging.warning('Cannot use InChI to calculate the thermodynamics')
+                                self.logger.warning('Cannot use InChI to calculate the thermodynamics')
                                 pass
                         #try for inchi
                         if smiles and dfG_prime_o==None:
@@ -400,12 +403,12 @@ class rpThermo:
                                 self.calculated_dG[smiles]['X'] = X
                                 self.calculated_dG[smiles]['G'] = G
                             except (KeyError, LookupError):
-                                logging.warning('Cannot use SMILES to calculate the thermodynamics')
+                                self.logger.warning('Cannot use SMILES to calculate the thermodynamics')
                                 raise KeyError
             ############## use the structure #########################
             else:
                 if cid:
-                    logging.warning('Database does not contain thermodynamics for KEGG: '+str(cid))
+                    self.logger.warning('Database does not contain thermodynamics for KEGG: '+str(cid))
                 #at last, if all fails use its structure to calculate dfG_prime_o
                 #try for smiles
                 if inchi:
@@ -419,7 +422,7 @@ class rpThermo:
                         self.calculated_dG[smiles]['X'] = X
                         self.calculated_dG[smiles]['G'] = G
                     except (KeyError, LookupError):
-                        logging.warning('Cannot use InChI to calculate the thermodynamics')
+                        self.logger.warning('Cannot use InChI to calculate the thermodynamics')
                         pass
                 #try for inchi
                 if smiles and dfG_prime_o==None:
@@ -433,7 +436,7 @@ class rpThermo:
                         self.calculated_dG[smiles]['X'] = X
                         self.calculated_dG[smiles]['G'] = G
                     except (KeyError, LookupError):
-                        logging.warning('Cannot use SMILES to calculate the thermodynamics')
+                        self.logger.warning('Cannot use SMILES to calculate the thermodynamics')
                         raise KeyError
         #update the species dfG information
         dfG_prime_m = None
@@ -512,7 +515,7 @@ class rpThermo:
                         G = already_calculated[pro.species]['G']
                         concentration = already_calculated[pro.species]['concentration']
                 except (KeyError, LookupError):
-                    logging.warning('Failed to calculate the thermodynamics for '+str(pro.species))
+                    self.logger.warning('Failed to calculate the thermodynamics for '+str(pro.species))
                     continue
                 reaction_stoichio.append(float(pro.stoichiometry))
                 pathway_stoichio.append(float(pro.stoichiometry))
@@ -543,7 +546,7 @@ class rpThermo:
                         G = already_calculated[rea.species]['G']
                         concentration = already_calculated[rea.species]['concentration']
                 except (KeyError, LookupError):
-                    logging.warning('Failed to calculate the thermodynamics for '+str(pro.species))
+                    self.logger.warning('Failed to calculate the thermodynamics for '+str(pro.species))
                     continue
                 reaction_stoichio.append(-float(rea.stoichiometry))
                 pathway_stoichio.append(-float(rea.stoichiometry))

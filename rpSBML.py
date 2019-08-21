@@ -1,9 +1,10 @@
 import libsbml
 from hashlib import md5
-import logging
 import os
 import pickle
 import gzip
+
+import logging
 
 ## @package RetroPath SBML writer
 # Documentation for SBML representation of the different model
@@ -29,6 +30,8 @@ class rpSBML:
     # @param docModel libSBML Document object
     # @param nameSpaceModel libSBML name space (not required)
     def __init__(self, modelName, document=None, path=None):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Started instance of rpSBML')
         self.modelName = modelName
         self.document = document
         if self.document==None:
@@ -41,7 +44,7 @@ class rpSBML:
         self.compartmentName = None
         self.compartmentId = None
         #if self.model==None:
-        #    logging.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
+        #    self.logger.warning('rpSBML object was initiated as empty. Please call createModel() to initalise the model')
 
     #######################################################################
     ############################# PRIVATE FUNCTIONS ####################### 
@@ -56,7 +59,7 @@ class rpSBML:
     # @param message The string that describes the call
     def _checklibSBML(self, value, message):
         if value is None:
-            logging.error('LibSBML returned a null value trying to ' + message + '.')
+            self.logger.error('LibSBML returned a null value trying to ' + message + '.')
             raise SystemExit('LibSBML returned a null value trying to ' + message + '.')
         elif type(value) is int:
             if value==libsbml.LIBSBML_OPERATION_SUCCESS:
@@ -65,10 +68,10 @@ class rpSBML:
                 err_msg = 'Error encountered trying to ' + message + '.' \
                         + 'LibSBML returned error code ' + str(value) + ': "' \
                         + libsbml.OperationReturnValue_toString(value).strip() + '"'
-                logging.error(err_msg)
+                self.logger.error(err_msg)
                 raise SystemExit(err_msg)
         else:
-            #logging.info(message)
+            #self.logger.info(message)
             return None
 
 
@@ -117,18 +120,18 @@ class rpSBML:
     # @param inFile String Path to the input SBML file
     def readSBML(self, inFile):
         if not os.path.isfile(inFile):
-            logging.error('Invalid input file')
+            self.logger.error('Invalid input file')
             raise FileNotFoundError
         document = libsbml.readSBML(inFile)
-        self._checklibSBML(document, 'readinf input file')
+        self._checklibSBML(document, 'reading input file')
         errors = document.getNumErrors()
         #display the errors in the log accordning to the severity
         for err in [document.getError(i) for i in range(document.getNumErrors())]:
             if err.isFatal:
-                logging.error('libSBML reading error: '+str(err.getShortMessage()))
+                self.logger.error('libSBML reading error: '+str(err.getShortMessage()))
                 raise FileNotFoundError
             else:
-                logging.warning('libSBML reading warning: '+str(err.getShortMessage()))
+                self.logger.warning('libSBML reading warning: '+str(err.getShortMessage()))
         model = document.getModel()
         if not model:
             loging.error('Either the file was not read correctly or the SBML is empty')
@@ -155,7 +158,7 @@ class rpSBML:
                 if self.path:
                     p = self.path
                 else:
-                    logging.error('The output path is not a directory: '+str(path))
+                    self.logger.error('The output path is not a directory: '+str(path))
                     return False
             else:
                 p = path
@@ -242,7 +245,7 @@ class rpSBML:
         for i in range(bag.getNumChildren()):
             str_annot = bag.getChild(i).getAttrValue(0)
             if str_annot=='':
-                logging.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
+                self.logger.warning('This contains no attributes: '+str(bag.getChild(i).toXMLString()))
                 continue
             dbid = str_annot.split('/')[-2].split('.')[0]
             if len(str_annot.split('/')[-1].split(':'))==2:
@@ -263,7 +266,7 @@ class rpSBML:
         for i in range(bag.getNumChildren()):
             ann = bag.getChild(i)
             if ann=='':
-                logging.warning('This contains no attributes: '+str(ann.toXMLString()))
+                self.logger.warning('This contains no attributes: '+str(ann.toXMLString()))
                 continue
             #if not ann.getName() in toRet:
             if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o' or ann.getName()[0:4]=='fba_':
@@ -447,7 +450,7 @@ class rpSBML:
                 for spe_name in rp_rp_species[rp_step_id]['products']:
                     rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
         except AttributeError:
-            logging.error('TODO: debug, for some reason some are passed as None here')
+            self.logger.error('TODO: debug, for some reason some are passed as None here')
             return False, {}
         if not len(meas_rp_species)==len(rp_rp_species)+1: #add one for the targetSink
             return False, {}
@@ -551,7 +554,7 @@ class rpSBML:
                                 return False
             return True
         else:
-            logging.error('The pathways are not the same length')
+            self.logger.error('The pathways are not the same length')
             return False
         """
 
@@ -610,7 +613,7 @@ class rpSBML:
             source_annotation = source_compartment.getAnnotation()
             #self._checklibSBML(source_annotation, 'Getting compartment target annotation')
             if not source_annotation:
-                logging.warning('No annotation for the source of compartment '+str(source_compartment.getId()))
+                self.logger.warning('No annotation for the source of compartment '+str(source_compartment.getId()))
                 continue
             for y in range(target_model.getNumCompartments()):
                 target_compartment = target_model.getCompartment(y)
@@ -618,7 +621,7 @@ class rpSBML:
                 target_annotation = target_compartment.getAnnotation()
                 #self._checklibSBML(target_annotation, 'Getting target annotation')
                 if not target_annotation:
-                    logging.warning('No annotation for the target of compartment: '+str(target_compartment.getId()))
+                    self.logger.warning('No annotation for the target of compartment: '+str(target_compartment.getId()))
                     continue
                 if self.compareMIRIAMAnnotations(source_annotation, target_annotation):
                     sourceCompartmentID_targetCompartmentID[source_compartment.getId()] = target_compartment.getId() 
@@ -716,7 +719,7 @@ class rpSBML:
             #target_annotation = target_species.getAnnotation()
             target_annotation = target_model.getSpecies(y).getAnnotation()
             if not target_annotation:    
-                logging.warning('Cannot find annotations for species: '+str(target_model.getSpecies(y).getId()))
+                self.logger.warning('Cannot find annotations for species: '+str(target_model.getSpecies(y).getId()))
                 continue
             self._checklibSBML(target_annotation, 'Getting target annotation')
             targetModel_speciesAnnot[y] = self.readMIRIAMAnnotation(target_annotation)
@@ -729,7 +732,7 @@ class rpSBML:
             source_annotation = source_species.getAnnotation()
             self._checklibSBML(source_annotation, 'Getting source annotation')
             if not source_annotation:
-                logging.warning('No annotation for the source of compartment '+str(source_compartment.getId()))
+                self.logger.warning('No annotation for the source of compartment '+str(source_compartment.getId()))
                 #we assume that if there are no annotations then we add it
                 toAddNum.append(i)
                 continue
@@ -739,7 +742,7 @@ class rpSBML:
                 #target_annotation = target_species.getAnnotation()
                 #self._checklibSBML(target_annotation, 'Getting target annotation')
                 #if not target_annotation:    
-                #    logging.warning('Cannot find target number: '+str(y))
+                #    self.logger.warning('Cannot find target number: '+str(y))
                 #    continue
             for y in targetModel_speciesAnnot:
                 #if self.compareMIRIAMAnnotations(source_annotation, targetModel_speciesAnnot[y]):
@@ -803,7 +806,7 @@ class rpSBML:
             #self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
             target_annotation = target_model.getReaction(y).getAnnotation()
             if not target_annotation:    
-                logging.warning('No annotation for the target of reaction: '+str(target_model.getReaction(y).getId()))
+                self.logger.warning('No annotation for the target of reaction: '+str(target_model.getReaction(y).getId()))
                 continue
             self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
             targetModel_reactionsAnnot[y] = self.readMIRIAMAnnotation(target_annotation)
@@ -818,8 +821,8 @@ class rpSBML:
             source_annotation = source_reaction.getAnnotation()
             #self._checklibSBML(source_annotation, 'fetching source reaction annotation')
             if not source_annotation:
-                logging.warning(source_annotation)
-                logging.warning('No annotation for the source of reaction: '+str(source_reaction.getId()))
+                self.logger.warning(source_annotation)
+                self.logger.warning('No annotation for the source of reaction: '+str(source_reaction.getId()))
                 toAddNum.append(i)
                 continue
             if source_reaction.getId() in model_rpPathway:
@@ -831,7 +834,7 @@ class rpSBML:
                 #target_annotation = target_reaction.getAnnotation()
                 #self._checklibSBML(target_annotation, 'fetching target reaction annotation') 
                 #if not target_annotation:    
-                #    logging.warning('No annotation for the target of reaction: '+str(target_reaction.getId()))
+                #    self.logger.warning('No annotation for the target of reaction: '+str(target_reaction.getId()))
                 #    continue
             for y in targetModel_reactionsAnnot:
                 #if self.compareMIRIAMAnnotations(source_annotation, target_annotation):
@@ -1008,7 +1011,7 @@ class rpSBML:
       <bqbiol:is>
         <rdf:Bag>'''
         #TODO: for yout to complete
-        id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/'}
+        id_ident = {'mnx': 'metanetx.compartment/', 'bigg': 'bigg.compartment/', 'seed': 'seed/', 'name': 'name/'}
         #WARNING: compartmentNameID as of now, needs to be a MNX ID
         for databaseId in compXref:
             for compartmentId in compXref[databaseId]:
@@ -1109,7 +1112,7 @@ class rpSBML:
             fluxUpperBound,
             fluxLowerBound,
             step,
-            compartmentId='MNXC3',
+            compartmentId,
             reaction_smiles=None,
             ecs=[],
             reacXref={},
@@ -1213,7 +1216,7 @@ class rpSBML:
             self._checklibSBML(newM, 'Creating a new groups member')
             self._checklibSBML(newM.setIdRef(reacId), 'Setting name to the groups member')
         else:
-            logging.warning('This pathway is not added to a particular group')
+            self.logger.warning('This pathway is not added to a particular group')
 
 
     ## Create libSBML reaction
@@ -1232,12 +1235,12 @@ class rpSBML:
     # @param dG_uncert Optional Uncertainty associated with the thermodynamics of the reaction 
     def createSpecies(self, 
             chemId,
+            compartmentId,
             chemXref={}, 
             metaID=None, 
             inchi=None,
             inchiKey=None,
-            smiles=None,
-            compartmentId=None):
+            smiles=None):
             #TODO: add these at some point -- not very important
             #charge=0,
             #chemForm=''):
@@ -1248,10 +1251,11 @@ class rpSBML:
         self._checklibSBML(spe_fbc, 'creating this species as an instance of FBC')
         #spe_fbc.setCharge(charge) #### These are not required for FBA 
         #spe_fbc.setChemicalFormula(chemForm) #### These are not required for FBA
-        if compartmentId:
-            self._checklibSBML(spe.setCompartment(compartmentId), 'set species spe compartment')
-        else:
-            self._checklibSBML(spe.setCompartment(self.compartmentId), 'set species spe compartment')
+        #if compartmentId:
+        self._checklibSBML(spe.setCompartment(compartmentId), 'set species spe compartment')
+        #else:
+        #    #removing this could lead to errors with xref
+        #    self._checklibSBML(spe.setCompartment(self.compartmentId), 'set species spe compartment')
         #ID same structure as cobrapy
         #TODO: determine if this is always the case or it will change
         self._checklibSBML(spe.setHasOnlySubstanceUnits(False), 'set substance units')
@@ -1413,7 +1417,7 @@ class rpSBML:
     #
     #
     #
-    def genericModel(self, modelName, modelID, compXref):
+    def genericModel(self, modelName, modelID, compXref, compartment_id):
         self.createModel(modelName, modelID)
         # mmol_per_gDW_per_hr
         unitDef = self.createUnitDefinition('mmol_per_gDW_per_hr')
@@ -1432,7 +1436,13 @@ class rpSBML:
         lowZeroParam = self.createParameter('B_0', 0, 'mmol_per_gDW_per_hr')
         #compartment
         #TODO: create a new compartment 
-        self.createCompartment(1, 'MNXC3', 'cytoplasm', compXref)
+        #self.createCompartment(1, 'MNXC3', 'cytoplasm', compXref)
+        #try to recover the name from the Xref
+        try:
+            name = compXref['name'][0]
+        except KeyError:
+            name = compartment_id+'_name'
+        self.createCompartment(1, compartment_id, name, compXref)
 
 
     ##################################################################################################
@@ -1454,7 +1464,7 @@ class rpSBML:
             if cofactors_rp_paths==None and not self.cofactors_rp_paths==None:
                 cofactors_rp_paths = self.cofactors_rp_paths
         except EmptyOutRPpaths:
-            logging.error('Both class and input cofactors_rp_paths are empty')
+            self.logger.error('Both class and input cofactors_rp_paths are empty')
         #### Check what is the best path to use
         if path_id==None:
             path_id = 1

@@ -3,10 +3,10 @@ import os
 import sys
 import gzip
 import copy
-import logging
 import itertools
 from .rpSBML import rpSBML
 
+import logging
 
 ## Class to add the cofactors to a monocomponent reaction to construct the full reaction
 #
@@ -19,6 +19,8 @@ class rpCofactors:
     # @param rpReader input reader object with the parsed user input and cache files required
     #DEPRECATED def __init__(self, rpReader, userXrefDbName=None):
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Started instance of rpCofactors')
         ##### stuff to load from cache #####
         self.full_reactions = None
         self.rr_reactions = None
@@ -41,27 +43,27 @@ class rpCofactors:
         try:
             self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.full_reactions = pickle.load(open(dirname+'/cache/full_reactions.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         return True
 
@@ -90,7 +92,7 @@ class rpCofactors:
             if len(cmp_diff)==1:
                 pathway_cmp_mnxm.update({cmp_diff[0]: self.rr_reactions[step['rule_id']]['subs_id']})
             else:
-                logging.warning('There are more than 1 or None of cmp_diff: '+str(cmp_diff))
+                self.logger.warning('There are more than 1 or None of cmp_diff: '+str(cmp_diff))
         elif reac_side=='left':
             #identify the main compounds and remove them from the full reaction
             try:
@@ -100,10 +102,10 @@ class rpCofactors:
                 #INFO: this happens if the step does not match the original reaction
                 # and usually happens since there can be more than one reaction rule associated
                 # with a reaction when the original reaction species do not match
-                logging.error('Could not find intermediate compound name')
+                self.logger.error('Could not find intermediate compound name')
                 raise KeyError
         else:
-            logging.warning('Direction can only be right or left')
+            self.logger.warning('Direction can only be right or left')
             raise KeyError
         #calculate the difference between the two
         diff = {i: noMain_fullReac[i] for i in noMain_fullReac.keys()-step[reac_side].keys()}
@@ -133,7 +135,7 @@ class rpCofactors:
                             diff[i] = diff_stochio
                     step[reac_side][i] = f_reac[pathway_cmp_mnxm[i]]
                 except KeyError:
-                    logging.warning('Could not find the intermediate compound in full reaction: '+str(i))
+                    self.logger.warning('Could not find the intermediate compound in full reaction: '+str(i))
                     pass
         ######### REACTION RULE ########
         #take all the added chemical compounds, return their SMILES and add them to the appropriate side
@@ -149,10 +151,10 @@ class rpCofactors:
                             reac_smiles[0] += '.'+self.mnxm_strc[i]['smiles']
                         step['reaction_rule'] = reac_smiles[0]+'>>'+reac_smiles[1]
                     else:
-                        logging.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc')
+                        self.logger.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc')
                         continue
                 else:
-                    logging.warning('Cannot find '+str(i)+' in self.mnxm_strc')
+                    self.logger.warning('Cannot find '+str(i)+' in self.mnxm_strc')
                     continue
 
 
@@ -170,8 +172,10 @@ class rpCofactors:
                 self.completeReac(step, 'right', self.rr_reactions[step['rule_id']]['left'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['left'], pathway_cmp_mnxm)
                 self.completeReac(step, 'left', self.rr_reactions[step['rule_id']]['right'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['right'], pathway_cmp_mnxm)
             else:
-                logging.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']]['rel_direction']))
-        except KeyError:
+                self.logger.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']]['rel_direction']))
+                return False
+        except KeyError as e:
+            self.logger.error('Could not recognise the following reaction rule: '+str(e))
             return False
         return True
 
@@ -211,7 +215,7 @@ class rpCofactors:
                                 #TODO: although there should not be any 
                                 #intermediate species here consider
                                 #removing this warning
-                                logging.warning('Cannot find the xref for this species: '+str(species))
+                                self.logger.warning('Cannot find the xref for this species: '+str(species))
                                 pass
                         try:
                             inchi = self.mnxm_strc[species]['inchi']
@@ -219,7 +223,7 @@ class rpCofactors:
                             try:
                                 inchi = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['inchi']
                             except KeyError:
-                                logging.warning('Cannot find the inchi for this species: '+str(species))
+                                self.logger.warning('Cannot find the inchi for this species: '+str(species))
                                 pass
                         try:
                             inchikey = self.mnxm_strc[species]['inchikey']
@@ -227,7 +231,7 @@ class rpCofactors:
                             try:
                                 inchikey = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['inchikey']
                             except KeyError:
-                                logging.warning('Cannot find the inchikey for this species: '+str(species))
+                                self.logger.warning('Cannot find the inchikey for this species: '+str(species))
                                 pass
                         try:
                             smiles = self.mnxm_strc[species]['smiles']
@@ -235,16 +239,16 @@ class rpCofactors:
                             try:
                                 smiles = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['smiles']
                             except KeyError:
-                                logging.warning('Cannot find the smiles for this species: '+str(species))
+                                self.logger.warning('Cannot find the smiles for this species: '+str(species))
                                 pass
                         #add the new species to rpsbml
                         rpsbml.createSpecies(species, 
+                                compartment_id,
                                 xref, 
                                 None, 
                                 inchi,
                                 inchikey,
-                                smiles,
-                                compartment_id)
+                                smiles)
                 #add the new species to the RP reactions
                 reac = rpsbml.model.getReaction(rp_path[stepNum]['reaction_id'])
                 for pro in products:

@@ -1,10 +1,8 @@
 import csv
 import os
 import itertools
-import logging
 import collections
 import pickle
-import logging
 import gzip
 import sys
 import random
@@ -12,7 +10,10 @@ from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, Mol
 import json
 import copy
 
+#from .setup_self.logger import self.logger
+import logging
 from .rpSBML import rpSBML
+
 
 ## @package rpReader
 #
@@ -52,6 +53,8 @@ class rpReader:
     #
     #  @param self The object pointer
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Starting instance of rpReader')
         #cache files
         #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
@@ -88,43 +91,48 @@ class rpReader:
         try:
             self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         try:
             self.compXref = pickle.load(gzip.open(dirname+'/cache/compXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
+            return False
+        try:
+            self.nameCompXref = pickle.load(gzip.open(dirname+'/cache/nameCompXref.pickle.gz', 'rb'))
+        except FileNotFoundError as e:
+            self.logger.error(e)
             return False
         ''' Not used as of now
         try:
             self.reacXref = pickle.load(gzip.open(dirname+'/cache/reacXref.pickle.gz', 'rb'))
         except FileNotFoundError as e:
-            logging.error(e)
+            self.logger.error(e)
             return False
         '''
         return True
@@ -193,7 +201,7 @@ class rpReader:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchi'})
                             self.rp_strc[row[0]]['inchi'] = resConv['inchi']
                         except DepictionError as e:
-                            logging.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
+                            self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                     try:
                         self.rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
                         #try to generate them yourself by converting them directly
@@ -203,9 +211,9 @@ class rpReader:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})
                             self.rp_strc[row[0]]['inchikey'] = resConv['inchikey']
                         except DepictionError as e:
-                            logging.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
+                            self.logger.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
         except (TypeError, FileNotFoundError) as e:
-            logging.error('Could not read the compounds file ('+str(path)+')')
+            self.logger.error('Could not read the compounds file ('+str(path)+')')
 
 
     ## Function to parse the scope.csv file
@@ -226,7 +234,7 @@ class rpReader:
                         self.rp_transformation[row[1]]['rule'] = row[2]
                         self.rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
         except FileNotFoundError:
-            logging.error('Could not read the compounds file: '+str(path))
+            self.logger.error('Could not read the compounds file: '+str(path))
 
 
     ## Function to parse the out_paths.csv file
@@ -260,21 +268,21 @@ class rpReader:
                         #important to leave them in order
                         current_path_id = int(row[0])
                     except ValueError:
-                        logging.error('Cannot convert path_id to int ('+str(row[0])+')')
+                        self.logger.error('Cannot convert path_id to int ('+str(row[0])+')')
                         return {}
                     #################################
                     ruleIds = row[2].split(',')
                     if ruleIds==None:
-                        logging.error('The rulesIds is None')
+                        self.logger.error('The rulesIds is None')
                         pass
                     ###WARNING: This is the part where we select some rules over others
                     # we do it by sorting the list according to their score and taking the topx
                     if len(ruleIds)>maxRuleIds:
-                        logging.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
+                        self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
                         try:
                             ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
                         except KeyError:
-                            logging.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
+                            self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
                             ruleIds = random.sample(ruleIds, maxRuleIds)
                     sub_path_step = 1
                     for singleRule in ruleIds:
@@ -297,7 +305,7 @@ class rpReader:
                                     mnxm = tmp_l[1]
                                 tmpReac['left'][mnxm] = int(tmp_l[0])
                             except ValueError:
-                                logging.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
+                                self.logger.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
                                 return {}
                         ############## RIGHT ###########
                         for r in row[4].split(':'):
@@ -311,7 +319,7 @@ class rpReader:
                                     mnxm = tmp_r[1]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
                                 tmpReac['right'][mnxm] = int(tmp_r[0])
                             except ValueError:
-                                logging.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
+                                self.logger.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
                                 return {}
                         #################################
                         if not int(row[0]) in rp_paths:
@@ -323,8 +331,8 @@ class rpReader:
                         sub_path_step += 1
             self.rp_paths = rp_paths
         except (TypeError, FileNotFoundError) as e:
-            logging.error(e)
-            logging.error('Could not read the out_paths file ('+str(path)+') ')
+            self.logger.error(e)
+            self.logger.error('Could not read the out_paths file ('+str(path)+') ')
             return {}
 
     ## Convert RetroPath2.0 pathways to SBML (rpSBML's) 
@@ -340,6 +348,12 @@ class rpReader:
         #if the output folder does not exist then create it
         #for path in self.rp_paths:
         #sbmlThermo = rpThermo.rpThermo()
+        #recover the mnx compartment_id
+        try:
+            mnxc = self.nameCompXref[compartment_id.lower()]
+        except KeyError:
+            self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
+            return False
         self.sbml_paths = {}
         for pathNum in self.rp_paths:
             #first level is the list of lists of sub_steps
@@ -356,7 +370,8 @@ class rpReader:
                 #   -> special attention to the compartment
                 rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum),
                         'RP_model_'+str(path_id)+'_'+str(altPathNum),
-                        self.compXref[compartment_id])
+                        self.compXref[mnxc],
+                        compartment_id)
                 #2) create the pathway (groups)
                 rpsbml.createPathway(pathId)
                 #3) find all the unique species and add them to the model
@@ -365,23 +380,23 @@ class rpReader:
                     #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
                         rpsbml.createSpecies(meta,
+                                compartment_id,
                                 self.chemXref[meta],
                                 None,
                                 self.rp_strc[meta]['inchi'],
                                 self.rp_strc[meta]['inchikey'],
-                                self.rp_strc[meta]['smiles'],
-                                compartment_id)
+                                self.rp_strc[meta]['smiles'])
                     except KeyError:
                         try:
                             rpsbml.createSpecies(meta,
+                                    compartment_id,
                                     {},
                                     None,
                                     self.rp_strc[meta]['inchi'],
                                     self.rp_strc[meta]['inchikey'],
-                                    self.rp_strc[meta]['smiles'],
-                                    compartment_id)
+                                    self.rp_strc[meta]['smiles'])
                         except KeyError:
-                            logging.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
+                            self.logger.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
                 #4) add the complete reactions and their annotations
                 for step in steps:
                     #add the substep to the model
@@ -442,9 +457,18 @@ class rpReader:
     #  @return rpsbml.document the SBML document
     def jsonToSBML(self, json_dict, pathNum=1, pathId='rp_pathway', compartment_id='MNXC3'):
         #pathNum = 1
+        #recover the mnx compartment_id
+        try:
+            mnxc = self.nameCompXref[compartment_id]
+        except KeyError:
+            self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
+            return False
         #create the SBML
         rpsbml = rpSBML('rp_'+str(pathNum))
-        rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 'RP_model'+str(pathNum), self.compXref[compartment_id])
+        rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 
+                'RP_model'+str(pathNum), 
+                self.compXref[mnxc], 
+                compartment_id)
         rpsbml.createPathway(pathId)
         ### gather the data
         all_reac = {}
@@ -462,20 +486,20 @@ class rpReader:
                 inchikey_cid[node['data']['id'].replace('-', '')] = cid
                 try:
                     rpsbml.createSpecies(cid,
+                                        compartment_id,
                                         self.chemXref[cid],
                                         None,
                                         node['data']['InChI'],
                                         node['data']['id'],
-                                        node['data']['SMILES'],
-                                        compartment_id)
+                                        node['data']['SMILES'])
                 except KeyError:
                     rpsbml.createSpecies(cid,
+                                        compartment_id,
                                         {},
                                         None,
                                         node['data']['InChI'],
                                         node['data']['id'],
-                                        node['data']['SMILES'],
-                                        compartment_id)
+                                        node['data']['SMILES'])
                 if int(node['data']['isSource']) == 1:
                     source_name = cid
                     source_stochio = 1
@@ -501,7 +525,7 @@ class rpReader:
         for reaction_node in json_dict['elements']['edges']:
             if not len(reaction_node['data']['source'].split('-'))==3:
                 if not reaction_node['data']['source'] in all_reac:
-                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                    self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                 else:
                     rid = reaction_node['data']['source']
                     try:
@@ -517,7 +541,7 @@ class rpReader:
             #target
             if not len(reaction_node['data']['target'].split('-'))==3:
                 if not reaction_node['data']['target'] in all_reac:
-                    logging.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                    self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                     return False
                 else:
                     rid = reaction_node['data']['target']
@@ -585,7 +609,7 @@ class rpReader:
                 try:
                     pathID = int(row['pathway_ID'])
                 except ValueError:
-                    logging.error('Cannot convert pathway ID: '+str(row['pathway_ID']))
+                    self.logger.error('Cannot convert pathway ID: '+str(row['pathway_ID']))
                     continue
                 if not pathID in data:
                     data[pathID] = {}
@@ -595,7 +619,7 @@ class rpReader:
                 try:
                     stepID = int(row['step'])
                 except ValueError:
-                    logging.error('Cannot convert step ID: '+str(row['step']))
+                    self.logger.error('Cannot convert step ID: '+str(row['step']))
                     data[pathID]['isValid'] = False
                     continue
                 if stepID==0:
@@ -634,11 +658,11 @@ class rpReader:
                                     tmp['dbref'][db_name] = []
                                 tmp['dbref'][db_name].append(db_cid)
                             else:
-                                logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
+                                self.logger.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
                                 data[pathID]['isValid'] = False
                         data[pathID]['steps'][stepID]['substrates'].append(tmp)
                 else:
-                    logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['substrate_name'])+' <--> '+str(row['substrate_structure'])+' <--> '+str(row['substrate_dbref']))
+                    self.logger.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['substrate_name'])+' <--> '+str(row['substrate_structure'])+' <--> '+str(row['substrate_dbref']))
                     data[pathID]['isValid'] = False
                     continue
                 ##### products #########
@@ -672,16 +696,16 @@ class rpReader:
                                 tmp['dbref'][db_name].append(db_cid)
                             else:
                                 data[pathID]['isValid'] = False
-                                logging.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
+                                self.logger.warning('Ignoring the folowing product dbref ('+str(name)+'): '+str(dbref))
                         data[pathID]['steps'][stepID]['products'].append(tmp)
                 else:
-                    logging.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['product_name'])+' <--> '+str(row['product_structure'])+' <--> '+str(row['product_dbref']))
+                    self.logger.warning('Not equal length between substrate names, their structure or dbref ('+str(name)+'): '+str(row['product_name'])+' <--> '+str(row['product_structure'])+' <--> '+str(row['product_dbref']))
                     data[pathID]['isValid'] = False
                 data[pathID]['steps'][stepID]['ec_numbers'] = [i.replace(' ', '') for i in row['EC_number'].split(';')]
                 data[pathID]['steps'][stepID]['enzyme_id'] = [i.replace(' ', '') for i in row['enzyme_identifier'].split(';')]
                 data[pathID]['steps'][stepID]['enzyme_name'] = row['enzyme_name'].split(';')
         except FileNotFoundError:
-            logging.error('Cannot open the file: '+str(inFile))
+            self.logger.error('Cannot open the file: '+str(inFile))
         #now loop through all of them and remove the invalid paths
         toRet = copy.deepcopy(data)
         for path_id in data.keys():
@@ -736,7 +760,7 @@ class rpReader:
                     #must list the different models
                     meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
                 else:
-                    logging.warning('All species must be referenced by a MNX id or will be ignored')
+                    self.logger.warning('All species must be referenced by a MNX id or will be ignored')
                     break
                 #try to conver the inchi into the other structures
                 smiles = None
@@ -746,27 +770,27 @@ class rpReader:
                     smiles = resConv['smiles']
                     inchikey = resConv['inchikey']
                 except DepictionError as e:
-                    logging.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
+                    self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                 #create a new species
                 try:
                     rpsbml.createSpecies(meta,
+                            compartment_id,
                             self.chemXref[meta],
                             None,
                             chem['inchi'],
                             inchikey,
-                            smiles,
-                            compartment_id)
+                            smiles)
                 except KeyError:
                     try:
                         rpsbml.createSpecies(meta,
+                                compartment_id,
                                 {},
                                 None,
                                 chem['inchi'],
                                 inchikey,
-                                smiles,
-                                compartment_id)
+                                smiles)
                     except KeyError:
-                        logging.error('Could not create the following metabolite: '+str(meta))
+                        self.logger.error('Could not create the following metabolite: '+str(meta))
                         break
             #4) add the complete reactions and their annotations
             #need to convert the validation to step for reactions
@@ -777,14 +801,14 @@ class rpReader:
                         meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
                         toSend['left'][meta] = 1
                     else:
-                        logging.error('Need all the species to have a MNX ID')
+                        self.logger.error('Need all the species to have a MNX ID')
                         break
                 for chem in data[path_id]['steps'][stepNum]['products']:
                     if 'mnx' in chem['dbref']:
                         meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
                         toSend['right'][meta] = 1
                     else:
-                        logging.error('Need all the species to have a MNX ID')
+                        self.logger.error('Need all the species to have a MNX ID')
                         break
                 #if all are full add it
                 rpsbml.createReaction('M'+str(stepNum),

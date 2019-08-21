@@ -1,7 +1,7 @@
 import cobra
 import libsbml
-import logging
 
+import logging
 #import rpSBML
 
 ## Class to simulate an rpsbml object using different FBA types and objective functions
@@ -10,6 +10,8 @@ import logging
 #TODO: add the pareto frontier optimisation as an automatic way to calculate the optimal fluxes
 class rpFBA:
     def __init__(self, rpsbml):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Started instance of rpFBA')
         self.rpsbml = rpsbml
         self.cobraModel = None
   
@@ -22,7 +24,7 @@ class rpFBA:
     # @param message The string that describes the call
     def _checklibSBML(self, value, message):
         if value is None:
-            logging.error('LibSBML returned a null value trying to ' + message + '.')
+            self.logger.error('LibSBML returned a null value trying to ' + message + '.')
             raise SystemExit('LibSBML returned a null value trying to ' + message + '.')
         elif type(value) is int:
             if value==libsbml.LIBSBML_OPERATION_SUCCESS:
@@ -31,10 +33,10 @@ class rpFBA:
                 err_msg = 'Error encountered trying to ' + message + '.' \
                         + 'LibSBML returned error code ' + str(value) + ': "' \
                         + libsbml.OperationReturnValue_toString(value).strip() + '"'
-                logging.error(err_msg)
+                self.logger.error(err_msg)
                 raise SystemExit(err_msg)
         else:
-            #logging.info(message)
+            #self.logger.info(message)
             return None
 
 
@@ -43,8 +45,8 @@ class rpFBA:
             self.cobraModel = cobra.io.read_sbml_model(self.rpsbml.document.toXMLNode().toXMLString(),
                     use_fbc_package=True)
         except cobra.io.sbml.CobraSBMLError as e:
-            logging.error(e)
-            logging.error('Cannot convert the libSBML model to Cobra')
+            self.logger.error(e)
+            self.logger.error('Cannot convert the libSBML model to Cobra')
 
 
     ##
