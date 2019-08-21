@@ -14,7 +14,7 @@ import logging
 class rpCofactors:
     ## Init method
     # Here we want to seperate what is the use input and what is parsed by the cache to make sure that
-    # everything is not hadled by a single 
+    # everything is not hadled by a single
     #
     # @param rpReader input reader object with the parsed user input and cache files required
     #DEPRECATED def __init__(self, rpReader, userXrefDbName=None):
@@ -67,7 +67,7 @@ class rpCofactors:
             return False
         return True
 
-    
+
     ################################################################
     ######################### PUBLIC FUNCTIONS #####################
     ################################################################
@@ -98,11 +98,11 @@ class rpCofactors:
             try:
                 toRem = [pathway_cmp_mnxm[i] for i in list(step[reac_side].keys()-f_reac.keys())]
                 noMain_fullReac = {i:f_reac[i] for i in f_reac if i not in toRem}
-            except KeyError:
+            except KeyError as e:
                 #INFO: this happens if the step does not match the original reaction
                 # and usually happens since there can be more than one reaction rule associated
                 # with a reaction when the original reaction species do not match
-                self.logger.error('Could not find intermediate compound name')
+                self.logger.error('Could not find intermediate compound name {} in pathway_cmp_mnxm {}'.format(e, pathway_cmp_mnxm.keys()))
                 raise KeyError
         else:
             self.logger.warning('Direction can only be right or left')
@@ -176,7 +176,9 @@ class rpCofactors:
                 return False
         except KeyError as e:
             self.logger.error('Could not recognise the following reaction rule: '+str(e))
+            self.logger.error('Could not recognise reaction rule for step {}'.format(step))
             return False
+        self.logger.info('Successful compeltion for step {}'.format(step))
         return True
 
 
@@ -209,10 +211,10 @@ class rpCofactors:
                         try:
                             xref = self.chemXref[species]
                         except KeyError:
-                            try: 
+                            try:
                                 xref = self.chemXref[self.deprecatedMNXM_mnxm[species]]
                             except KeyError:
-                                #TODO: although there should not be any 
+                                #TODO: although there should not be any
                                 #intermediate species here consider
                                 #removing this warning
                                 self.logger.warning('Cannot find the xref for this species: '+str(species))
@@ -242,10 +244,10 @@ class rpCofactors:
                                 self.logger.warning('Cannot find the smiles for this species: '+str(species))
                                 pass
                         #add the new species to rpsbml
-                        rpsbml.createSpecies(species, 
+                        rpsbml.createSpecies(species,
                                 compartment_id,
-                                xref, 
-                                None, 
+                                xref,
+                                None,
                                 inchi,
                                 inchikey,
                                 smiles)
