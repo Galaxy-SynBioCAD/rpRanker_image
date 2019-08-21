@@ -30,11 +30,11 @@ from .rpFBA import rpFBA
 try:
     from .rpThermo import rpThermo
 except ModuleNotFoundError:
-    logger.warning("rpThermo is not available")
+    loggers.warning("rpThermo is not available")
 from .tools import tools
 try:
     from . import component_contribution
 except ModuleNotFoundError:
-    logger.warning("component_contribution is not available")
+    loggers.warning("component_contribution is not available")
 #from .component_contribution import *
 
