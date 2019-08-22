@@ -547,14 +547,17 @@ class rpCache:
                     else:
                         products[mnxm] += 1
                 try:
-                    #rule[row[0]] = {'rule_id': row[0], 'rule_score': float(row[12]), 'reac_id': self._checkMNXRdeprecated(row[2]), 'subs_id': self._checkMNXMdeprecated(row[6]), 'rel_direction': int(row[15]), 'left': {self._checkMNXMdeprecated(row[6]): 1}, 'right': products}
+                    '''
                     rule[row['# Rule_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
+                    '''
                     #WARNING: one reaction rule can have multiple reactions associated with them
-                    ''' To change when you can set subpaths from the mutliple numbers of 
+                    #To change when you can set subpaths from the mutliple numbers of 
+                    #we assume that the reaction rule has multiple unique reactions associated
                     if row['# Rule_ID'] not in rule:
                         rule[row['# Rule_ID']] = {}
+                    if row['# Rule_ID'] in rule[row['# Rule_ID']]:
+                        self.logger.warning('There is already reaction '+str(row['# Rule_ID'])+' in reaction rule '+str(row['# Rule_ID']))
                     rule[row['# Rule_ID']][row['Reaction_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
-                    '''
                 except ValueError:
                     self.logger.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
                     self.logger.error('Problem converting rule_score: '+str(row['Score_normalized']))

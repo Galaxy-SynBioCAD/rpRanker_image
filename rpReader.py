@@ -249,8 +249,6 @@ class rpReader:
     #  @maxRuleId maximal numer of rules associated with a step
     #  @return toRet_rp_paths Pathway object
     def outPaths(self, path, maxRuleIds=10):
-        ########## open either the global path or the local defined path ############
-        #### (with priority with the local path)
         try:
             rp_paths = {}
             #reactions = self.rr_reactions
@@ -274,20 +272,29 @@ class rpReader:
                     ruleIds = row[2].split(',')
                     if ruleIds==None:
                         self.logger.error('The rulesIds is None')
-                        pass
+                        #pass # or continue
+                        continue
                     ###WARNING: This is the part where we select some rules over others
                     # we do it by sorting the list according to their score and taking the topx
+                    tmp_rr_reactions = {}
+                    for r_id in ruleIds:
+                        for rea_id in self.rr_reactions[r_id]:
+                            tmp_rr_reactions[str(r_id)+'__'+str(rea_id)] = self.rr_reactions[r_id][rea_id]
                     if len(ruleIds)>maxRuleIds:
                         self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
                         try:
-                            ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
+                            #ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
+                            ruleIds = [y for y,_ in sorted([(i, tmp_rr_reactions[i]['rule_score']) for i in tmp_rr_reactions])][:maxRuleIds]
                         except KeyError:
                             self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
-                            ruleIds = random.sample(ruleIds, maxRuleIds)
+                            ruleIds = random.sample(tmp_rr_reactions, maxRuleIds)
+                    else:
+                        ruleIds = tmp_rr_reactions
                     sub_path_step = 1
                     for singleRule in ruleIds:
-                        tmpReac = {'rule_id': singleRule,
-                                'rule_score': self.rr_reactions[singleRule]['rule_score'],
+                        tmpReac = {'rule_id': singleRule.split('__')[0],
+                                'mnxr': singleRule.split('__')[1],
+                                'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
                                 'right': {},
                                 'left': {},
                                 'path_id': int(row[0]),
@@ -409,7 +416,7 @@ class rpReader:
                             self.rp_transformation[step['transformation_id']]['rule'],
                             self.rp_transformation[step['transformation_id']]['ec'])
                     #5) adding the consumption of the target
-                targetStep = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None}
+                targetStep = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None, 'mnxr': None}
                 rpsbml.createReaction('targetSink',
                         'B_999999',
                         'B_0',
@@ -446,6 +453,21 @@ class rpReader:
             pathNum += 1
 
 
+
+    def jsonPaths(self, json_dict):
+        
+        tmpReac = {'rule_id': singleRule.split('__')[0],
+            'mnxr': singleRule.split('__')[1],
+            'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
+            'right': {},
+            'left': {},
+            'path_id': int(row[0]),
+            'step': path_step,
+            'transformation_id': row[1][:-2]}
+
+
+
+    
     ## Function to generate an SBLM model from a JSON file
     #
     #  Read the json files of a folder describing pathways and generate an SBML file for each
@@ -457,6 +479,7 @@ class rpReader:
     #  @return rpsbml.document the SBML document
     def jsonToSBML(self, json_dict, pathNum=1, pathId='rp_pathway', compartment_id='MNXC3'):
         #pathNum = 1
+        '''
         #recover the mnx compartment_id
         try:
             mnxc = self.nameCompXref[compartment_id]
@@ -470,20 +493,26 @@ class rpReader:
                 self.compXref[mnxc], 
                 compartment_id)
         rpsbml.createPathway(pathId)
-        ### gather the data
-        all_reac = {}
+        '''
+        ############## gather the data #############
+        reactions_list = {}
         rp_paths = {}
         stochio = {}
         inchikey_cid = {}
+        species_list = {}
         for node in json_dict['elements']['nodes']:
             # add the species to the SBML directly
             if node['data']['type']=='compound':
                 try:
-                    #hack, pick the smallest mnx ID if there are multiple ones
+                    #pick the smallest mnx ID if there are multiple ones
                     cid = sorted(self.inchikey_mnxm[node['data']['id']]['mnx'], key=lambda x: int(x[4:]))[0]
                 except KeyError:
                     cid = node['data']['id'].replace('-', '')
                 inchikey_cid[node['data']['id'].replace('-', '')] = cid
+                species_list[cid] = {'inchi': node['data']['InChI'], 
+                                'id': node['data']['id'],
+                                'smiles': node['data']['SMILES']}
+                '''
                 try:
                     rpsbml.createSpecies(cid,
                                         compartment_id,
@@ -500,31 +529,36 @@ class rpReader:
                                         node['data']['InChI'],
                                         node['data']['id'],
                                         node['data']['SMILES'])
+                '''
                 if int(node['data']['isSource']) == 1:
                     source_name = cid
                     source_stochio = 1
             ## Create a dictionnary containing all the reactions
             elif node['data']['type']=='reaction':
                 #note sure about this... need to ask
-                step = node['data']['Iteration']
-                #hack, pick the first rule, usually have the biggest diameter
+                #NOTE: pick the rule with the highest diameter
                 r_id = sorted(node['data']['Rule ID'], key=lambda x: int(x.split('-')[-2]), reverse=True)[0]
-                all_reac[node['data']['id']] = {'rule_id': r_id,
+                reactions_list[node['data']['id']] = {}
+                sub_step_num = 1
+                for reac_id in self.rr_reactions[r_id]:
+                    reactions_list[node['data']['id']][reac_id] = {'rule_id': r_id,
+                        'mnxr': reac_id,
                         'right': {},
                         'left': {},
                         'path_id': pathNum,
-                        'step': step,
-                        'sub_step': 1,
+                        'step': None,
+                        'sub_step': None,
                         'transformation_id': node['data']['id'],
                         'rule_score': node['data']['Score'],
                         'smiles': node['data']['Reaction SMILES'],
                         'ec': list(filter(None, [i for i in node['data']['EC number']]))}
                 stochio[node['data']['id']] = node['data']['Stoechiometry']
+        ############ now that you have compiled all the reactions and species ###########
         target_name = None #used for the targetSink
         target_stochio = None
         for reaction_node in json_dict['elements']['edges']:
             if not len(reaction_node['data']['source'].split('-'))==3:
-                if not reaction_node['data']['source'] in all_reac:
+                if not reaction_node['data']['source'] in reactions_list:
                     self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                 else:
                     rid = reaction_node['data']['source']
@@ -540,7 +574,7 @@ class rpReader:
                         all_reac[rid]['left'][cid] = 1.0
             #target
             if not len(reaction_node['data']['target'].split('-'))==3:
-                if not reaction_node['data']['target'] in all_reac:
+                if not reaction_node['data']['target'] in reactions_list:
                     self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
                     return False
                 else:

@@ -1194,6 +1194,7 @@ class rpSBML:
       <ibisba:ibisba xmlns:ibisba="http://ibisba.eu">
         <ibisba:smiles>'''+str(reaction_smiles or '')+'''</ibisba:smiles>
         <ibisba:rule_id>'''+str(step['rule_id'] or '')+'''</ibisba:rule_id>
+        <ibisba:rule_mnxr>'''+str(step['mnxr'] or '')+'''</ibisba:rule_mnxr>
         <ibisba:rule_score value="'''+str(step['rule_score'] or '')+'''" />
         <ibisba:path_id value="'''+str(step['path_id'])+'''"/>
         <ibisba:step_id value="'''+str(step['step'])+'''"/>
