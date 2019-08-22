@@ -81,7 +81,16 @@ class rpCofactors:
     # @param f_reac Dictionnary describing the full original reaction
     # @param pathway_cmp_mnxm Dictionnary used to retreive the public ID of the intermediate compounds. Resets for each individual pathway
     #
-    def completeReac(self, step, reac_side, rr_reac, f_reac, pathway_cmp_mnxm):
+    def completeReac(self, step, reac_side, f_reac_side, pathway_cmp_mnxm):
+        ## BUG fix, remove MNXM1 (i.e. hydrogen ion) from the rr_reactions since they are commonly not 
+        # found in the full reaction and causes an error
+        hydro_diff = None
+        try:
+            hydro_diff = {'MNXM1': step[reac_side]['MNXM1']}
+            del step[reac_side]['MNXM1']
+        except KeyError:
+            pass
+        f_reac = self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']][f_reac_side]
         ######## COFACTORS #####
         if reac_side=='right':
             #from the monocomponent side, remove the main species from RR
@@ -99,9 +108,12 @@ class rpCofactors:
                 toRem = [pathway_cmp_mnxm[i] for i in list(step[reac_side].keys()-f_reac.keys())]
                 noMain_fullReac = {i:f_reac[i] for i in f_reac if i not in toRem}
             except KeyError as e:
-                #INFO: this happens if the step does not match the original reaction
+                #INFO: this happens if the RR reaction does not match the full reaction (original MNX)
                 # and usually happens since there can be more than one reaction rule associated
                 # with a reaction when the original reaction species do not match
+                self.logger.error(pathway_cmp_mnxm)
+                self.logger.error(step[reac_side])
+                self.logger.error(f_reac)
                 self.logger.error('Could not find intermediate compound name {} in pathway_cmp_mnxm {}'.format(e, pathway_cmp_mnxm.keys()))
                 raise KeyError
         else:
@@ -111,6 +123,8 @@ class rpCofactors:
         diff = {i: noMain_fullReac[i] for i in noMain_fullReac.keys()-step[reac_side].keys()}
         #update the reaction
         step[reac_side].update(diff)
+        if not hydro_diff==None:
+            step[reac_side].update(hydro_diff)
         ########## STOCHIO #####
         #TODO: in both stochio and reaction rule reconstruction, if an error occurs we do not remove the step from the final
         #results ==>  consider raising the error if that is the case, depends on how important it is
@@ -151,6 +165,7 @@ class rpCofactors:
                             reac_smiles[0] += '.'+self.mnxm_strc[i]['smiles']
                         step['reaction_rule'] = reac_smiles[0]+'>>'+reac_smiles[1]
                     else:
+                        #TODO: if any of the steps fail you should revert to the original reaction rule 
                         self.logger.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc')
                         continue
                 else:
@@ -166,11 +181,11 @@ class rpCofactors:
     def addCofactors_step(self, step, pathway_cmp_mnxm):
         try:
             if self.rr_reactions[step['rule_id']]['rel_direction']==-1:
-                self.completeReac(step, 'right', self.rr_reactions[step['rule_id']]['left'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['right'], pathway_cmp_mnxm)
-                self.completeReac(step, 'left', self.rr_reactions[step['rule_id']]['right'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['left'], pathway_cmp_mnxm)
+                self.completeReac(step, 'right', 'right', pathway_cmp_mnxm)
+                self.completeReac(step, 'left', 'left', pathway_cmp_mnxm)
             elif self.rr_reactions[step['rule_id']]['rel_direction']==1:
-                self.completeReac(step, 'right', self.rr_reactions[step['rule_id']]['left'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['left'], pathway_cmp_mnxm)
-                self.completeReac(step, 'left', self.rr_reactions[step['rule_id']]['right'], self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']]['right'], pathway_cmp_mnxm)
+                self.completeReac(step, 'right', 'left', pathway_cmp_mnxm)
+                self.completeReac(step, 'left', 'right', pathway_cmp_mnxm)
             else:
                 self.logger.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']]['rel_direction']))
                 return False
@@ -178,7 +193,7 @@ class rpCofactors:
             self.logger.error('Could not recognise the following reaction rule: '+str(e))
             self.logger.error('Could not recognise reaction rule for step {}'.format(step))
             return False
-        self.logger.info('Successful compeltion for step {}'.format(step))
+        self.logger.info('Successful completion for step {}'.format(step))
         return True
 
 
