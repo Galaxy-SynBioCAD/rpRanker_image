@@ -769,6 +769,7 @@ class rpReader:
                     #must list the different models
                     meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
                 else:
+                    #TODO: add the species with other types of xref in annotation
                     self.logger.warning('Some species are not referenced by a MNX id or will be ignored')
                     #break
                     

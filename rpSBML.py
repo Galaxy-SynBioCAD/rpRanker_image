@@ -438,89 +438,86 @@ class rpSBML:
         #return all the species annotations of the RP pathways
         try:
             meas_rp_species = measured_sbml.readRPspecies()
-            for meas_step_id in measured_sbml.readRPpathway():
+            found_meas_rp_species = measured_sbml.readRPspecies()
+            for meas_step_id in meas_rp_species:
+                meas_rp_species[meas_step_id]['annotation'] = measured_sbml.model.getReaction(meas_step_id).getAnnotation()
+                found_meas_rp_species[meas_step_id]['found'] = False
                 for spe_name in meas_rp_species[meas_step_id]['reactants']:
                     meas_rp_species[meas_step_id]['reactants'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+                    found_meas_rp_species[meas_step_id]['reactants'][spe_name] = False
                 for spe_name in meas_rp_species[meas_step_id]['products']:
                     meas_rp_species[meas_step_id]['products'][spe_name] = measured_sbml.model.getSpecies(spe_name).getAnnotation()
+                    found_meas_rp_species[meas_step_id]['products'][spe_name] = False
             rp_rp_species = self.readRPspecies()
-            for rp_step_id in self.readRPspecies():
+            for rp_step_id in rp_rp_species:
+                rp_rp_species[rp_step_id]['annotation'] = self.model.getReaction(rp_step_id).getAnnotation()
                 for spe_name in rp_rp_species[rp_step_id]['reactants']:
                     rp_rp_species[rp_step_id]['reactants'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
                 for spe_name in rp_rp_species[rp_step_id]['products']:
                     rp_rp_species[rp_step_id]['products'][spe_name] = self.model.getSpecies(spe_name).getAnnotation()
+            try:
+                del rp_rp_species['targetSink']
+            except KeyError:
+                self.logger.error('The generated RP pathway does not have a targetSink')
         except AttributeError:
             self.logger.error('TODO: debug, for some reason some are passed as None here')
             return False, {}
-        if not len(meas_rp_species)==len(rp_rp_species)+1: #add one for the targetSink
+        #compare the number of steps in the pathway
+        if not len(meas_rp_species)==len(rp_rp_species): #add one for the targetSink
+            self.logger.error('The pathways are not of the same length')
+            #self.logger.error(len(meas_rp_species))
+            #self.logger.error(meas_rp_species.keys())
+            #self.logger.error(len(rp_rp_species))
+            #self.logger.error(rp_rp_species.keys())
+            #self.logger.error(found_meas_rp_species)
             return False, {}
-        #remove the targetSink from RP
-        try:
-            del rp_rp_species['targetSink']
-        except KeyError:
-            pass
         ############## compare using the reactions ###################
-        measReac_rpReac = {}
-        found = False
         for meas_step_id in measured_sbml.readRPpathway():
-            measReac_rpReac[meas_step_id] = []
             for rp_step_id in rp_rp_species:
-                if self.compareMIRIAMAnnotations(self.model.getReaction(rp_step_id).getAnnotation(), measured_sbml.model.getReaction(meas_step_id).getAnnotation()):
-                    found = True
+                if self.compareMIRIAMAnnotations(rp_rp_species[rp_step_id]['annotation'], meas_rp_species[meas_step_id]['annotation']):
+                    found_meas_rp_species[meas_step_id]['found'] = True
                     #print('FOUND USING REACTION')
-                    measReac_rpReac[meas_step_id].append(rp_step_id)
-                else:
-                    ############## compare using the species ###################
-                    # if reaction annotation fails, then compare the species directly
-                    # We test to see if the meas reaction elements all exist in rp reaction
-                    all_meas_found = {}
-                    for pro_rea in meas_rp_species[meas_step_id]:
-                        all_meas_found[pro_rea] = {}
-                        for spe in meas_rp_species[meas_step_id][pro_rea]:
-                            all_meas_found[pro_rea][spe] = False
-                    # compare annotations of the species 
-                    #print('------ Reactants -----------')
+                    measReac_rpReac[meas_step_id] = rp_step_id
+                    break
+        ############## compare using the species ###################
+        for meas_step_id in measured_sbml.readRPpathway():
+            if not found_meas_rp_species[meas_step_id]['found']:
+                for rp_step_id in rp_rp_species:
+                    # We test to see if the meas reaction elements all exist in rp reaction and not the opposite
+                    #because the measured pathways may not contain all the elements
                     for meas_spe_id in meas_rp_species[meas_step_id]['reactants']:
                         for rp_spe_id in rp_rp_species[rp_step_id]['reactants']:
-                            #print(meas_rp_species[meas_step_id]['reactants'][meas_spe_id].toXMLString())
-                            #print(rp_rp_species[rp_step_id]['reactants'][rp_spe_id].toXMLString())
                             if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
-                                all_meas_found['reactants'][meas_spe_id] = True
+                                found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
                                 break
                             else:
                                 if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
-                                    all_meas_found['reactants'][meas_spe_id] = True
+                                    found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
                                     break
-                    #print('------ Products -----------')
                     for meas_spe_id in meas_rp_species[meas_step_id]['products']:
                         for rp_spe_id in rp_rp_species[rp_step_id]['products']:
-                            #print(meas_rp_species[meas_step_id]['products'][meas_spe_id].toXMLString())
-                            #print(rp_rp_species[rp_step_id]['products'][rp_spe_id].toXMLString())
                             if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
-                                all_meas_found['products'][meas_spe_id] = True
+                                found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
                                 break
                             else:
                                 if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
-                                    all_meas_found['products'][meas_spe_id] = True
+                                    found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
                                     break
-                    #now check if all the booleans are the same
-                    #print('##--##--##--##--##--##--##--##--##--##')
-                    #print(all_meas_found)
-                    tmp = {}
-                    for i in rp_rp_species[rp_step_id]:
-                        tmp[i] = list(rp_rp_species[rp_step_id][i].keys())
-                    #print(tmp)
-                    #print('##--##--##--##--##--##--##--##--##--##')
-                    print(all_meas_found)
-                    found = True
-                    for pro_rea in all_meas_found:
-                        for spe in all_meas_found[pro_rea]:
-                            if not all_meas_found[pro_rea][spe]:
-                                found = False
-                    if found:
-                        #print('FOUND USING SPECIES')
-                        measReac_rpReac[meas_step_id].append(rp_step_id)
-        return found, measReac_rpReac
+        for meas_step_id in found_meas_rp_species:
+            if not found_meas_rp_species[meas_step_id]['found']:
+                for rp_step_id in rp_rp_species:
+                    pro_found = [found_meas_rp_species[meas_step_id]['products'][i] for i in found_meas_rp_species[meas_step_id]['products']]
+                    rea_found = [found_meas_rp_species[meas_step_id]['reactants'][i] for i in found_meas_rp_species[meas_step_id]['reactants']]
+                    if pro_found and rea_found:
+                        if all(pro_found) and all(rea_found):
+                            found_meas_rp_species[meas_step_id]['found'] = True
+                            break
+        print(found_meas_rp_species)
+        ################# Now see if all steps have been found ############
+        if all(found_meas_rp_species[i]['found'] for i in found_meas_rp_species):
+            return True, found_meas_rp_species
+        else:
+            return False, {}
 
         """
         #''.join(i for i in s if i.isdigit())
