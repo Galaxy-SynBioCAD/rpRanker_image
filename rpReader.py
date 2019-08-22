@@ -350,7 +350,7 @@ class rpReader:
         #sbmlThermo = rpThermo.rpThermo()
         #recover the mnx compartment_id
         try:
-            mnxc = self.nameCompXref[compartment_id.lower()]
+            mnxc = self.nameCompXref[compartment_id]
         except KeyError:
             self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
             return False
@@ -587,6 +587,7 @@ class rpReader:
         rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
         return rpsbml
 
+
     #############################################################################################
     ############################### validation data tsv #########################################
     #############################################################################################
@@ -738,11 +739,19 @@ class rpReader:
         self.sbml_paths = {}
         #TODO: need to exit at this loop
         for path_id in data:
+            try:
+                mnxc = self.nameCompXref[compartment_id]
+            except KeyError:
+                self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
+                return False
             rpsbml = rpSBML('measured_'+str(path_id))
             #1) create a generic Model, ie the structure and unit definitions that we will use the most
             ##### TODO: give the user more control over a generic model creation:
             #   -> special attention to the compartment
-            rpsbml.genericModel('measured_'+str(path_id), 'measured_'+str(path_id), self.compXref[compartment_id])
+            rpsbml.genericModel('measured_'+str(path_id),
+                                'measured_'+str(path_id), 
+                                self.compXref[mnxc], 
+                                compartment_id)
             #find all the chemical species and add them to an SBML
             #2) create the pathway (groups)
             rpsbml.createPathway(path_id)
@@ -760,8 +769,9 @@ class rpReader:
                     #must list the different models
                     meta = sorted(chem['dbref']['mnx'], key=lambda x : int(x.replace('MNXM', '')))[0]
                 else:
-                    self.logger.warning('All species must be referenced by a MNX id or will be ignored')
-                    break
+                    self.logger.warning('Some species are not referenced by a MNX id or will be ignored')
+                    #break
+                    
                 #try to conver the inchi into the other structures
                 smiles = None
                 inchikey = None
