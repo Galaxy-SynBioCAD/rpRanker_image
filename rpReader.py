@@ -237,6 +237,7 @@ class rpReader:
             self.logger.error('Could not read the compounds file: '+str(path))
 
 
+    #TODO: make sure that you account for the fact that each reaction may have multiple associated reactions
     ## Function to parse the out_paths.csv file
     #
     #  Reading the RP2path output and extract all the information for each pathway
@@ -248,128 +249,118 @@ class rpReader:
     #  @param path The out_path.csv file path
     #  @maxRuleId maximal numer of rules associated with a step
     #  @return toRet_rp_paths Pathway object
-    def outPaths(self, path, maxRuleIds=10):
-        try:
-            rp_paths = {}
-            #reactions = self.rr_reactions
-            with open(path) as f:
-                reader = csv.reader(f)
-                next(reader)
-                current_path_id = 0
-                path_step = 1
-                for row in reader:
-                    try:
-                        if not int(row[0])==current_path_id:
-                            path_step = 1
-                        else:
-                            path_step += 1
-                        #important to leave them in order
-                        current_path_id = int(row[0])
-                    except ValueError:
-                        self.logger.error('Cannot convert path_id to int ('+str(row[0])+')')
-                        return {}
-                    #################################
-                    ruleIds = row[2].split(',')
-                    if ruleIds==None:
-                        self.logger.error('The rulesIds is None')
-                        #pass # or continue
-                        continue
-                    ###WARNING: This is the part where we select some rules over others
-                    # we do it by sorting the list according to their score and taking the topx
-                    tmp_rr_reactions = {}
-                    for r_id in ruleIds:
-                        for rea_id in self.rr_reactions[r_id]:
-                            tmp_rr_reactions[str(r_id)+'__'+str(rea_id)] = self.rr_reactions[r_id][rea_id]
-                    if len(ruleIds)>maxRuleIds:
-                        self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
-                        try:
-                            #ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
-                            ruleIds = [y for y,_ in sorted([(i, tmp_rr_reactions[i]['rule_score']) for i in tmp_rr_reactions])][:maxRuleIds]
-                        except KeyError:
-                            self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
-                            ruleIds = random.sample(tmp_rr_reactions, maxRuleIds)
+    #def outPaths(self, path, maxRuleIds=10):
+    def outPaths(self, path, maxRuleIds=10, pathId='rp_pathway', compartment_id='MNXC3'):
+        #try:
+        rp_paths = {}
+        #reactions = self.rr_reactions
+        with open(path) as f:
+            reader = csv.reader(f)
+            next(reader)
+            current_path_id = 0
+            path_step = 1
+            for row in reader:
+                try:
+                    if not int(row[0])==current_path_id:
+                        path_step = 1
                     else:
-                        ruleIds = tmp_rr_reactions
-                    sub_path_step = 1
-                    for singleRule in ruleIds:
-                        tmpReac = {'rule_id': singleRule.split('__')[0],
-                                'mnxr': singleRule.split('__')[1],
-                                'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
-                                'right': {},
-                                'left': {},
-                                'path_id': int(row[0]),
-                                'step': path_step,
-                                'transformation_id': row[1][:-2]}
-                        ############ LEFT ##############
-                        for l in row[3].split(':'):
-                            tmp_l = l.split('.')
-                            try:
-                                #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
-                                mnxm = '' #TODO: change this
-                                if tmp_l[1] in self.deprecatedMNXM_mnxm:
-                                    mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
-                                else:
-                                    mnxm = tmp_l[1]
-                                tmpReac['left'][mnxm] = int(tmp_l[0])
-                            except ValueError:
-                                self.logger.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
-                                return {}
-                        ############## RIGHT ###########
-                        for r in row[4].split(':'):
-                            tmp_r = r.split('.')
-                            try:
-                                #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
-                                mnxm = '' #TODO change this
-                                if tmp_r[1] in self.deprecatedMNXM_mnxm:
-                                    mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
-                                else:
-                                    mnxm = tmp_r[1]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
-                                tmpReac['right'][mnxm] = int(tmp_r[0])
-                            except ValueError:
-                                self.logger.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
-                                return {}
-                        #################################
-                        if not int(row[0]) in rp_paths:
-                            rp_paths[int(row[0])] = {}
-                        if not int(path_step) in rp_paths[int(row[0])]:
-                            rp_paths[int(row[0])][int(path_step)] = {}
-                        rp_paths[int(row[0])][int(path_step)][int(sub_path_step)] = tmpReac
-                        #rp_paths[int(row[0])][int(path_step)] = tmpReac
-                        sub_path_step += 1
-            self.rp_paths = rp_paths
-        except (TypeError, FileNotFoundError) as e:
-            self.logger.error(e)
-            self.logger.error('Could not read the out_paths file ('+str(path)+') ')
-            return {}
-
-    ## Convert RetroPath2.0 pathways to SBML (rpSBML's) 
-    # TODO: switch this from generic to defined, with defined bounds
-    # TODO: remove the default MNXC3 compartment ID
-    #
-    # rp_paths structure is the following {1: {1: {1: {'rule_id': '', 'right': {}, 'left': {}, 'path_id': int, 'step': int, 'sub_step': int, 'transformation_id': ''}, ...}, ...}, ...}
-    # a single step looks like this {'rule_id': 'RR-01-503dbb54cf91-49-F', 'right': {'TARGET_0000000001': 1}, 'left': {'MNXM2': 1, 'MNXM376': 1}, 'path_id': 1, 'step': 1, 'sub_step': 1, 'transformation_id': 'TRS_0_0_17'}
-    #
-    #  @param pathId Name given to the heterologous pathway, default is 'rp_pathway'
-    #  @param compartment_id ID of the compartment to add the reaction, default is 'MNXC3'
-    def pathsToSBML(self, pathId='rp_pathway', compartment_id='MNXC3'):
-        #if the output folder does not exist then create it
-        #for path in self.rp_paths:
-        #sbmlThermo = rpThermo.rpThermo()
-        #recover the mnx compartment_id
+                        path_step += 1
+                    #important to leave them in order
+                    current_path_id = int(row[0])
+                except ValueError:
+                    self.logger.error('Cannot convert path_id to int ('+str(row[0])+')')
+                    return {}
+                #################################
+                ruleIds = row[2].split(',')
+                if ruleIds==None:
+                    self.logger.error('The rulesIds is None')
+                    #pass # or continue
+                    continue
+                ###WARNING: This is the part where we select some rules over others
+                # we do it by sorting the list according to their score and taking the topx
+                tmp_rr_reactions = {}
+                for r_id in ruleIds:
+                    for rea_id in self.rr_reactions[r_id]:
+                        tmp_rr_reactions[str(r_id)+'__'+str(rea_id)] = self.rr_reactions[r_id][rea_id]
+                if len(ruleIds)>maxRuleIds:
+                    self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
+                    try:
+                        #ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
+                        ruleIds = [y for y,_ in sorted([(i, tmp_rr_reactions[i]['rule_score']) for i in tmp_rr_reactions])][:maxRuleIds]
+                    except KeyError:
+                        self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
+                        ruleIds = random.sample(tmp_rr_reactions, maxRuleIds)
+                else:
+                    ruleIds = tmp_rr_reactions
+                sub_path_step = 1
+                for singleRule in ruleIds:
+                    tmpReac = {'rule_id': singleRule.split('__')[0],
+                            'mnxr': singleRule.split('__')[1],
+                            'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
+                            'right': {},
+                            'left': {},
+                            'path_id': int(row[0]),
+                            'step': path_step,
+                            'transformation_id': row[1][:-2]}
+                    ############ LEFT ##############
+                    for l in row[3].split(':'):
+                        tmp_l = l.split('.')
+                        try:
+                            #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
+                            mnxm = '' #TODO: change this
+                            if tmp_l[1] in self.deprecatedMNXM_mnxm:
+                                mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
+                            else:
+                                mnxm = tmp_l[1]
+                            tmpReac['left'][mnxm] = int(tmp_l[0])
+                        except ValueError:
+                            self.logger.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
+                            return {}
+                    ############## RIGHT ###########
+                    for r in row[4].split(':'):
+                        tmp_r = r.split('.')
+                        try:
+                            #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
+                            mnxm = '' #TODO change this
+                            if tmp_r[1] in self.deprecatedMNXM_mnxm:
+                                mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
+                            else:
+                                mnxm = tmp_r[1]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
+                            tmpReac['right'][mnxm] = int(tmp_r[0])
+                        except ValueError:
+                            self.logger.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
+                            return {}
+                    #################################
+                    if not int(row[0]) in rp_paths:
+                        rp_paths[int(row[0])] = {}
+                    if not int(path_step) in rp_paths[int(row[0])]:
+                        rp_paths[int(row[0])][int(path_step)] = {}
+                    rp_paths[int(row[0])][int(path_step)][int(sub_path_step)] = tmpReac
+                    #rp_paths[int(row[0])][int(path_step)] = tmpReac
+                    sub_path_step += 1
+        #except (TypeError, FileNotFoundError) as e:
+        #    self.logger.error(e)
+        #    self.logger.error('Could not read the out_paths file ('+str(path)+') ')
+        #    return {}
+        #### pathToSBML ####
+        #self.rp_paths = rp_paths
         try:
             mnxc = self.nameCompXref[compartment_id]
         except KeyError:
             self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
             return False
         self.sbml_paths = {}
-        for pathNum in self.rp_paths:
+        #for pathNum in self.rp_paths:
+        for pathNum in rp_paths:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
             altPathNum = 1
-            for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
+            #for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
+            for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
                 steps = []
                 for i in range(len(comb_path)):
-                    steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
+                    #steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
+                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
                 path_id = steps[0]['path_id']
                 rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
@@ -416,7 +407,15 @@ class rpReader:
                             self.rp_transformation[step['transformation_id']]['rule'],
                             self.rp_transformation[step['transformation_id']]['ec'])
                     #5) adding the consumption of the target
-                targetStep = {'rule_id': None, 'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 'right': [], 'step': None, 'sub_step': None, 'path_id': None, 'transformation_id': None, 'rule_score': None, 'mnxr': None}
+                targetStep = {'rule_id': None, 
+                        'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 
+                        'right': [], 
+                        'step': None, 
+                        'sub_step': None, 
+                        'path_id': None, 
+                        'transformation_id': None, 
+                        'rule_score': None, 
+                        'mnxr': None}
                 rpsbml.createReaction('targetSink',
                         'B_999999',
                         'B_0',
@@ -435,39 +434,9 @@ class rpReader:
     ############################# JSON input ##############################
     #######################################################################
 
-
-    ## Pass a dictionnary of JSON dict and convert them to SBML
-    #
-    # This function parses the JSON format output from RetroPath3.0 and generates the SBML
-    #
-    # @param self Object pointer
-    # @param collJson dictionnary of pathways from JSON format
-    def collectionJSON(self, collJson):
-        pathNum = 1
-        sub_path = 1
-        #According to the rule applied there should be subpaths ==> in this case we ignore that
-        self.sbml_paths = {}
-        for i in collJson:
-            rpsbml = self.jsonToSBML(collJson[i], pathNum)
-            self.sbml_paths['rp_'+str(pathNum)+'_'+str(sub_path)] = rpsbml
-            pathNum += 1
-
-
-
-    def jsonPaths(self, json_dict):
-        
-        tmpReac = {'rule_id': singleRule.split('__')[0],
-            'mnxr': singleRule.split('__')[1],
-            'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
-            'right': {},
-            'left': {},
-            'path_id': int(row[0]),
-            'step': path_step,
-            'transformation_id': row[1][:-2]}
-
-
-
-    
+    #WARNING: we are not setting any restrictions on the number of steps allowed here and instead we
+    #take the rule with the highest dimension. Also assume that there is a single rule at a maximal
+    #dimension
     ## Function to generate an SBLM model from a JSON file
     #
     #  Read the json files of a folder describing pathways and generate an SBML file for each
@@ -477,149 +446,243 @@ class rpReader:
     #
     #  @param self Object pointer
     #  @return rpsbml.document the SBML document
-    def jsonToSBML(self, json_dict, pathNum=1, pathId='rp_pathway', compartment_id='MNXC3'):
-        #pathNum = 1
-        '''
-        #recover the mnx compartment_id
-        try:
-            mnxc = self.nameCompXref[compartment_id]
-        except KeyError:
-            self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
-            return False
-        #create the SBML
-        rpsbml = rpSBML('rp_'+str(pathNum))
-        rpsbml.genericModel('RetroPath_Pathway_'+str(pathNum), 
-                'RP_model'+str(pathNum), 
-                self.compXref[mnxc], 
-                compartment_id)
-        rpsbml.createPathway(pathId)
-        '''
-        ############## gather the data #############
-        reactions_list = {}
+    def jsonToSBML(self, collJson, pathId='rp_pathway', compartment_id='MNXC3'):
+        pathNum = 1
         rp_paths = {}
-        stochio = {}
-        inchikey_cid = {}
+        reac_smiles = {}
+        reac_ecs = {}
         species_list = {}
-        for node in json_dict['elements']['nodes']:
-            # add the species to the SBML directly
-            if node['data']['type']=='compound':
-                try:
-                    #pick the smallest mnx ID if there are multiple ones
-                    cid = sorted(self.inchikey_mnxm[node['data']['id']]['mnx'], key=lambda x: int(x[4:]))[0]
-                except KeyError:
-                    cid = node['data']['id'].replace('-', '')
-                inchikey_cid[node['data']['id'].replace('-', '')] = cid
-                species_list[cid] = {'inchi': node['data']['InChI'], 
-                                'id': node['data']['id'],
-                                'smiles': node['data']['SMILES']}
-                '''
-                try:
-                    rpsbml.createSpecies(cid,
-                                        compartment_id,
-                                        self.chemXref[cid],
-                                        None,
-                                        node['data']['InChI'],
-                                        node['data']['id'],
-                                        node['data']['SMILES'])
-                except KeyError:
-                    rpsbml.createSpecies(cid,
-                                        compartment_id,
-                                        {},
-                                        None,
-                                        node['data']['InChI'],
-                                        node['data']['id'],
-                                        node['data']['SMILES'])
-                '''
-                if int(node['data']['isSource']) == 1:
-                    source_name = cid
-                    source_stochio = 1
-            ## Create a dictionnary containing all the reactions
-            elif node['data']['type']=='reaction':
-                #note sure about this... need to ask
-                #NOTE: pick the rule with the highest diameter
-                r_id = sorted(node['data']['Rule ID'], key=lambda x: int(x.split('-')[-2]), reverse=True)[0]
-                reactions_list[node['data']['id']] = {}
-                sub_step_num = 1
-                for reac_id in self.rr_reactions[r_id]:
-                    reactions_list[node['data']['id']][reac_id] = {'rule_id': r_id,
-                        'mnxr': reac_id,
+        reactions_list = {}
+        source_cid = {}
+        source_stochio = {}
+        cid_inchikey = {}
+        ########### construct rp_paths ########
+        for json_dict in collJson:
+            ### these are used for the SBML creation
+            reac_smiles[pathNum] = {}
+            reac_ecs[pathNum] = {}
+            species_list[pathNum] = {}
+            reactions_list[pathNum] = {}
+            cid_inchikey[pathNum] = {}
+            ############## gather the data #############
+            stochio = {}
+            inchikey_cid = {}
+            source_species = []
+            sink_species = []
+            for node in collJson[json_dict]['elements']['nodes']:
+                ##### compounds ####
+                if node['data']['type']=='compound':
+                    #inchikey_cid[node['data']['id']] = node['data']['id'].replace('-', '')
+                    cid_inchikey[pathNum][node['data']['id'].replace('-', '')] = node['data']['id']
+                    species_list[pathNum][node['data']['id'].replace('-', '')] = {'inchi': node['data']['InChI'], 
+                                    'inchikey': node['data']['id'],
+                                    'smiles': node['data']['SMILES']}
+                    if int(node['data']['isSource'])==1:
+                        #TODO: this should always be only one, to check
+                        source_species.append(node['data']['id'].replace('-', '')) 
+                        source_cid[pathNum] = node['data']['id'].replace('-', '')
+                    if int(node['data']['inSink'])==1:
+                        sink_species.append(node['data']['id'].replace('-', ''))
+                ###### reactions ######
+                elif node['data']['type']=='reaction':
+                    #NOTE: pick the rule with the highest diameter
+                    r_id = sorted(node['data']['Rule ID'], key=lambda x: int(x.split('-')[-2]), reverse=True)[0]
+                    #reactions_list[node['data']['id']] = {}
+                    #for reac_id in self.rr_reactions[r_id]:
+                    reactions_list[pathNum][node['data']['id']] = {'rule_id': r_id,
+                        'mnxr': None,
                         'right': {},
                         'left': {},
                         'path_id': pathNum,
                         'step': None,
                         'sub_step': None,
-                        'transformation_id': node['data']['id'],
-                        'rule_score': node['data']['Score'],
-                        'smiles': node['data']['Reaction SMILES'],
-                        'ec': list(filter(None, [i for i in node['data']['EC number']]))}
-                stochio[node['data']['id']] = node['data']['Stoechiometry']
-        ############ now that you have compiled all the reactions and species ###########
-        target_name = None #used for the targetSink
-        target_stochio = None
-        for reaction_node in json_dict['elements']['edges']:
-            if not len(reaction_node['data']['source'].split('-'))==3:
-                if not reaction_node['data']['source'] in reactions_list:
-                    self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
-                else:
-                    rid = reaction_node['data']['source']
+                        'transformation_id': None,
+                        'rule_score': node['data']['Score']}
+                    reac_smiles[pathNum][r_id] = node['data']['Reaction SMILES']
+                    reac_ecs[pathNum][r_id] = list(filter(None, [i for i in node['data']['EC number']]))
+                    stochio[node['data']['id']] = {}
+                    for i in node['data']['Stoechiometry']:
+                        stochio[node['data']['id']][i.replace('-', '')] = node['data']['Stoechiometry'][i]
+            ############ make main pathway ###########
+            main_reac = {}
+            for reaction_node in collJson[json_dict]['elements']['edges']:
+                if not len(reaction_node['data']['source'].split('-'))==3:
+                    if not reaction_node['data']['source'] in reactions_list[pathNum]:
+                        self.logger.error('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                        return False
+                    else:
+                        rid = reaction_node['data']['source']
+                        try:
+                            cid = inchikey_cid[reaction_node['data']['target'].replace('-', '')]
+                        except KeyError:
+                            cid = reaction_node['data']['target'].replace('-', '')
+                        try:
+                            reactions_list[pathNum][rid]['left'][cid] = stochio[rid][cid]
+                        except KeyError:
+                            reactions_list[pathNum][rid]['left'][cid] = 1.0
+                            self.logger.warning('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
+                if not len(reaction_node['data']['target'].split('-'))==3:
+                    if not reaction_node['data']['target'] in reactions_list[pathNum]:
+                        self.logger.error('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
+                        return False
+                    else:
+                        rid = reaction_node['data']['target']
+                        try:
+                            cid = inchikey_cid[reaction_node['data']['source'].replace('-', '')]
+                        except KeyError:
+                            cid = reaction_node['data']['source'].replace('-', '')
+                        try:
+                            reactions_list[pathNum][rid]['right'][cid] = stochio[rid][cid]
+                        except KeyError:
+                            reactions_list[pathNum][rid]['right'][cid] = 1.0
+                            self.logger.warning('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
+            ################# calculate the steps associated with the reactions_list ######
+            #find the source in the LAST reaction in the pathway
+            #NOTE: this assumes that the source is contained in a single final reaction and no where else
+            last_rid = None
+            step_num = len(reactions_list[pathNum])
+            found_rid = []
+            toFind_rid = list(reactions_list[pathNum].keys())
+            for rid in reactions_list[pathNum]:    
+                if all([True if i in source_species else False for i in reactions_list[pathNum][rid]['right']]):
+                    reactions_list[pathNum][rid]['step'] = step_num
+                    step_num -= 1
+                    last_rid = rid
                     try:
-                        cid = inchikey_cid[reaction_node['data']['target'].replace('-', '')]
+                        source_stochio[pathNum] = stochio[rid][source_cid[pathNum]]
                     except KeyError:
-                        cid = reaction_node['data']['target'].replace('-', '')
+                        source_stochio[pathNum] = 1.0
+                    found_rid.append(rid)
+                    toFind_rid.remove(rid)
+                    break
+            for rid in toFind_rid[:]:
+            #for rid in reactions_list:
+                if all([True if i in reactions_list[pathNum][last_rid]['left'] else False for i in reactions_list[pathNum][rid]['right']]):
+                    reactions_list[pathNum][rid]['step'] = step_num
+                    step_num -= 1
+                    last_rid = rid
+                    found_rid.append(rid)
+                    toFind_rid.remove(rid)
+            if not toFind_rid==[]:
+                self.logger.error('There are still some reactions unaccounted for: '+str(toFind_rid))
+                return False
+            ########### calculate the substeps associated with reactions associated with the reaction rule #######
+            rp_paths[pathNum] = {}
+            for rid in reactions_list[pathNum]:
+                rp_paths[pathNum][reactions_list[pathNum][rid]['step']] = {}
+                sub_step = 1
+                for reac_id in self.rr_reactions[reactions_list[pathNum][rid]['rule_id']]:
+                    tmpReac = copy.deepcopy(reactions_list[pathNum][rid])
+                    tmpReac['mnxr'] = reac_id
+                    tmpReac['sub_step'] = sub_step
+                    rp_paths[pathNum][reactions_list[pathNum][rid]['step']][sub_step] = tmpReac
+                    sub_step += 1
+            pathNum += 1
+        #print(rp_paths[1])
+        ######################################
+        ########### create the SBML's ########
+        ######################################
+        try:
+            mnxc = self.nameCompXref[compartment_id]
+        except KeyError:
+            self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
+            return False
+        self.sbml_paths = {}
+        #for pathNum in self.rp_paths:
+        for pathNum in rp_paths:
+            #first level is the list of lists of sub_steps
+            #second is itertools all possible combinations using product
+            altPathNum = 1
+            #for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
+            for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+                steps = []
+                for i in range(len(comb_path)):
+                    #steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
+                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+                path_id = steps[0]['path_id']
+                rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
+                #1) create a generic Model, ie the structure and unit definitions that we will use the most
+                ##### TODO: give the user more control over a generic model creation:
+                #   -> special attention to the compartment
+                rpsbml.genericModel('RetroPath_Pathway_'+str(path_id)+'_'+str(altPathNum),
+                        'RP_model_'+str(path_id)+'_'+str(altPathNum),
+                        self.compXref[mnxc],
+                        compartment_id)
+                #2) create the pathway (groups)
+                rpsbml.createPathway(pathId)
+                #3) find all the unique species and add them to the model
+                for meta in species_list[pathNum]:
+                    #### beofre adding it to the model check to see if you can recover some MNXM from inchikey
                     try:
-                        #all_reac[rid]['right'][cid] = stochio[rid][cid]
-                        all_reac[rid]['left'][cid] = stochio[rid][cid]
+                        #take the smallest MNX, usually the best TODO: review this
+                        cid = sorted(self.inchikey_mnxm[cid_inchikey[pathNum][meta]]['mnx'], key=lambda x: int(x[4:]))[0]
                     except KeyError:
-                        #all_reac[rid]['right'][cid] = 1.0
-                        all_reac[rid]['left'][cid] = 1.0
-            #target
-            if not len(reaction_node['data']['target'].split('-'))==3:
-                if not reaction_node['data']['target'] in reactions_list:
-                    self.logger.warning('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
-                    return False
-                else:
-                    rid = reaction_node['data']['target']
+                        cid = meta
+                    #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
-                        cid = inchikey_cid[reaction_node['data']['source'].replace('-', '')]
+                        rpsbml.createSpecies(cid,
+                                compartment_id,
+                                self.chemXref[cid],
+                                None,
+                                species_list[pathNum][meta]['inchi'],
+                                species_list[pathNum][meta]['inchikey'],
+                                species_list[pathNum][meta]['smiles'])
                     except KeyError:
-                        cid = reaction_node['data']['source'].replace('-', '')
-                    try:
-                        #all_reac[rid]['left'][cid] = stochio[rid][cid]
-                        all_reac[rid]['right'][cid] = stochio[rid][cid]
-                        target_stochio = stochio[rid][cid]
-                    except KeyError:
-                        #all_reac[rid]['left'][cid] = 1.0
-                        all_reac[rid]['right'][cid] = 1.0
-                        target_stochio = 1.0
-                    target_name = cid
-        # now that all the information has been gathered pass it to the SBML
-        for rule_id in all_reac:
-            rpsbml.createReaction('RP'+str(all_reac[rule_id]['step']),
-                    'B_999999', #only for genericModel
-                    'B_0', #only for genericModel
-                    #{'left': all_reac[rule_id]['left'], 'right': all_reac[rule_id]['right']},
-                    all_reac[rule_id],
-                    compartment_id,
-                    all_reac[rule_id]['smiles'],
-                    all_reac[rule_id]['ec'],
-                    {})
-        targetStep = {'rule_id': None,
-                    'left': {source_name: source_stochio},
-                    'right': {},
-                    'step': None,
-                    'sub_step': None,
-                    'path_id': None,
-                    'transformation_id': None,
-                    'rule_score': None}
-        rpsbml.createReaction('targetSink',
-                'B_999999', #only for generic model
-                'B_0', #only for generic model
-                targetStep,
-                compartment_id)
-        #6) Optional?? Add the flux objectives. Could be in another place, TBD
-        #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
-        rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
-        return rpsbml
+                        try:
+                            rpsbml.createSpecies(meta,
+                                    compartment_id,
+                                    {},
+                                    None,
+                                    species_list[pathNum][meta]['inchi'],
+                                    species_list[pathNum][meta]['inchikey'],
+                                    species_list[pathNum][meta]['smiles'])
+                        except KeyError:
+                            self.logger.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
+                #4) add the complete reactions and their annotations
+                for step in steps:
+                    #add the substep to the model
+                    step['sub_step'] = altPathNum
+                    #### try to replace the inchikeys with mnxm
+                    for direc in ['right', 'left']:
+                        step_mnxm = {}
+                        for i in step[direc]:
+                            try:
+                                #take the smallest MNX, usually the best TODO: review this
+                                step_mnxm[sorted(self.inchikey_mnxm[cid_inchikey[pathNum][i]]['mnx'], key=lambda x: int(x[4:]))[0]] = step[direc][i]
+                            except KeyError:
+                                step_mnxm[i] = step[direc][i]
+                        step[direc] = step_mnxm
+                    rpsbml.createReaction('RP'+str(step['step']), # parameter 'name' of the reaction deleted : 'RetroPath_Reaction_'+str(step['step']),
+                            'B_999999', #only for genericModel
+                            'B_0', #only for genericModel
+                            step,
+                            compartment_id,
+                            reac_smiles[pathNum][step['rule_id']],
+                            reac_ecs[pathNum][step['rule_id']])
+                    #5) adding the consumption of the target
+                try:
+                    #take the smallest MNX, usually the best TODO: review this
+                    cid = sorted(self.inchikey_mnxm[cid_inchikey[pathNum][source_cid[pathNum]]]['mnx'], key=lambda x: int(x[4:]))[0]
+                except KeyError:
+                    cid = source_cid[pathNum]
+                targetStep = {'rule_id': None, 
+                        'left': {cid: source_stochio[pathNum]}, 
+                        'right': {}, 
+                        'step': None, 
+                        'sub_step': None, 
+                        'path_id': None, 
+                        'transformation_id': None, 
+                        'rule_score': None, 
+                        'mnxr': None}
+                rpsbml.createReaction('targetSink',
+                        'B_999999',
+                        'B_0',
+                        targetStep,
+                        compartment_id)
+                #6) Optional?? Add the flux objectives. Could be in another place, TBD
+                rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
+                self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
+                altPathNum += 1
 
 
     #############################################################################################

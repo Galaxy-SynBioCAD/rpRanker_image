@@ -352,6 +352,7 @@ class rpSBML:
                         'reaction_rule': ibisbaAnnot['smiles'], 
                         'rule_score': ibisbaAnnot['rule_score'],
                         'rule_id': ibisbaAnnot['rule_id'],
+                        'rule_mnxr': ibisbaAnnot['rule_mnxr'],
                         'right': speciesReac['right'],
                         'left': speciesReac['left'],
                         'path_id': ibisbaAnnot['path_id'],
@@ -439,6 +440,8 @@ class rpSBML:
         try:
             meas_rp_species = measured_sbml.readRPspecies()
             found_meas_rp_species = measured_sbml.readRPspecies()
+            found_meas_rp_species['measured_model_id'] = measured_sbml.model.getId()
+            found_meas_rp_species['rp_model_id'] = self.model.getId()
             for meas_step_id in meas_rp_species:
                 meas_rp_species[meas_step_id]['annotation'] = measured_sbml.model.getReaction(meas_step_id).getAnnotation()
                 found_meas_rp_species[meas_step_id]['found'] = False
@@ -476,8 +479,8 @@ class rpSBML:
             for rp_step_id in rp_rp_species:
                 if self.compareMIRIAMAnnotations(rp_rp_species[rp_step_id]['annotation'], meas_rp_species[meas_step_id]['annotation']):
                     found_meas_rp_species[meas_step_id]['found'] = True
+                    found_meas_rp_species[meas_step_id]['rp_step_id'] = rp_step_id
                     #print('FOUND USING REACTION')
-                    measReac_rpReac[meas_step_id] = rp_step_id
                     break
         ############## compare using the species ###################
         for meas_step_id in measured_sbml.readRPpathway():
@@ -485,6 +488,7 @@ class rpSBML:
                 for rp_step_id in rp_rp_species:
                     # We test to see if the meas reaction elements all exist in rp reaction and not the opposite
                     #because the measured pathways may not contain all the elements
+                    ########## reactants ##########
                     for meas_spe_id in meas_rp_species[meas_step_id]['reactants']:
                         for rp_spe_id in rp_rp_species[rp_step_id]['reactants']:
                             if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
@@ -494,6 +498,7 @@ class rpSBML:
                                 if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
                                     found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
                                     break
+                    ########### products ###########
                     for meas_spe_id in meas_rp_species[meas_step_id]['products']:
                         for rp_spe_id in rp_rp_species[rp_step_id]['products']:
                             if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
@@ -503,16 +508,14 @@ class rpSBML:
                                 if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
                                     found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
                                     break
-        for meas_step_id in found_meas_rp_species:
-            if not found_meas_rp_species[meas_step_id]['found']:
-                for rp_step_id in rp_rp_species:
+                    ######### test to see the difference
                     pro_found = [found_meas_rp_species[meas_step_id]['products'][i] for i in found_meas_rp_species[meas_step_id]['products']]
                     rea_found = [found_meas_rp_species[meas_step_id]['reactants'][i] for i in found_meas_rp_species[meas_step_id]['reactants']]
                     if pro_found and rea_found:
                         if all(pro_found) and all(rea_found):
                             found_meas_rp_species[meas_step_id]['found'] = True
+                            found_meas_rp_species[meas_step_id]['rp_step_id'] = rp_step_id
                             break
-        print(found_meas_rp_species)
         ################# Now see if all steps have been found ############
         if all(found_meas_rp_species[i]['found'] for i in found_meas_rp_species):
             return True, found_meas_rp_species

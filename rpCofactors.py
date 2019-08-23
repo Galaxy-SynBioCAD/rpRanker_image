@@ -90,16 +90,16 @@ class rpCofactors:
             del step[reac_side]['MNXM1']
         except KeyError:
             pass
-        f_reac = self.full_reactions[self.rr_reactions[step['rule_id']]['reac_id']][f_reac_side]
+        f_reac = self.full_reactions[self.rr_reactions[step['rule_id']][step['rule_mnxr']]['reac_id']][f_reac_side]
         ######## COFACTORS #####
         if reac_side=='right':
             #from the monocomponent side, remove the main species from RR
-            noMain_fullReac = {i:f_reac[i] for i in f_reac if i!=self.rr_reactions[step['rule_id']]['subs_id']}
+            noMain_fullReac = {i:f_reac[i] for i in f_reac if i!=self.rr_reactions[step['rule_id']][step['rule_mnxr']]['subs_id']}
             #find the intermediate compound
             cmp_diff = list(step[reac_side].keys()-noMain_fullReac.keys())
             #add it to the dictionnary
             if len(cmp_diff)==1:
-                pathway_cmp_mnxm.update({cmp_diff[0]: self.rr_reactions[step['rule_id']]['subs_id']})
+                pathway_cmp_mnxm.update({cmp_diff[0]: self.rr_reactions[step['rule_id']][step['rule_mnxr']]['subs_id']})
             else:
                 self.logger.warning('There are more than 1 or None of cmp_diff: '+str(cmp_diff))
         elif reac_side=='left':
@@ -180,14 +180,14 @@ class rpCofactors:
     # @return Boolean determine if the step is to be added
     def addCofactors_step(self, step, pathway_cmp_mnxm):
         try:
-            if self.rr_reactions[step['rule_id']]['rel_direction']==-1:
+            if self.rr_reactions[step['rule_id']][step['rule_mnxr']]['rel_direction']==-1:
                 self.completeReac(step, 'right', 'right', pathway_cmp_mnxm)
                 self.completeReac(step, 'left', 'left', pathway_cmp_mnxm)
-            elif self.rr_reactions[step['rule_id']]['rel_direction']==1:
+            elif self.rr_reactions[step['rule_id']][step['rule_mnxr']]['rel_direction']==1:
                 self.completeReac(step, 'right', 'left', pathway_cmp_mnxm)
                 self.completeReac(step, 'left', 'right', pathway_cmp_mnxm)
             else:
-                self.logger.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']]['rel_direction']))
+                self.logger.error('Relative direction can only be 1 or -1: '+str(self.rr_reactions[step['rule_id']][step['rule_mnxr']]['rel_direction']))
                 return False
         except KeyError as e:
             self.logger.error('Could not recognise the following reaction rule: '+str(e))
