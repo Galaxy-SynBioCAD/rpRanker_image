@@ -185,7 +185,7 @@ class rpCache:
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
-        inchikey_mnxm = {}
+        #inchikey_mnxm = {}
         #with open(rr_compounds_path) as f:
         #    c = csv.reader(f, delimiter='\t')
         #    for row in c:
@@ -226,10 +226,6 @@ class rpCache:
                             mnxm_strc[mnxm]['smiles'] = tmp['smiles']
                         if not mnxm_strc[mnxm]['inchikey'] and tmp['inchikey']:
                             mnxm_strc[mnxm]['inchikey'] = tmp['inchikey']
-                        #### inchikey_mnxm ###
-                        if not tmp['inchikey'] in inchikey_mnxm:
-                            inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
-                        inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
                     else:
                         #check to see if the inchikey is valid or not
                         otype = set({})
@@ -255,11 +251,17 @@ class rpCache:
                             self.logger.warning('Could not convert some of the structures: '+str(tmp))
                             self.logger.warning(e)
                         mnxm_strc[tmp['mnxm']] = tmp
-                        #### inchikey_mnxm ###
-                        if not tmp['inchikey'] in inchikey_mnxm:
-                            inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
-                        inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
-        return mnxm_strc, inchikey_mnxm
+                    #### inchikey_mnxm ###
+                    #if not tmp['inchikey'] in inchikey_mnxm:
+                    #    inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
+                    #inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
+        '''
+        inchikey_mnxm = {}
+        for mnxm in mnxm_strc:
+            inchikey_mnxm[mnxm_strc[mnxm]['inchikey']] = {'mnx': []}
+            inchikey_mnxm[mnxm_strc[mnxm]['inchikey']]['mnx'].append(tmp['mnxm'])
+        '''
+        return mnxm_strc#, inchikey_mnxm
 
 
     ## Function to parse the chem_xref.tsv file of MetanetX
@@ -697,7 +699,8 @@ if __name__ == "__main__":
         open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
     #self.logger.info('Generating rr_reactions')
-    rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
+    #rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
+    rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
     #self.logger.info('Generating full_reactions')
@@ -706,8 +709,19 @@ if __name__ == "__main__":
     #mnxm_strc --> use gzip since it is a large file
     #self.logger.info('Parsing the SMILES and InChI')
     #pickle.dump(cache.mnxm_strc(), open('cache/mnxm_strc.pickle', 'wb'))
-    mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
+    #mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
+    mnx_strc = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     pickle.dump(mnx_strc, gzip.open('cache/mnxm_strc.pickle.gz','wb'))
+    '''
+    inchikey_mnxm = {}
+    for mnxm in mnx_strc:
+        if not mnx_strc[mnxm]['inchikey'] in inchikey_mnxm:
+            inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = []
+        inchikey_mnxm[mnx_strc[mnxm]['inchikey']].append(mnxm)
+    '''
+    inchikey_mnxm = {}
+    for mnxm in mnx_strc:
+        inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = mnxm
     pickle.dump(inchikey_mnxm, gzip.open('cache/inchikey_mnxm.pickle.gz','wb'))
     #xref --> use gzip since it is a large file
     #self.logger.info('Parsing the Cross-references')
