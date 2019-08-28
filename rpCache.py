@@ -699,8 +699,8 @@ if __name__ == "__main__":
         open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
     #self.logger.info('Generating rr_reactions')
-    #rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
-    rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
+    rr_reactions = cache.retro_reactions('input_cache/rules_rall_nohs.tsv')
+    #rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
     #self.logger.info('Generating full_reactions')
@@ -712,7 +712,6 @@ if __name__ == "__main__":
     #mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     mnx_strc = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     pickle.dump(mnx_strc, gzip.open('cache/mnxm_strc.pickle.gz','wb'))
-    '''
     inchikey_mnxm = {}
     for mnxm in mnx_strc:
         if not mnx_strc[mnxm]['inchikey'] in inchikey_mnxm:
@@ -722,6 +721,7 @@ if __name__ == "__main__":
     inchikey_mnxm = {}
     for mnxm in mnx_strc:
         inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = mnxm
+    '''
     pickle.dump(inchikey_mnxm, gzip.open('cache/inchikey_mnxm.pickle.gz','wb'))
     #xref --> use gzip since it is a large file
     #self.logger.info('Parsing the Cross-references')
