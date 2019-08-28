@@ -40,11 +40,11 @@ class DepictionError(Error):
 
 ## Class to generate the cache
 #
-# Contains all the functions that parse different files, used to calculate the thermodynamics and the FBA of the 
+# Contains all the functions that parse different files, used to calculate the thermodynamics and the FBA of the
 #the other steps. These should be called only when the files have changes
 class rpCache:
     ## Cache constructor
-    # 
+    #
     # @param self The object pointer
     # @param inputPath The path to the folder that contains all the input/output files required
     def __init__(self):
@@ -109,7 +109,7 @@ class rpCache:
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
-    #  @return Dictionnary of identifiers  
+    #  @return Dictionnary of identifiers
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def _deprecatedMNXM(self, chem_xref_path):
         self.deprecatedMNXM_mnxm = {}
@@ -131,7 +131,7 @@ class rpCache:
     #
     #  @param self Object pointer
     #  @param reac_xref_path Input file path
-    #  @return Dictionnary of identifiers  
+    #  @return Dictionnary of identifiers
     def _deprecatedMNXR(self, reac_xref_path):
         self.deprecatedMNXMR_mnxr = {}
         with open(reac_xref_path) as f:
@@ -143,7 +143,7 @@ class rpCache:
                         self.deprecatedMNXR_mnxr[mnx[1]] = row[1]
 
 
-    ## Function to create a dictionnary of old to new chemical id's 
+    ## Function to create a dictionnary of old to new chemical id's
     #
     #  Generate a one-to-one dictionnary of old id's to new ones. Private function
     #
@@ -170,10 +170,10 @@ class rpCache:
 
     ########################################################
     ####################### PUBLIC FUNCTIONS ###############
-    ######################################################## 
+    ########################################################
 
 
-    ################### MetaNetX ############################   
+    ################### MetaNetX ############################
 
 
     ## Function to parse the chemp_prop.tsv file from MetanetX and compounds.tsv from RetroRules. Uses the InchIkey as key to the dictionnary
@@ -181,7 +181,7 @@ class rpCache:
     #  Generate a dictionnary gaving the formula, smiles, inchi and inchikey for the components
     #
     #  @param self Object pointer
-    #  @param chem_prop_path Input file path 
+    #  @param chem_prop_path Input file path
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
@@ -191,11 +191,11 @@ class rpCache:
         #    for row in c:
         for row in csv.DictReader(open(rr_compounds_path), delimiter='\t'):
             #if not row[0][0]=='#':
-            tmp = {'forumla':  None, 
-                    'smiles': None, 
-                    'inchi': row['inchi'], 
-                    'inchikey': None, 
-                    'mnxm': self._checkMNXMdeprecated(row['cid']), 
+            tmp = {'forumla':  None,
+                    'smiles': None,
+                    'inchi': row['inchi'],
+                    'inchikey': None,
+                    'mnxm': self._checkMNXMdeprecated(row['cid']),
                     'name': None}
             try:
                 resConv = self._convert_depiction(idepic=tmp['inchi'], itype='inchi', otype={'smiles','inchikey'})
@@ -210,11 +210,11 @@ class rpCache:
             for row in c:
                 if not row[0][0]=='#':
                     mnxm = self._checkMNXMdeprecated(row[0])
-                    tmp = {'forumla':  row[2], 
-                            'smiles': row[6], 
-                            'inchi': row[5], 
-                            'inchikey': row[8], 
-                            'mnxm': mnxm, 
+                    tmp = {'forumla':  row[2],
+                            'smiles': row[6],
+                            'inchi': row[5],
+                            'inchikey': row[8],
+                            'mnxm': mnxm,
                             'name': row[1]}
                     for i in tmp:
                         if tmp[i]=='' or tmp[i]=='NA':
@@ -270,7 +270,7 @@ class rpCache:
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
-    #  @return a The dictionnary of identifiers  
+    #  @return a The dictionnary of identifiers
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def mnx_chemXref(self, chem_xref_path):
         chemXref = {}
@@ -304,12 +304,12 @@ class rpCache:
 
     ## Function to parse the reacXref.tsv file of MetanetX and rxn_recipes.tsv from RetroRules
     #
-    #  Generate a dictionnary of all cross references for a given reaction id (MNX) to other database id's 
+    #  Generate a dictionnary of all cross references for a given reaction id (MNX) to other database id's
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
     #  @param rxn_recipes_path Input file path for the reaction recipes
-    #  @return a The dictionnary of identifiers  
+    #  @return a The dictionnary of identifiers
     def mnx_reacXref(self, reacXref_path, rxn_recipes_path):
         reacXref = {}
         with open(reacXref_path) as f:
@@ -357,7 +357,7 @@ class rpCache:
     #
     #  @param self Object pointer
     #  @param chem_xref_path Input file path
-    #  @return a The dictionnary of identifiers  
+    #  @return a The dictionnary of identifiers
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
     def mnx_compXref(self, compXref_path):
         name_pubDB_xref = {}
@@ -414,7 +414,7 @@ class rpCache:
                 compounds_path):
         cc_alberty = {}
         ########################## compounds ##################
-        #contains the p_kas and molecule decomposition 
+        #contains the p_kas and molecule decomposition
         cid_comp = {}
         with open(compounds_path) as f:
             c = csv.reader(f, delimiter=',', quotechar='"')
@@ -424,7 +424,7 @@ class rpCache:
                 cid_comp[row[-1].split(':')[1]]['atom_bag'] = literal_eval(row[3])
                 cid_comp[row[-1].split(':')[1]]['p_kas'] = literal_eval(row[4])
                 cid_comp[row[-1].split(':')[1]]['major_ms'] = int(literal_eval(row[6]))
-                cid_comp[row[-1].split(':')[1]]['number_of_protons'] = literal_eval(row[7]) 
+                cid_comp[row[-1].split(':')[1]]['number_of_protons'] = literal_eval(row[7])
                 cid_comp[row[-1].split(':')[1]]['charges'] = literal_eval(row[8])
         '''
         ###################### mnxm_kegg ################
@@ -432,7 +432,7 @@ class rpCache:
         with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
             c = csv.reader(f, delimiter='\t')
             for row in c:
-                mnx = row[0].split(':') 
+                mnx = row[0].split(':')
                 if mnx[0]=='kegg' and mnx[1][0]=='C':
                     if mnx[1] in kegg_mnxm:
                         self.logger.warning(
@@ -517,7 +517,7 @@ class rpCache:
                     cc_alberty[cd['CID']]['alberty'].append(cd)
         return cc_alberty
 
-    
+
     ####################################### RetroRules #####################################
 
 
@@ -553,7 +553,7 @@ class rpCache:
                     rule[row['# Rule_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
                     '''
                     #WARNING: one reaction rule can have multiple reactions associated with them
-                    #To change when you can set subpaths from the mutliple numbers of 
+                    #To change when you can set subpaths from the mutliple numbers of
                     #we assume that the reaction rule has multiple unique reactions associated
                     if row['# Rule_ID'] not in rule:
                         rule[row['# Rule_ID']] = {}
@@ -568,7 +568,7 @@ class rpCache:
                 return {}
         return rule
 
-    
+
     ## Generate complete reactions from the rxn_recipes.tsv from RetroRules
     #
     #  These are the compplete reactions from which the reaction rules are generated from. This is used to
@@ -597,7 +597,7 @@ class rpCache:
                 if not len(row['Equation'].split('='))==2:
                     self.logger.warning('There should never be more or less than a left and right of an euation')
                     self.logger.warnin(row['Equation'])
-                    continue 
+                    continue
                 #reac_left = row[1].split('=')[0]
                 #reac_right = row[1].split('=')[1]
                 ######### LEFT ######
@@ -623,7 +623,7 @@ class rpCache:
                         tmp['chem_left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
                     except KeyError:
                         #2) try to convert to int if its not
-                        try: 
+                        try:
                             tmp['chem_left'][spe[1]] = int(spe[0])
                         except ValueError:
                             self.logger.warning('Cannot convert '+str(spe[0]))
@@ -638,7 +638,7 @@ class rpCache:
                         tmp['right'][self._checkMNXMdeprecated(spe[1])] = DEFAULT_STOICHIO_RESCUE[spe[0]]
                     except KeyError:
                         #2) try to convert to int if its not
-                        try: 
+                        try:
                             tmp['right'][self._checkMNXMdeprecated(spe[1])] = int(spe[0])
                         except ValueError:
                             self.logger.warning('Cannot convert '+str(spe[0]))
@@ -652,7 +652,7 @@ class rpCache:
                         tmp['chem_right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
                     except KeyError:
                         #2) try to convert to int if its not
-                        try: 
+                        try:
                             tmp['chem_right'][spe[1]] = int(spe[0])
                         except ValueError:
                             self.logger.warning('Cannot convert '+str(spe[0]))
@@ -672,7 +672,7 @@ class rpCache:
         except FileNotFoundError:
             self.logger.error('Cannot find file: '+str(path))
             return False
- 
+
 
 ## Run all the functions
 #
@@ -699,12 +699,12 @@ if __name__ == "__main__":
         open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
     #self.logger.info('Generating rr_reactions')
-    rr_reactions = cache.retro_reactions('input_cache/rules_rall_nohs.tsv')
+    rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
     #rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
     #self.logger.info('Generating full_reactions')
-    pickle.dump(cache.full_reac('input_cache/rxn_recipes.tsv'), 
+    pickle.dump(cache.full_reac('input_cache/rxn_recipes.tsv'),
             open('cache/full_reactions.pickle', 'wb'))
     #mnxm_strc --> use gzip since it is a large file
     #self.logger.info('Parsing the SMILES and InChI')
@@ -732,7 +732,6 @@ if __name__ == "__main__":
     pickle.dump(compName_mnxc, gzip.open('cache/nameCompXref.pickle.gz','wb'))
     #copy the other file required
     copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
-    #copy the rules_rall.tsv 
+    #copy the rules_rall.tsv
     #with tarfile.open('cache/rules_rall.tsv.tar.xz', "w:xz") as tar:
     #    tar.add('input_cache/rules_rall.tsv')
-
