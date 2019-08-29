@@ -366,7 +366,7 @@ class rpReader:
             #    for i in range(len(comb_path)):
             #        #steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
             #        steps.append(rp_paths[pathNum][i+1][comb_path[i]])
-            for comb_path in list(itertools.product(*[[(i,y) for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]]))[1:10]:
+            for comb_path in list(itertools.product(*[[(i,y) for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]]))[0:10]:
                 steps = []
                 for i, y in comb_path:
                     steps.append(rp_paths[pathNum][i][y])
@@ -623,7 +623,7 @@ class rpReader:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
             altPathNum = 1
-            for comb_path in list(itertools.product(*[[(i,y) for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+            for comb_path in list(itertools.product(*[[(i,y) for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]]))[0:10]:
                 steps = []
                 for i, y in comb_path:
                     steps.append(rp_paths[pathNum][i][y])
