@@ -325,7 +325,7 @@ class rpCofactors:
                             try:
                                 smiles = self.mnxm_strc[self.deprecatedMNXM_mnxm[species]]['smiles']
                             except KeyError:
-                                self.logger.warning('Cannot find the smiles for this species: '+str(species))
+                                self.logger.debug('Cannot find the smiles for this species: '+str(species))
                                 pass
                         #add the new species to rpsbml
                         rpsbml.createSpecies(species,
