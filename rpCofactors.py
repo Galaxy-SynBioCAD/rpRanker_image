@@ -21,7 +21,7 @@ class rpCofactors:
     #DEPRECATED def __init__(self, rpReader, userXrefDbName=None):
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Started instance of rpCofactors')
+        self.logger.debug('Started instance of rpCofactors')
         ##### stuff to load from cache #####
         self.full_reactions = None
         self.rr_reactions = None
@@ -84,7 +84,7 @@ class rpCofactors:
     #
     def completeReac(self, step, reac_side, f_reac_side, pathway_cmp_mnxm):
         '''
-        ## BUG fix, remove MNXM1 (i.e. hydrogen ion) from the rr_reactions since they are commonly not 
+        ## BUG fix, remove MNXM1 (i.e. hydrogen ion) from the rr_reactions since they are commonly not
         # found in the full reaction and causes an error
         hydro_diff = None
         try:
@@ -122,13 +122,13 @@ class rpCofactors:
                 # and usually happens since there can be more than one reaction rule associated
                 # with a reaction when the original reaction species do not match
                 #INFO2: can also happen when a reaction has more than one product that need to be recovered here
-                # Means that there are two species that need to be recovered instead of the one from 
+                # Means that there are two species that need to be recovered instead of the one from
                 # excpected monocomponent reaction
                 #Temp fix: use the full_reactions main species to do it
                 #works with RP3, but don't like to need to refer to the original reaction
                 try:
-                    self.logger.warning('Reverting to using the full reactions main reaction')
-                    ## control for INFO2 
+                    self.logger.debug('Reverting to using the full reactions main reaction')
+                    ## control for INFO2
                     toRem = [i for i in list(step[reac_side].keys()-f_reac.keys())]
                     if len(toRem)==1:
                         main = self.full_reactions[self.rr_reactions[step['rule_id']][step['rule_mnxr']]['reac_id']]['main_'+str(f_reac_side)]
@@ -139,7 +139,7 @@ class rpCofactors:
                         main = self.full_reactions[self.rr_reactions[step['rule_id']][step['rule_mnxr']]['reac_id']]['main_'+str(f_reac_side)]
                         unknownMain = list(step[reac_side].keys()-f_reac.keys())[0]
                         pathway_cmp_mnxm.update({unknownMain: main[0]})
-                        #recover the inchi keys from species in the full reactions, remove the knowns, 
+                        #recover the inchi keys from species in the full reactions, remove the knowns,
                         toCompare = [i for i in f_reac if not i==unknownMain]
                         inchikey_freac = {}
                         for mnxm in f_reac:
@@ -162,7 +162,7 @@ class rpCofactors:
                     print(step[reac_side].keys())
                     print('#######################')
                     '''
-                except KeyError as e:
+                except (KeyError, IndexError) as e:
                     self.logger.error('Could not find intermediate in pathway_cmp_mnxm '+str(e))
                     return False
         else:
@@ -218,11 +218,11 @@ class rpCofactors:
                             reac_smiles[0] += '.'+self.mnxm_strc[i]['smiles']
                         step['reaction_rule'] = reac_smiles[0]+'>>'+reac_smiles[1]
                     else:
-                        #TODO: if any of the steps fail you should revert to the original reaction rule 
+                        #TODO: if any of the steps fail you should revert to the original reaction rule
                         self.logger.warning('There are no SMILES defined for '+str(i)+' in self.mnxm_strc')
                         continue
                 else:
-                    self.logger.warning('Cannot find '+str(i)+' in self.mnxm_strc')
+                    self.logger.debug('Cannot find '+str(i)+' in self.mnxm_strc')
                     continue
         return True
 

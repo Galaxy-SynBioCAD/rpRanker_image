@@ -12,7 +12,7 @@ import logging
 class tools:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Started instance of tools')
+        self.logger.debug('Started instance of tools')
         self.pathId = 'rp_pathway'
 
 

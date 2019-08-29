@@ -11,10 +11,10 @@ import logging
 class rpFBA:
     def __init__(self, rpsbml):
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Started instance of rpFBA')
+        self.logger.debug('Started instance of rpFBA')
         self.rpsbml = rpsbml
         self.cobraModel = None
-  
+
 
     ## Check the libSBML calls
     #
@@ -51,7 +51,7 @@ class rpFBA:
 
     ##
     #
-    #   
+    #
     def allObj(self):
         fbc_plugin = self.rpsbml.model.getPlugin('fbc')
         self._checklibSBML(fbc_plugin, 'Getting FBC package')
@@ -63,7 +63,7 @@ class rpFBA:
             rp_pathway = groups.getGroup('rp_pathway')
             self._checklibSBML(rp_pathway, 'Getting RP pathway')
             #find all the species of the reactions in the rp_pathway to return the shadow price
-            ''' TO BE DETERMINED IF USED 
+            ''' TO BE DETERMINED IF USED
             mem = []
             for member in rp_pathway.getListOfMembers():
                 reac = self.rpsbml.model.getReaction(member.getIdRef())
@@ -106,12 +106,12 @@ class rpFBA:
     #
     #
     def addObjective():
-        pass       
+        pass
 
 
     ## Given that there can be multiple objectives defined in the SBML, this function switches between different ones
     #
-    # TODO: 
+    # TODO:
     def switchObjective(self, objId):
         fbc_plugin = self.rpsbml.model.getPlugin('fbc')
         listObj = fbc_plugin.getListOfObjectives()
@@ -131,16 +131,16 @@ class rpFBA:
         self.cobraModel = cobra.io.read_sbml_model(document.toXMLNode().toXMLString())
         #for an old version of cobrapy (0.4)
         #return cobra.io.sbml3.parse_xml_into_model(lxml.etree.fromstring(rpsbml.document.toXMLNode().toXMLString()))
-        
-    
+
+
     ##
     #
-    #TODO: should update the 
+    #TODO: should update the
     def simulate(self):
         res = self.cobraModel.optimize()
         return self.cobraModel.summary()
-        
-    
+
+
     ##
     #
     # child: rule_score, fba_biomass_score, fba_target_score, fba_splitObj_score, global_score

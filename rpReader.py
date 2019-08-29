@@ -54,7 +54,7 @@ class rpReader:
     #  @param self The object pointer
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Starting instance of rpReader')
+        self.logger.debug('Starting instance of rpReader')
         #cache files
         #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
@@ -412,14 +412,14 @@ class rpReader:
                             self.rp_transformation[step['transformation_id']]['rule'],
                             self.rp_transformation[step['transformation_id']]['ec'])
                     #5) adding the consumption of the target
-                targetStep = {'rule_id': None, 
-                        'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 
-                        'right': [], 
-                        'step': None, 
-                        'sub_step': None, 
-                        'path_id': None, 
-                        'transformation_id': None, 
-                        'rule_score': None, 
+                targetStep = {'rule_id': None,
+                        'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1},
+                        'right': [],
+                        'step': None,
+                        'sub_step': None,
+                        'path_id': None,
+                        'transformation_id': None,
+                        'rule_score': None,
                         'mnxr': None}
                 rpsbml.createReaction('targetSink',
                         'B_999999',
@@ -435,7 +435,7 @@ class rpReader:
                 altPathNum += 1
         return True
 
-    
+
     ## Function to group all the functions for parsing RP2 output to SBML files
     #
     # Takes RP2paths's compounds.txt and out_paths.csv and RetroPaths's *_scope.csv files and generates SBML
@@ -466,7 +466,7 @@ class rpReader:
     #  WARNING: We are only using a single rule (technically with the highest diameter)
     #
     #  @param self Object pointer
-    # @param colJson Dictionnary of 
+    # @param colJson Dictionnary of
     #  @return rpsbml.document the SBML document
     def jsonToSBML(self, collJson, pathId='rp_pathway', compartment_id='MNXC3'):
         #global parameters used for all parameters
@@ -499,12 +499,12 @@ class rpReader:
                 ##### compounds ####
                 if node['data']['type']=='compound':
                     cid_inchikey[pathNum][node['data']['id'].replace('-', '')] = node['data']['id']
-                    species_list[pathNum][node['data']['id'].replace('-', '')] = {'inchi': node['data']['InChI'], 
+                    species_list[pathNum][node['data']['id'].replace('-', '')] = {'inchi': node['data']['InChI'],
                                     'inchikey': node['data']['id'],
                                     'smiles': node['data']['SMILES']}
                     if int(node['data']['isSource'])==1:
                         #TODO: there should always be only one source, to check
-                        source_species.append(node['data']['id'].replace('-', '')) 
+                        source_species.append(node['data']['id'].replace('-', ''))
                         source_cid[pathNum] = node['data']['id'].replace('-', '')
                     if int(node['data']['inSink'])==1:
                         sink_species[pathNum][node['data']['id'].replace('-', '')] = node['data']['id']
@@ -544,7 +544,7 @@ class rpReader:
                             reactions_list[pathNum][rid]['left'][cid] = stochio[rid][cid]
                         except KeyError:
                             reactions_list[pathNum][rid]['left'][cid] = 1.0
-                            self.logger.warning('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
+                            self.logger.debug('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
                 if not len(reaction_node['data']['target'].split('-'))==3:
                     if not reaction_node['data']['target'] in reactions_list[pathNum]:
                         self.logger.error('The following reaction was not found in the JSON elements: '+str(reaction_node['data']['source']))
@@ -560,7 +560,7 @@ class rpReader:
                             reactions_list[pathNum][rid]['right'][cid] = stochio[rid][cid]
                         except KeyError:
                             reactions_list[pathNum][rid]['right'][cid] = 1.0
-                            self.logger.warning('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
+                            self.logger.debug('The cid ('+str(cid)+') has not been detected by stochio. Setting to 1.0')
             ################# calculate the steps associated with the reactions_list ######
             #find the source in the LAST reaction in the pathway
             #NOTE: this assumes that the source is contained in a single final reaction and nowhere else
@@ -568,7 +568,7 @@ class rpReader:
             step_num = len(reactions_list[pathNum])
             found_rid = []
             toFind_rid = list(reactions_list[pathNum].keys())
-            for rid in reactions_list[pathNum]:    
+            for rid in reactions_list[pathNum]:
                 if all([True if i in source_species else False for i in reactions_list[pathNum][rid]['right']]):
                     reactions_list[pathNum][rid]['step'] = step_num
                     step_num -= 1
@@ -681,7 +681,7 @@ class rpReader:
                             try:
                                 step_mnxm[meta_to_cid[meta]] = step[direc][meta]
                             except KeyError:
-                                step_mnxm[meta] = step[direc][meta] 
+                                step_mnxm[meta] = step[direc][meta]
                         step[direc] = step_mnxm
                     rpsbml.createReaction('RP'+str(step['step']),
                             'B_999999', #only for genericModel
@@ -691,14 +691,14 @@ class rpReader:
                             reac_smiles[pathNum][step['rule_id']],
                             reac_ecs[pathNum][step['rule_id']])
                 #5) adding the consumption of the target
-                targetStep = {'rule_id': None, 
-                        'left': {source_cid[pathNum]: source_stochio[pathNum]}, 
-                        'right': {}, 
-                        'step': None, 
-                        'sub_step': None, 
-                        'path_id': None, 
-                        'transformation_id': None, 
-                        'rule_score': None, 
+                targetStep = {'rule_id': None,
+                        'left': {source_cid[pathNum]: source_stochio[pathNum]},
+                        'right': {},
+                        'step': None,
+                        'sub_step': None,
+                        'path_id': None,
+                        'transformation_id': None,
+                        'rule_score': None,
                         'mnxr': None}
                 rpsbml.createReaction('targetSink',
                         'B_999999',
@@ -872,8 +872,8 @@ class rpReader:
             ##### TODO: give the user more control over a generic model creation:
             #   -> special attention to the compartment
             rpsbml.genericModel('measured_'+str(path_id),
-                                'measured_'+str(path_id), 
-                                self.compXref[mnxc], 
+                                'measured_'+str(path_id),
+                                self.compXref[mnxc],
                                 compartment_id)
             #find all the chemical species and add them to an SBML
             #2) create the pathway (groups)
@@ -895,7 +895,7 @@ class rpReader:
                     #TODO: add the species with other types of xref in annotation
                     self.logger.warning('Some species are not referenced by a MNX id or will be ignored')
                     #break
-                    
+
                 #try to conver the inchi into the other structures
                 smiles = None
                 inchikey = None
