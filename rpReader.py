@@ -361,11 +361,15 @@ class rpReader:
             #second is itertools all possible combinations using product
             altPathNum = 1
             #for comb_path in list(itertools.product(*[[y for y in self.rp_paths[pathNum][i]] for i in self.rp_paths[pathNum]])):
-            for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+            #for comb_path in list(itertools.product(*[[y for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
+            #    steps = []
+            #    for i in range(len(comb_path)):
+            #        #steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
+            #        steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+            for comb_path in list(itertools.product(*[[(i,y) for y in rp_paths[pathNum][i]] for i in rp_paths[pathNum]])):
                 steps = []
-                for i in range(len(comb_path)):
-                    #steps.append(self.rp_paths[pathNum][i+1][comb_path[i]])
-                    steps.append(rp_paths[pathNum][i+1][comb_path[i]])
+                for i, y in comb_path:
+                    steps.append(rp_paths[pathNum][i][y])
                 path_id = steps[0]['path_id']
                 rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
