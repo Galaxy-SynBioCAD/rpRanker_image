@@ -256,7 +256,7 @@ class rpReader:
     def outPathsToSBML(self, path, maxRuleIds=10, pathId='rp_pathway', compartment_id='MNXC3'):
         #try:
         rp_paths = {}
-        #reactions = self.rr_reactions
+        #reactions = self.rr_reactionsingleRule.split('__')[1]s
         with open(path) as f:
             reader = csv.reader(f)
             next(reader)
@@ -569,13 +569,15 @@ class rpReader:
             #find the source in the LAST reaction in the pathway
             #NOTE: this assumes that the source is contained in a single final reaction and nowhere else
             last_rid = None
-            step_num = len(reactions_list[pathNum])
+            #step_num = len(reactions_list[pathNum])
+            step_num = 1
             found_rid = []
             toFind_rid = list(reactions_list[pathNum].keys())
             for rid in reactions_list[pathNum]:    
                 if all([True if i in source_species else False for i in reactions_list[pathNum][rid]['right']]):
                     reactions_list[pathNum][rid]['step'] = step_num
-                    step_num -= 1
+                    #step_num -= 1
+                    step_num += 1
                     last_rid = rid
                     try:
                         source_stochio[pathNum] = stochio[rid][source_cid[pathNum]]
@@ -587,7 +589,8 @@ class rpReader:
             for rid in toFind_rid[:]:
                 if all([True if i in reactions_list[pathNum][last_rid]['left'] else False for i in reactions_list[pathNum][rid]['right']]):
                     reactions_list[pathNum][rid]['step'] = step_num
-                    step_num -= 1
+                    #step_num -= 1
+                    step_num += 1
                     last_rid = rid
                     found_rid.append(rid)
                     toFind_rid.remove(rid)
@@ -674,7 +677,7 @@ class rpReader:
                                     species_list[pathNum][meta]['smiles'])
                         except KeyError:
                             self.logger.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
-                #4) add the complete reactions and their annotations
+                #4) add the reactions and their annotations
                 for step in steps:
                     #add the substep to the model
                     step['sub_step'] = altPathNum
