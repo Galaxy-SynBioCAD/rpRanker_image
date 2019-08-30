@@ -700,7 +700,8 @@ if __name__ == "__main__":
     #rr_reactions
     #self.logger.info('Generating rr_reactions')
     #rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
-    rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
+    #rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
+    rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
     #self.logger.info('Generating full_reactions')
