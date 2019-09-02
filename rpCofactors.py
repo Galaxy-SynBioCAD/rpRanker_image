@@ -143,9 +143,9 @@ class rpCofactors:
         reac_smiles_left = step['reaction_rule'].split('>>')[0]
         reac_smiles_right = step['reaction_rule'].split('>>')[1]
         if self.rr_reactions[step['rule_id']][step['rule_mnxr']]['rel_direction']==-1:
-            isSuccess, reac_smiles_right = self.completeReac(step['right'], 
+            isSuccess, reac_smiles_right = self.completeReac(step['right'],
                     self.rr_reactions[step['rule_id']][step['rule_mnxr']]['left'],
-                    self.full_reactions[step['rule_mnxr']]['right'], 
+                    self.full_reactions[step['rule_mnxr']]['right'],
                     True,
                     reac_smiles_right,
                     pathway_cmp_mnxm)
@@ -154,7 +154,7 @@ class rpCofactors:
                 return False
             isSuccess, reac_smiles_left = self.completeReac(step['left'],
                     self.rr_reactions[step['rule_id']][step['rule_mnxr']]['right'],
-                    self.full_reactions[step['rule_mnxr']]['left'], 
+                    self.full_reactions[step['rule_mnxr']]['left'],
                     False,
                     reac_smiles_left,
                     pathway_cmp_mnxm)
@@ -164,7 +164,7 @@ class rpCofactors:
         elif self.rr_reactions[step['rule_id']][step['rule_mnxr']]['rel_direction']==1:
             isSuccess, reac_smiles_right = self.completeReac(step['right'],
                     self.rr_reactions[step['rule_id']][step['rule_mnxr']]['left'],
-                    self.full_reactions[step['rule_mnxr']]['left'], 
+                    self.full_reactions[step['rule_mnxr']]['left'],
                     True,
                     reac_smiles_right,
                     pathway_cmp_mnxm)
@@ -173,7 +173,7 @@ class rpCofactors:
                 return False
             isSuccess, reac_smiles_left = self.completeReac(step['left'],
                     self.rr_reactions[step['rule_id']][step['rule_mnxr']]['right'],
-                    self.full_reactions[step['rule_mnxr']]['right'], 
+                    self.full_reactions[step['rule_mnxr']]['right'],
                     False,
                     reac_smiles_left,
                     pathway_cmp_mnxm)
