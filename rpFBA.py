@@ -52,7 +52,7 @@ class rpFBA:
     ##
     #
     #   
-    def allObj(self):
+    def allObj(self, pathId='rp_pathway'):
         fbc_plugin = self.rpsbml.model.getPlugin('fbc')
         self._checklibSBML(fbc_plugin, 'Getting FBC package')
         #print(self.rpsbml.modelName)
@@ -60,7 +60,7 @@ class rpFBA:
             #print('----> '+str(objId))
             groups = self.rpsbml.model.getPlugin('groups')
             self._checklibSBML(groups, 'Getting groups plugin')
-            rp_pathway = groups.getGroup('rp_pathway')
+            rp_pathway = groups.getGroup(pathId)
             self._checklibSBML(rp_pathway, 'Getting RP pathway')
             #find all the species of the reactions in the rp_pathway to return the shadow price
             ''' TO BE DETERMINED IF USED 

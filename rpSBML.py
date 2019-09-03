@@ -570,7 +570,7 @@ class rpSBML:
     #called rp_pathway.
     # We add the reactions and species from the rpsbml to the target_model
     #
-    def mergeModels(self, target_model):
+    def mergeModels(self, target_model, pathId='rp_pathway'):
         #target_model = target_document.getModel()
         #Find the ID's of the similar target_model species
         ################ UNITDEFINITIONS ######
@@ -927,7 +927,7 @@ class rpSBML:
         self._checklibSBML(source_groups, 'fetching the source model groups')
         target_groups = target_model.getPlugin('groups')
         self._checklibSBML(target_groups, 'fetching the target model groups')
-        self._checklibSBML(target_groups.addGroup(source_groups.getGroup('rp_pathway')),
+        self._checklibSBML(target_groups.addGroup(source_groups.getGroup(pathId)),
                 'copying the source groups "rp_pathway" to the target groups')
         #return the fluxObj for the original model to define the bilevel objective        
         ###### TITLES #####
@@ -1328,12 +1328,12 @@ class rpSBML:
     # @param products list of species that are the products of this reaction
     # @param reaction_smiles String smiles description of this reaction (added in IBISBA annotation)
     # @return hetero_group The number libSBML groups object to pass to createReaction to categorise the new reactions
-    def createPathway(self, path_id, metaID=None):
+    def createPathway(self, path_id, metaID=None, pathId='rp_pathway'):
         groups_plugin = self.model.getPlugin('groups')
         self.hetero_group = groups_plugin.createGroup()
-        self.hetero_group.setId('rp_pathway')
+        self.hetero_group.setId(pathId)
         if metaID==None:
-            metaID = self._genMetaID('rp_pathway')
+            metaID = self._genMetaID(pathId)
         self.hetero_group.setMetaId(metaID)
         self.hetero_group.setKind(libsbml.GROUP_KIND_COLLECTION)
         annotation = '''<annotation>
