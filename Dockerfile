@@ -22,8 +22,8 @@ RUN apt-get --quiet update && \
     pip install --no-cache-dir pytest && \
     pip install --no-cache-dir cobra && \
     pip install --no-cache-dir scipy && \
-    git clone --single-branch --branch dev https://mdulac:towlie1988@brsforge.micalis.fr/DBT_pipeline/rpRanker.git
-    #git clone --single-branch --branch master https://mdulac:towlie1988@brsforge.micalis.fr/DBT_pipeline/rpRanker.git
+    #git clone --single-branch --branch dev https://mdulac:towlie1988@brsforge.micalis.fr/DBT_pipeline/rpRanker.git
+    git clone --single-branch --branch master https://mdulac:towlie1988@brsforge.micalis.fr/DBT_pipeline/rpRanker.git
 
 #Below is the code used for shared data -- remove and use rpCache if you want to use that
 
