@@ -746,6 +746,11 @@ class rpReader:
                     data[pathID] = {}
                     data[pathID]['isValid'] = True
                     data[pathID]['steps'] = {}
+                ####### target #########
+                if not 'target' in data[pathID]:
+                    data[pathID]['target'] = {}
+                    data[pathID]['target']['name'] = row['target_name'] 
+                    data[pathID]['target']['inchi'] = row['target_structure'] 
                 ####### step #########
                 try:
                     stepID = int(row['step'])

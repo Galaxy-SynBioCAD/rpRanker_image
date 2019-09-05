@@ -6,8 +6,8 @@ logging.basicConfig(filename='rpRanker.log',
                             filemode='a',
                             format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
-                            level=logging.DEBUG)
-logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+                            level=logging.ERROR)
+#logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 loggers = logging.getLogger(__name__)
 '''
 # Create a Formatter for formatting the log messages
