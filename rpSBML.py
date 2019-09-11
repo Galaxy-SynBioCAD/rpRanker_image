@@ -570,7 +570,9 @@ class rpSBML:
     #called rp_pathway.
     # We add the reactions and species from the rpsbml to the target_model
     #
-    def mergeModels(self, target_model, pathId='rp_pathway'):
+    # @param bilevel_obj: Defines if the different objectves are to be added to the model (False if (0.0, 0.0) and what are the coefficients to add it)
+    #
+    def mergeModels(self, target_model, bilevel_obj=(0.0, 0.0), pathId='rp_pathway'):
         #target_model = target_document.getModel()
         #Find the ID's of the similar target_model species
         ################ UNITDEFINITIONS ######
@@ -690,6 +692,7 @@ class rpSBML:
         ############### FBC OBJECTIVES ############
         #WARNING: here we compare the Objective by ID, and we add the downstream fluxObjectives
         targetObjectiveID = [i.getId() for i in target_fbc.getListOfObjectives()]
+        sourceObjectiveID = [i.getId() for i in source_fbc.getListOfObjectives()]
         for source_objective in source_fbc.getListOfObjectives():
             if not source_objective.getId() in targetObjectiveID:
                 target_objective = target_fbc.createObjective()
@@ -707,6 +710,43 @@ class rpSBML:
                         'setting target flux objective coefficient')
                     self._checklibSBML(target_fluxObjective.setReaction(source_fluxObjective.getReaction()),
                         'setting target flux objective reaction')
+        #### bilevel
+        #add a bilevel fluxObjective. Under the assumption that the GEM model input only has a single objective and that that is the biomass one. 
+        #NOTE: only if each model have only one objective with a single flux objective
+        #create the two list of objectives
+        if 1>=len(targetObjectiveID)>0 and 1>=len(sourceObjectiveID)>0:
+            #create a new one objective
+            bilevel_objective = target_fbc.createObjective()
+            self._checklibSBML(bilevel_objective, 'creating bilevel objective')
+            self._checklibSBML(bilevel_objective.setId('rpFBA_bilevel_obj'), 'setting bilevel obj id')
+            self._checklibSBML(bilevel_objective.setType('maximize'), 'setting type of bilevel')
+            #list the flux objectives
+            source_fluxObjective = source_fbc.getObjective(sourceObjectiveID[0])
+            target_fluxObjective = target_fbc.getObjective(targetObjectiveID[0])
+            targetFluxObjectives = target_fluxObjective.getListOfFluxObjectives()
+            sourceFluxObjectives = source_fluxObjective.getListOfFluxObjectives()
+            if 1>=len(targetFluxObjectives)>0 and 1>=len(sourceFluxObjectives)>0:
+                #biomass
+                bilevel_fluxObjective_biomass = bilevel_objective.createFluxObjective()
+                self._checklibSBML(bilevel_fluxObjective_biomass.setName(sourceFluxObjectives[0].getName()),
+                    'setting target flux objective name')
+                self._checklibSBML(bilevel_fluxObjective_biomass.setCoefficient(0.5),
+                    'setting target flux objective coefficient')
+                self._checklibSBML(bilevel_fluxObjective_biomass.setReaction(sourceFluxObjectives[0].getReaction()),
+                    'setting target flux objective reaction')
+                #target
+                bilevel_fluxObjective_target = bilevel_objective.createFluxObjective()
+                self._checklibSBML(bilevel_fluxObjective_target, 'creating target flux objective')
+                self._checklibSBML(bilevel_fluxObjective_target.setName(targetFluxObjectives[0].getName()),
+                    'setting target flux objective name')
+                self._checklibSBML(bilevel_fluxObjective_target.setCoefficient(0.5),
+                    'setting target flux objective coefficient')
+                self._checklibSBML(bilevel_fluxObjective_target.setReaction(targetFluxObjectives[0].getReaction()),
+                    'setting target flux objective reaction')
+            else:
+                self.logger.warning('Either the target or source model has one of the oobjectives with multiple flux values')
+        else:
+            self.logger.warning('There are more than one, or zero objective in the target and the source')
         ################ SPECIES ####################
         #TODO: modify the name to add rpPathway
         sourceSpeciesID_targetSpeciesID = {}
