@@ -981,6 +981,7 @@ class rpReader:
         for i in rpsbml.model.getListOfSpecies():
             if i.getCompartment()==compartment_id:
                 cytoplasm_species.append(i)
+        count = 0
         with open(file_out, mode='w') as f:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(['Name','InChI'])
@@ -998,7 +999,11 @@ class rpReader:
                     inchi = None
                 if mnx and inchi:
                     writer.writerow([mnx,inchi])
-
+                    count += 1
+        if count==0:
+            return False
+        else:
+            return True
 
 '''TODO: Need to update this test or write actual test functions
 #TODO: update this thing
