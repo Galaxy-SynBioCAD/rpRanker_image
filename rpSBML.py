@@ -384,6 +384,7 @@ class rpSBML:
     ############################# COMPARE MODELS ############################
     #########################################################################
 
+
     ## Find out if two libSBML Species or Reactions come from the same species
     #
     # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
@@ -399,6 +400,8 @@ class rpSBML:
             if source_dict[same_key]==target_dict[same_key]:
                 return True
         return False
+
+
     ## Find out if two libSBML Species or Reactions come from the same species
     #
     # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
@@ -443,7 +446,6 @@ class rpSBML:
             if bool(set(source_dict[com_key]) & set(target_dict[com_key])):
                 return True
         return False
-
 
 
     ## Function to compare two SBML's RP pathways
