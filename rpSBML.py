@@ -554,7 +554,7 @@ class rpSBML:
     #
     # @param bilevel_obj: Defines if the different objectves are to be added to the model (False if (0.0, 0.0) and what are the coefficients to add it)
     #
-    def mergeModels(self, target_model, bilevel_obj=(0.0, 0.0), pathId='rp_pathway'):
+    def mergeModels(self, target_model, pathId='rp_pathway', bilevel_obj=(0.0, 0.0)):
         #target_model = target_document.getModel()
         #Find the ID's of the similar target_model species
         ################ UNITDEFINITIONS ######
