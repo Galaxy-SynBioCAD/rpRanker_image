@@ -1,9 +1,6 @@
 import libsbml
 from hashlib import md5
 import os
-import pickle
-import gzip
-
 import logging
 
 ## @package RetroPath SBML writer
@@ -261,7 +258,21 @@ class rpSBML:
     ## Takes for input a libSBML annotatio object and returns a dictionnary of the annotations
     #
     def readIBISBAAnnotation(self, annot):
-        toRet = {}
+        toRet = {'dfG_prime_m': {},
+                 'dfG_uncert': {},
+                 'dfG_prime_o': {},
+                 'fba_rpFBA_obj': {},
+                 'path_id': None,
+                 'step_id': None,
+                 'sub_step_id': None,
+                 'rule_score': None,
+                 'smiles': None,
+                 'selenzyme': None,
+                 'rule_id': None,
+                 'rule_mnxr': None,
+                 'rule_score': None,
+                 'global_score': None
+                }
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
         for i in range(bag.getNumChildren()):
             ann = bag.getChild(i)
@@ -269,7 +280,7 @@ class rpSBML:
                 self.logger.warning('This contains no attributes: '+str(ann.toXMLString()))
                 continue
             #if not ann.getName() in toRet:
-            if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o' or ann.getName()[0:4]=='fba_':
+            if ann.getName()=='dfG_prime_m' or ann.getName()=='dfG_uncert' or ann.getName()=='dfG_prime_o' or ann.getName()[0:4]=='fba_':
                 toRet[ann.getName()] = {
                         'units': ann.getAttrValue('units'), 
                         'value': float(ann.getAttrValue('value'))}
@@ -278,7 +289,7 @@ class rpSBML:
                     toRet[ann.getName()] = int(ann.getAttrValue('value'))
                 except ValueError:
                     toRet[ann.getName()] = None
-            elif ann.getName()=='rule_score':
+            elif ann.getName()=='rule_score' or ann.getName()=='global_score':
                 try:
                     toRet[ann.getName()] = float(ann.getAttrValue('value'))
                 except ValueError:
@@ -301,7 +312,7 @@ class rpSBML:
     ## Function to return the products and the species associated with a reaction
     #
     # @return Dictionnary with right==product and left==reactants
-    def readReactionSpecies(self, reaction):
+    def readReactionSpecies(self, reaction, isID=False):
         #TODO: check that reaction is either an sbml species; if not check that its a string and that
         # it exists in the rpsbml model
         toRet = {'left': {}, 'right': {}}
@@ -309,12 +320,19 @@ class rpSBML:
         for i in range(reaction.getNumReactants()):
             reactant_ref = reaction.getReactant(i)
             reactant = self.model.getSpecies(reactant_ref.getSpecies())
-            toRet['left'][reactant.getName()] = int(reactant_ref.getStoichiometry())
+            if isID:
+                toRet['left'][reactant.getId()] = int(reactant_ref.getStoichiometry())
+            else:
+                toRet['left'][reactant.getName()] = int(reactant_ref.getStoichiometry())
         #products
         for i in range(reaction.getNumProducts()):
             product_ref = reaction.getProduct(i)
             product = self.model.getSpecies(product_ref.getSpecies())
-            toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
+            if isID:
+                toRet['right'][product.getId()] = int(product_ref.getStoichiometry())
+            else:
+                toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
+            toRet['reversible'] = reaction.getReversible()
         return toRet
 
 
@@ -521,42 +539,6 @@ class rpSBML:
             return True, found_meas_rp_species
         else:
             return False, {}
-
-        """
-        #''.join(i for i in s if i.isdigit())
-        #rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
-        #measured_pathways = sorted(measured_sbml.readRPpathways(), key=lambda x : int(x.replace('M', '')))
-        #check that they are the same size #TODO: consider if the pathway is a subpart if an output of RP
-        toRet = []
-        if len(rp_pathways)==len(measured_pathways):
-            for rp_step, meas_step in zip(rp_pathways, measured_pathways):
-                rp_reaction = self.model.getReaction(rp_step)
-                meas_reaction = measured_sbml.model.getReaction(meas_step)
-                #compare the reaction annotations
-                if compareMIRIAMAnnotations(rp_reaction.getAnnotation(), meas_reaction.getAnnotation()):
-                    return True
-                else:
-                    #remove the stoichiometry. We will not be using it to compare
-                    #if the annotations are not the same, check that the measured species are contained within the rp one
-                    #rp_reaction_species = self.readReactionSpecies(rp_reaction)
-                    #rp_reaction_species = {'left': list(rp_reaction_species['left'].keys()), 'right': list(rp_reaction_species['right'].keys())}
-                    #meas_reaction_species = measured_sbml.readReactionSpecies(meas_reaction)
-                    #meas_reaction_species = {'left': list(meas_reaction_species['left'].keys()), 'right': list(meas_reaction_species['right'].keys())}
-                    #NOTE: we chack that the measured step species are contained within the current SBML.
-                    #This is because we assume that there are a number of steps that are missing
-                    for m_l in list(measured_sbml.readReactionSpecies(meas_reaction)['left'].keys()):
-                        for rp_l in list(self.readReactionSpecies(rp_reaction)['left'].keys()): 
-                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_l).getAnnotation(), measured_sbml.model.getReaction(m_l).getAnnotation()):
-                                return False
-                    for m_r in list(measured_sbml.readReactionSpecies(meas_reaction)['right'].keys()):
-                        for rp_r in list(self.readReactionSpecies(rp_reaction)['right'].keys()):
-                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_r).getAnnotation(), measured_sbml.model.getReaction(m_r).getAnnotation()):
-                                return False
-            return True
-        else:
-            self.logger.error('The pathways are not the same length')
-            return False
-        """
 
 
     #########################################################################
@@ -1277,11 +1259,12 @@ class rpSBML:
     def createSpecies(self, 
             chemId,
             compartmentId,
-            chemXref={}, 
-            metaID=None, 
+            metaName=None,
+            chemXref={},
             inchi=None,
             inchiKey=None,
-            smiles=None):
+            smiles=None,
+            metaID=None):
             #TODO: add these at some point -- not very important
             #charge=0,
             #chemForm=''):
@@ -1309,7 +1292,16 @@ class rpSBML:
         if metaID==None:
             metaID = self._genMetaID(chemId)
         self._checklibSBML(spe.setMetaId(metaID), 'setting reaction metaID')
-        self._checklibSBML(spe.setName(chemId), 'setting name for the namebolites')
+
+        if not metaName==None:
+            self._checklibSBML(spe.setName(chemId), 'setting name for the namebolites')
+        elif not metaID==None:
+            self._checklibSBML(spe.setName(metaID), 'setting name for the namebolites')
+        else:
+            self.logger.warning('There are no inputs for the name')
+        #this is setting MNX id as the name
+        #this is setting the name as the input name
+        
         ###### annotation ###
         annotation = '''<annotation>
   <rdf:RDF 

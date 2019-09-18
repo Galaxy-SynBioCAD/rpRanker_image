@@ -384,12 +384,15 @@ class rpReader:
                 #3) find all the unique species and add them to the model
                 all_meta = set([i for step in steps for lr in ['left', 'right'] for i in step[lr]])
                 for meta in all_meta:
-                    #here we want to gather the info from rpReader's rp_strc and mnxm_strc
+                    try:
+                        chemName = self.mnxm_strc[meta]['name']
+                    except KeyError:
+                        chemName = None
                     try:
                         rpsbml.createSpecies(meta,
                                 compartment_id,
+                                chemName,
                                 self.chemXref[meta],
-                                None,
                                 self.rp_strc[meta]['inchi'],
                                 self.rp_strc[meta]['inchikey'],
                                 self.rp_strc[meta]['smiles'])
@@ -397,8 +400,8 @@ class rpReader:
                         try:
                             rpsbml.createSpecies(meta,
                                     compartment_id,
+                                    chemName,
                                     {},
-                                    None,
                                     self.rp_strc[meta]['inchi'],
                                     self.rp_strc[meta]['inchikey'],
                                     self.rp_strc[meta]['smiles'])
@@ -657,12 +660,17 @@ class rpReader:
                             return False
                     else:
                         cid = meta
+                    # retreive the name of the molecule
+                    try:
+                        chemName = self.mnxm_strc[meta]['name']
+                    except KeyError:
+                        chemName = None
                     #here we want to gather the info from rpReader's rp_strc and mnxm_strc
                     try:
                         rpsbml.createSpecies(cid,
                                 compartment_id,
+                                chemName,
                                 self.chemXref[cid],
-                                None,
                                 species_list[pathNum][meta]['inchi'],
                                 species_list[pathNum][meta]['inchikey'],
                                 species_list[pathNum][meta]['smiles'])
@@ -670,8 +678,8 @@ class rpReader:
                         try:
                             rpsbml.createSpecies(meta,
                                     compartment_id,
+                                    chemName,
                                     {},
-                                    None,
                                     species_list[pathNum][meta]['inchi'],
                                     species_list[pathNum][meta]['inchikey'],
                                     species_list[pathNum][meta]['smiles'])
@@ -919,10 +927,14 @@ class rpReader:
                     self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                 #create a new species
                 try:
+                    chemName = self.mnxm_strc[meta]['name']
+                except KeyError:
+                    chemName = None
+                try:
                     rpsbml.createSpecies(meta,
                             compartment_id,
+                            chemName,
                             self.chemXref[meta],
-                            None,
                             chem['inchi'],
                             inchikey,
                             smiles)
@@ -930,8 +942,8 @@ class rpReader:
                     try:
                         rpsbml.createSpecies(meta,
                                 compartment_id,
+                                chemName,
                                 {},
-                                None,
                                 chem['inchi'],
                                 inchikey,
                                 smiles)

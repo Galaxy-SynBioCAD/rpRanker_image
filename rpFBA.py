@@ -60,6 +60,7 @@ class rpFBA:
             #print('----> '+str(objId))
             groups = self.rpsbml.model.getPlugin('groups')
             self._checklibSBML(groups, 'Getting groups plugin')
+            groups_annotations = groups.getAnnotation()
             rp_pathway = groups.getGroup(pathId)
             self._checklibSBML(rp_pathway, 'Getting RP pathway')
             #find all the species of the reactions in the rp_pathway to return the shadow price
@@ -89,6 +90,9 @@ class rpFBA:
                 #here we just pass the child node to be added
                 tmpAnnot = libsbml.XMLNode.convertStringToXMLNode('<ibisba:ibisba xmlns:ibisba="http://ibisba.eu"> <ibisba:fba_'+str(objId)+' units="mmol_per_gDW_per_hr" value="'+str(res.fluxes.get(member.getIdRef()))+'" /> </ibisba:ibisba>')
                 ibisba_annot.addChild(tmpAnnot.getChild('fba_'+str(objId)))
+                ### if targetSink add it to the annotations of the group as well ##
+                if member.getIdRef()=='targetSink':
+                    groups_annotations.addChild(tmpAnnot.getChild('fba_'+str(objId)))
             del res
             ''' TO BE DETERMINED IF USED
             #update the shadow prices for species

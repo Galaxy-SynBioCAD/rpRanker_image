@@ -4,7 +4,7 @@ import sys
 import gzip
 import copy
 import itertools
-import difflib
+#import difflib
 from .rpSBML import rpSBML
 
 import logging
@@ -250,10 +250,14 @@ class rpCofactors:
                                 self.logger.warning('Cannot find the smiles for this species: '+str(species))
                                 pass
                         #add the new species to rpsbml
+                        try:
+                            chemName = self.mnxm_strc[species]
+                        except KeyError:
+                            chemName = None
                         rpsbml.createSpecies(species,
                                 compartment_id,
+                                chemName,
                                 xref,
-                                None,
                                 inchi,
                                 inchikey,
                                 smiles)
