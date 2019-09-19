@@ -9,11 +9,12 @@ import random
 from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 import json
 import copy
-
+import urllib.request
 #from .setup_self.logger import self.logger
 import logging
-from .rpSBML import rpSBML
+import rpCache
 
+import rpSBML
 
 ## @package rpReader
 #
@@ -80,62 +81,89 @@ class rpReader:
     #######################################################################
 
 
-    ## Private function to load the required cache parameters
+    ## Private function to fetch the required data, parse them and generate the pickle
     #
     #  Opens the previously generated cache to the object memory
     #
     # @param The oject pointer
     # @return Boolean detemining the success of the function or not
-    def _loadCache(self):
+    def _loadCache(self, fetchInputFiles=False):
         dirname = os.path.dirname(os.path.abspath( __file__ ))
-        try:
-            self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        ## could be deleted in favor of mnxm_strc
-        try:
-            self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.compXref = pickle.load(gzip.open(dirname+'/cache/compXref.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        try:
-            self.nameCompXref = pickle.load(gzip.open(dirname+'/cache/nameCompXref.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        ''' Not used as of now
-        try:
-            self.reacXref = pickle.load(gzip.open(dirname+'/cache/reacXref.pickle.gz', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
-        '''
+        #################### make the folders locally ############################
+        # input_cache
+        if not os.path.isdir(dirname+'/input_cache')
+            os.mkdir(dirname+'/input_cache')
+        # cache
+        if not os.path.isdir(dirname+'/cache'):
+            os.mkdir(dirname+'/cache')
+        ###################### Fetch the files is necessary ######################
+        #reac_xref
+        if not os.path.isfile(dirname+'/input_cache/chem_xref.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_xref.tsv', 
+                    dirname+'/input_cache/chem_xref.tsv')
+        #chem_xref
+        if not os.path.isfile(dirname+'/input_cache/reac_xref.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/reac_xref.tsv', 
+                    dirname+'/input_cache/reac_xref.tsv')
+        # rules_rall.tsv
+        if not os.path.isfile(dirname+'/input_cache/rules_rall.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://retrorules.org/dl/retrorules_preparsed', 
+                    dirname+'/input_cache/retrorules_preparsed.tar.gz')
+            tf = tarfile.open(dirname+'/input_cache/retrorules_preparsed.tar.gz')
+            tf.extractall(path=dirname+'/input_cache/')
+            tf.close()
+            os.rename(dirname+'/retrorules_preparsed/retrorules-rr01_flat_all.csv', 
+                    dirname+'/input_cache/rules_rall.tsv')
+        # rr_compounds.tsv
+        #TODO: need to add this file to the git or another location
+        if not os.path.isfile(dirname+'/input_cache/rr_compounds.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve(
+                    'https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rr_compounds.tsv', 
+                    dirname+'/input_cache/rr_compounds.tsv')
+        # chem_prop.tsv
+        if not os.path.isfile(dirname+'/input_cache/chem_prop.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv', 
+                    dirname+'/input_cache/chem_prop.tsv')
+        # comp_xref
+        if not os.path.isfile(dirname+'/input_cache/comp_xref.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/comp_xref.tsv', 
+                    dirname+'/input_cache/comp_xref.tsv')
+        ###################### Populate the cache #################################
+        if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
+            rpCache.deprecatedMNXM(dirname+'/input_cache/reac_xref.tsv')
+            pickle.dump(rpCache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
+        self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
+        if not os.path.isfile(dirname+'/cache/deprecatedMNXR_mnxr.pickle'):
+            rpCache.deprecatedMNXR(dirname+'/input_cache/reac_xref.tsv')
+            pickle.dump(rpCpache.deprecatedMNXR_mnxr, open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'wb'))
+        self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
+        if not os.path.isfile(dirname+'/cache/mnxm_strc.pickle.gz'):
+            pickle.dump(rpCache.mnx_strc(dirname+'/input_cache/rr_compounds.tsv', 
+                            dirname+'/input_cache/chem_prop.tsv'), 
+                        gzip.open(dirname+'/cache/mnxm_strc.pickle.gz','wb'))
+        self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
+        if not os.path.isfile(dirname+'/cache/inchikey_mnxm.pickle.gz'):
+            inchikey_mnxm = {}
+            for mnxm in mnx_strc:
+                if not mnx_strc[mnxm]['inchikey'] in inchikey_mnxm:
+                    inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = []
+                inchikey_mnxm[mnx_strc[mnxm]['inchikey']].append(mnxm)
+        self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
+        if not os.path.isfile(dirname+'/cache/rr_reactions.pickle'):
+            pickle.dump(
+                    rpCache.retro_reactions(dirname+'/input_cache/rules_rall.tsv'), 
+                    open(dirname+'/cache/rr_reactions.pickle', 'wb'))
+        self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
+        if not os.path.isfile(dirname+'/cache/chemXref.pickle.gz'):
+            pickle.dump(rpCache.mnx_chemXref(dirname+'/input_cache/chem_xref.tsv'), 
+                    gzip.open(dirname+'/cache/chemXref.pickle.gz','wb'))
+        self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
+        if not os.path.isfile(dirname+'/cache/compXref.pickle.gz') or not os.path.isfile(dirname+'/cache/nameCompXref.pickle.gz'):
+            name_pubDB_xref, compName_mnxc = rpCache.mnx_compXref(dirname+'/input_cache/comp_xref.tsv')
+            pickle.dump(name_pubDB_xref, gzip.open(dirname+'/cache/compXref.pickle.gz','wb'))
+            pickle.dump(compName_mnxc, gzip.open(dirname+'/cache/nameCompXref.pickle.gz','wb'))
+        self.compXref = pickle.load(gzip.open(dirname+'/cache/compXref.pickle.gz', 'rb'))
+        self.nameCompXref = pickle.load(gzip.open(dirname+'/cache/nameCompXref.pickle.gz', 'rb'))
         return True
 
 
@@ -1017,22 +1045,3 @@ class rpReader:
         else:
             return True
 
-'''TODO: Need to update this test or write actual test functions
-#TODO: update this thing
-if __name__ == "__main__":
-    #READ THE INPUT FILES AND PASS THEM TO rpFBA
-    rpreader = rpFBA.rpReader()
-    rpreader.compounds(params.rp2paths_compounds)
-    rpreader.transformation(params.rp2paths_scope)
-    rpreader.outPaths(params.rp2paths_outPaths)
-    rpcofactors = rpFBA.rpCofactors(rpreader)
-    rpcofactors.pathsToSBML()
-    #WRITE THE TAR.XZ
-    with tarfile.open('testFBAout.tar.xz', 'w:xz') as tf:
-        for rpsbml_name in rpsbml_paths:
-            data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
-            fiOut = BytesIO(data)
-            info = tarfile.TarInfo(rpsbml_name)
-            info.size = len(data)
-            tf.addfile(tarinfo=info, fileobj=fiOut)
-'''

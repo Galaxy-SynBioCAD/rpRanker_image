@@ -111,7 +111,7 @@ class rpCache:
     #  @param chem_xref_path Input file path
     #  @return Dictionnary of identifiers
     #TODO: save the self.deprecatedMNXM_mnxm to be used in case there rp_paths uses an old version of MNX
-    def _deprecatedMNXM(self, chem_xref_path):
+    def deprecatedMNXM(self, chem_xref_path):
         self.deprecatedMNXM_mnxm = {}
         with open(chem_xref_path) as f:
             c = csv.reader(f, delimiter='\t')
@@ -132,7 +132,7 @@ class rpCache:
     #  @param self Object pointer
     #  @param reac_xref_path Input file path
     #  @return Dictionnary of identifiers
-    def _deprecatedMNXR(self, reac_xref_path):
+    def deprecatedMNXR(self, reac_xref_path):
         self.deprecatedMNXMR_mnxr = {}
         with open(reac_xref_path) as f:
             c = csv.reader(f, delimiter='\t')
