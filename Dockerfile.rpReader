@@ -13,7 +13,8 @@ RUN conda install -y -c rdkit rdkit && \
     wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/reac_xref.tsv -P /home/input_cache/ && \
     wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv -P /home/input_cache/ && \
     wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/comp_xref.tsv -P /home/input_cache/ && \
-    wget rules_rall_TODO -P /home/input_cache/
+    wget rules_rall_TODO -P /home/input_cache/ && \
+    wget rr_compounds_TODO -P /home/input_cache/
 
 
 ENTRYPOINT ["python"]

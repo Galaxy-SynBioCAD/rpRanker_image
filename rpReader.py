@@ -12,8 +12,9 @@ import copy
 import urllib.request
 #from .setup_self.logger import self.logger
 import logging
-import rpCache
+import io
 
+import rpCache
 import rpSBML
 
 ## @package rpReader
@@ -91,7 +92,7 @@ class rpReader:
         dirname = os.path.dirname(os.path.abspath( __file__ ))
         #################### make the local folders ############################
         # input_cache
-        if not os.path.isdir(dirname+'/input_cache')
+        if not os.path.isdir(dirname+'/input_cache'):
             os.mkdir(dirname+'/input_cache')
         # cache
         if not os.path.isdir(dirname+'/cache'):
@@ -107,22 +108,26 @@ class rpReader:
                     dirname+'/input_cache/reac_xref.tsv')
         # rules_rall.tsv
         if not os.path.isfile(dirname+'/input_cache/rules_rall.tsv') or fetchInputFiles:
-            urllib.request.urlretrieve('https://retrorules.org/dl/retrorules_preparsed', 
-                    dirname+'/input_cache/retrorules_preparsed.tar.gz')
+            urllib.request.urlretrieve('TODO', 
+                    dirname+'/input_cache/rules_rall.tsv')
+            '''
             tf = tarfile.open(dirname+'/input_cache/retrorules_preparsed.tar.gz')
             tf.extractall(path=dirname+'/input_cache/')
             tf.close()
             os.rename(dirname+'/retrorules_preparsed/retrorules-rr01_flat_all.csv', 
                     dirname+'/input_cache/rules_rall.tsv')
+            '''
         # rr_compounds.tsv
         #TODO: need to add this file to the git or another location
         if not os.path.isfile(dirname+'/input_cache/rr_compounds.tsv') or fetchInputFiles:
             urllib.request.urlretrieve(
-                    'https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/required_files/rr_compounds.tar.xz', 
-                    dirname+'/input_cache')
+                    'TODO', 
+                    dirname+'/input_cache/rr_compounds.tsv')
+            '''
             tf = tarfile.open(dirname+'/input_cache/retrorules_preparsed.tar.xz')
             tf.extractall(path=dirname+'/input_cache/')
             tf.close()
+            '''
         # chem_prop.tsv
         if not os.path.isfile(dirname+'/input_cache/chem_prop.tsv') or fetchInputFiles:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv', 
@@ -133,36 +138,43 @@ class rpReader:
                     dirname+'/input_cache/comp_xref.tsv')
         ###################### Populate the cache #################################
         if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
-            rpCache.deprecatedMNXM(dirname+'/input_cache/chem_xref.tsv')
-            pickle.dump(rpCache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
+            rpcache = rpCache.rpCache()
+            rpcache.deprecatedMNXM(dirname+'/input_cache/chem_xref.tsv')
+            pickle.dump(rpcache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
         self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         if not os.path.isfile(dirname+'/cache/deprecatedMNXR_mnxr.pickle'):
-            rpCache.deprecatedMNXR(dirname+'/input_cache/reac_xref.tsv')
-            pickle.dump(rpCpache.deprecatedMNXR_mnxr, open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'wb'))
+            rpcache = rpCache.rpCache()
+            rpcache.deprecatedMNXR(dirname+'/input_cache/reac_xref.tsv')
+            pickle.dump(rpcache.deprecatedMNXR_mnxr, open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'wb'))
         self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
         if not os.path.isfile(dirname+'/cache/mnxm_strc.pickle.gz'):
-            pickle.dump(rpCache.mnx_strc(dirname+'/input_cache/rr_compounds.tsv', 
+            rpcache = rpCache.rpCache()
+            pickle.dump(rpcache.mnx_strc(dirname+'/input_cache/rr_compounds.tsv', 
                             dirname+'/input_cache/chem_prop.tsv'), 
                         gzip.open(dirname+'/cache/mnxm_strc.pickle.gz','wb'))
         self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/inchikey_mnxm.pickle.gz'):
             inchikey_mnxm = {}
-            for mnxm in mnx_strc:
-                if not mnx_strc[mnxm]['inchikey'] in inchikey_mnxm:
-                    inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = []
-                inchikey_mnxm[mnx_strc[mnxm]['inchikey']].append(mnxm)
+            for mnxm in self.mnxm_strc:
+                if not self.mnxm_strc[mnxm]['inchikey'] in inchikey_mnxm:
+                    inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']] = []
+                inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']].append(mnxm)
+            pickle.dump(inchikey_mnxm, gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz','wb'))
         self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/rr_reactions.pickle'):
+            rpcache = rpCache.rpCache()
             pickle.dump(
-                    rpCache.retro_reactions(dirname+'/input_cache/rules_rall.tsv'), 
+                    rpcache.retro_reactions(dirname+'/input_cache/rules_rall_hs.tsv'), 
                     open(dirname+'/cache/rr_reactions.pickle', 'wb'))
         self.rr_reactions = pickle.load(open(dirname+'/cache/rr_reactions.pickle', 'rb'))
         if not os.path.isfile(dirname+'/cache/chemXref.pickle.gz'):
-            pickle.dump(rpCache.mnx_chemXref(dirname+'/input_cache/chem_xref.tsv'), 
+            rpcache = rpCache.rpCache()
+            pickle.dump(rpcache.mnx_chemXref(dirname+'/input_cache/chem_xref.tsv'), 
                     gzip.open(dirname+'/cache/chemXref.pickle.gz','wb'))
         self.chemXref = pickle.load(gzip.open(dirname+'/cache/chemXref.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/compXref.pickle.gz') or not os.path.isfile(dirname+'/cache/nameCompXref.pickle.gz'):
-            name_pubDB_xref, compName_mnxc = rpCache.mnx_compXref(dirname+'/input_cache/comp_xref.tsv')
+            rpcache = rpCache.rpCache()
+            name_pubDB_xref, compName_mnxc = rpcache.mnx_compXref(dirname+'/input_cache/comp_xref.tsv')
             pickle.dump(name_pubDB_xref, gzip.open(dirname+'/cache/compXref.pickle.gz','wb'))
             pickle.dump(compName_mnxc, gzip.open(dirname+'/cache/nameCompXref.pickle.gz','wb'))
         self.compXref = pickle.load(gzip.open(dirname+'/cache/compXref.pickle.gz', 'rb'))
@@ -219,9 +231,13 @@ class rpReader:
     #  @return rp_compounds Dictionnary of smile and structure for each compound
     def compounds(self, path):
         #self.rp_strc = {}
+        rp_strc = {}
         try:
-            with open(path) as f:
-                reader = csv.reader(f, delimiter='\t')
+            #### we might pass binary in the REST version
+            if isinstance(path, bytes):
+                reader = csv.reader(io.StringIO(path.decode('utf-8')), delimiter='\t')
+            else:
+                reader = csv.reader(open(path, 'r', encoding='utf-8'), delimiter='\t')
                 next(reader)
                 for row in reader:
                     rp_strc[row[0]] = {'smiles': row[1]}  #, 'structure':row[1].replace('[','').replace(']','')
@@ -246,7 +262,10 @@ class rpReader:
                             self.logger.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
         except (TypeError, FileNotFoundError) as e:
             self.logger.error('Could not read the compounds file ('+str(path)+')')
-            return {}
+            return None
+        self.logger.info(rp_strc)    
+        print(rp_strc)
+        self.logger.error(rp_strc)
         return rp_strc
 
 
@@ -258,19 +277,22 @@ class rpReader:
     #  @param path The scope.csv file path
     def transformation(self, path):
         rp_transformation = {}
-        try:
-            with open(path) as f:
-                reader = csv.reader(f, delimiter=',')
-                #self.rp_transformation = {}
-                next(reader)
-                for row in reader:
-                    if not row[1] in rp_transformation:
-                        rp_transformation[row[1]] = {}
-                        rp_transformation[row[1]]['rule'] = row[2]
-                        rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
-        except FileNotFoundError:
-            self.logger.error('Could not read the compounds file: '+str(path))
-            return {}
+        #### we might pass binary in the REST version
+        reader = None
+        if isinstance(path, bytes):
+            reader = csv.reader(io.StringIO(path.decode('utf-8')), delimiter=',')
+        else:
+            try:
+                reader = csv.reader(open(path, 'r'), delimiter=',')
+            except FileNotFoundError:
+                self.logger.error('Could not read the compounds file: '+str(path))
+                return {}
+        next(reader)
+        for row in reader:
+            if not row[1] in rp_transformation:
+                rp_transformation[row[1]] = {}
+                rp_transformation[row[1]]['rule'] = row[2]
+                rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
         return rp_transformation
 
 
@@ -291,92 +313,96 @@ class rpReader:
         #try:
         rp_paths = {}
         #reactions = self.rr_reactionsingleRule.split('__')[1]s
-        with open(path) as f:
-            reader = csv.reader(f)
-            next(reader)
-            current_path_id = 0
-            path_step = 1
-            for row in reader:
-                try:
-                    if not int(row[0])==current_path_id:
-                        path_step = 1
-                    else:
-                        path_step += 1
-                    #important to leave them in order
-                    current_path_id = int(row[0])
-                except ValueError:
-                    self.logger.error('Cannot convert path_id to int ('+str(row[0])+')')
-                    #return {}
-                    return False
-                #################################
-                ruleIds = row[2].split(',')
-                if ruleIds==None:
-                    self.logger.error('The rulesIds is None')
-                    #pass # or continue
-                    continue
-                ###WARNING: This is the part where we select some rules over others
-                # we do it by sorting the list according to their score and taking the topx
-                tmp_rr_reactions = {}
-                for r_id in ruleIds:
-                    for rea_id in self.rr_reactions[r_id]:
-                        tmp_rr_reactions[str(r_id)+'__'+str(rea_id)] = self.rr_reactions[r_id][rea_id]
-                if len(ruleIds)>maxRuleIds:
-                    self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
-                    try:
-                        #ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
-                        ruleIds = [y for y,_ in sorted([(i, tmp_rr_reactions[i]['rule_score']) for i in tmp_rr_reactions])][:maxRuleIds]
-                    except KeyError:
-                        self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
-                        ruleIds = random.sample(tmp_rr_reactions, maxRuleIds)
+        #with open(path, 'r') as f:
+        #### we might pass binary in the REST version
+        if isinstance(path, bytes):
+            reader = csv.reader(io.StringIO(path.decode('utf-8')))
+        else:
+            reader = csv.reader(open(path, 'r'))
+        next(reader)
+        current_path_id = 0
+        path_step = 1
+        for row in reader:
+            try:
+                if not int(row[0])==current_path_id:
+                    path_step = 1
                 else:
-                    ruleIds = tmp_rr_reactions
-                sub_path_step = 1
-                for singleRule in ruleIds:
-                    tmpReac = {'rule_id': singleRule.split('__')[0],
-                            'mnxr': singleRule.split('__')[1],
-                            'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
-                            'right': {},
-                            'left': {},
-                            'path_id': int(row[0]),
-                            'step': path_step,
-                            'transformation_id': row[1][:-2]}
-                    ############ LEFT ##############
-                    for l in row[3].split(':'):
-                        tmp_l = l.split('.')
-                        try:
-                            #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
-                            mnxm = '' #TODO: change this
-                            if tmp_l[1] in self.deprecatedMNXM_mnxm:
-                                mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
-                            else:
-                                mnxm = tmp_l[1]
-                            tmpReac['left'][mnxm] = int(tmp_l[0])
-                        except ValueError:
-                            self.logger.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
-                            #return {}
-                            return False
-                    ############## RIGHT ###########
-                    for r in row[4].split(':'):
-                        tmp_r = r.split('.')
-                        try:
-                            #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
-                            mnxm = '' #TODO change this
-                            if tmp_r[1] in self.deprecatedMNXM_mnxm:
-                                mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
-                            else:
-                                mnxm = tmp_r[1]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
-                            tmpReac['right'][mnxm] = int(tmp_r[0])
-                        except ValueError:
-                            self.logger.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
-                            return {}
-                    #################################
-                    if not int(row[0]) in rp_paths:
-                        rp_paths[int(row[0])] = {}
-                    if not int(path_step) in rp_paths[int(row[0])]:
-                        rp_paths[int(row[0])][int(path_step)] = {}
-                    rp_paths[int(row[0])][int(path_step)][int(sub_path_step)] = tmpReac
-                    #rp_paths[int(row[0])][int(path_step)] = tmpReac
-                    sub_path_step += 1
+                    path_step += 1
+                #important to leave them in order
+                current_path_id = int(row[0])
+            except ValueError:
+                self.logger.error('Cannot convert path_id to int ('+str(row[0])+')')
+                #return {}
+                return False
+            #################################
+            ruleIds = row[2].split(',')
+            if ruleIds==None:
+                self.logger.error('The rulesIds is None')
+                #pass # or continue
+                continue
+            ###WARNING: This is the part where we select some rules over others
+            # we do it by sorting the list according to their score and taking the topx
+            tmp_rr_reactions = {}
+            for r_id in ruleIds:
+                for rea_id in self.rr_reactions[r_id]:
+                    tmp_rr_reactions[str(r_id)+'__'+str(rea_id)] = self.rr_reactions[r_id][rea_id]
+            if len(ruleIds)>maxRuleIds:
+                self.logger.warning('There are too many rules, limiting the number to random top '+str(maxRuleIds))
+                try:
+                    #ruleIds = [y for y,_ in sorted([(i, self.rr_reactions[i]['rule_score']) for i in ruleIds])][:maxRuleIds]
+                    ruleIds = [y for y,_ in sorted([(i, tmp_rr_reactions[i]['rule_score']) for i in tmp_rr_reactions])][:maxRuleIds]
+                except KeyError:
+                    self.logger.warning('Could not select topX due inconsistencies between rules ids and rr_reactions... selecting random instead')
+                    ruleIds = random.sample(tmp_rr_reactions, maxRuleIds)
+            else:
+                ruleIds = tmp_rr_reactions
+            sub_path_step = 1
+            for singleRule in ruleIds:
+                tmpReac = {'rule_id': singleRule.split('__')[0],
+                        'mnxr': singleRule.split('__')[1],
+                        'rule_score': self.rr_reactions[singleRule.split('__')[0]][singleRule.split('__')[1]]['rule_score'],
+                        'right': {},
+                        'left': {},
+                        'path_id': int(row[0]),
+                        'step': path_step,
+                        'transformation_id': row[1][:-2]}
+                ############ LEFT ##############
+                for l in row[3].split(':'):
+                    tmp_l = l.split('.')
+                    try:
+                        #tmpReac['left'].append({'stoichio': int(tmp_l[0]), 'name': tmp_l[1]})
+                        mnxm = '' #TODO: change this
+                        if tmp_l[1] in self.deprecatedMNXM_mnxm:
+                            mnxm = self.deprecatedMNXM_mnxm[tmp_l[1]]
+                        else:
+                            mnxm = tmp_l[1]
+                        tmpReac['left'][mnxm] = int(tmp_l[0])
+                    except ValueError:
+                        self.logger.error('Cannot convert tmp_l[0] to int ('+str(tmp_l[0])+')')
+                        #return {}
+                        return False
+                ############## RIGHT ###########
+                for r in row[4].split(':'):
+                    tmp_r = r.split('.')
+                    try:
+                        #tmpReac['right'].append({'stoichio': int(tmp_r[0]), 'name': tmp_r[1]})
+                        mnxm = '' #TODO change this
+                        if tmp_r[1] in self.deprecatedMNXM_mnxm:
+                            mnxm = self.deprecatedMNXM_mnxm[tmp_r[1]]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
+                        else:
+                            mnxm = tmp_r[1]  #+':'+self.rr_reactions[tmpReac['rule_id']]['left']
+                        tmpReac['right'][mnxm] = int(tmp_r[0])
+                    except ValueError:
+                        self.logger.error('Cannot convert tmp_r[0] to int ('+str(tmp_r[0])+')')
+                        return {}
+                #################################
+                if not int(row[0]) in rp_paths:
+                    rp_paths[int(row[0])] = {}
+                if not int(path_step) in rp_paths[int(row[0])]:
+                    rp_paths[int(row[0])][int(path_step)] = {}
+                rp_paths[int(row[0])][int(path_step)][int(sub_path_step)] = tmpReac
+                #rp_paths[int(row[0])][int(path_step)] = tmpReac
+                sub_path_step += 1
         #except (TypeError, FileNotFoundError) as e:
         #    self.logger.error(e)
         #    self.logger.error('Could not read the out_paths file ('+str(path)+') ')
@@ -406,7 +432,7 @@ class rpReader:
                 for i, y in comb_path:
                     steps.append(rp_paths[pathNum][i][y])
                 path_id = steps[0]['path_id']
-                rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
+                rpsbml = rpSBML.rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
                 ##### TODO: give the user more control over a generic model creation:
                 #   -> special attention to the compartment
@@ -668,7 +694,7 @@ class rpReader:
                     steps.append(rp_paths[pathNum][i][y])
                 #print(steps)
                 path_id = steps[0]['path_id']
-                rpsbml = rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
+                rpsbml = rpSBML.rpSBML('rp_'+str(path_id)+'_'+str(altPathNum))
                 #1) create a generic Model, ie the structure and unit definitions that we will use the most
                 ##### TODO: give the user more control over a generic model creation:
                 #   -> special attention to the compartment
@@ -920,7 +946,7 @@ class rpReader:
             except KeyError:
                 self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
                 return False
-            rpsbml = rpSBML('measured_'+str(path_id))
+            rpsbml = rpSBML.rpSBML('measured_'+str(path_id))
             #1) create a generic Model, ie the structure and unit definitions that we will use the most
             ##### TODO: give the user more control over a generic model creation:
             #   -> special attention to the compartment

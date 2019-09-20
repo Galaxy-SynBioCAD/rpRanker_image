@@ -494,7 +494,7 @@ class rpCache:
                     self.logger.error('Problem converting rel_direction: '+str(row['Rule_relative_direction']))
                     self.logger.error('Problem converting rule_score: '+str(row['Score_normalized']))
         except FileNotFoundError as e:
-                self.logger.error('Could not read the rules_rall file ('+str(path)+')')
+                self.logger.error('Could not read the rules_rall file ('+str(rules_rall_path)+')')
                 return {}
         return rule
 
