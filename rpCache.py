@@ -185,12 +185,7 @@ class rpCache:
     #  @return mnxm_strc Dictionnary of formula, smiles, inchi and inchikey
     def mnx_strc(self, rr_compounds_path, chem_prop_path):
         mnxm_strc = {}
-        #inchikey_mnxm = {}
-        #with open(rr_compounds_path) as f:
-        #    c = csv.reader(f, delimiter='\t')
-        #    for row in c:
         for row in csv.DictReader(open(rr_compounds_path), delimiter='\t'):
-            #if not row[0][0]=='#':
             tmp = {'forumla':  None,
                     'smiles': None,
                     'inchi': row['inchi'],
@@ -251,17 +246,7 @@ class rpCache:
                             self.logger.warning('Could not convert some of the structures: '+str(tmp))
                             self.logger.warning(e)
                         mnxm_strc[tmp['mnxm']] = tmp
-                    #### inchikey_mnxm ###
-                    #if not tmp['inchikey'] in inchikey_mnxm:
-                    #    inchikey_mnxm[tmp['inchikey']] = {'mnx': []}
-                    #inchikey_mnxm[tmp['inchikey']]['mnx'].append(tmp['mnxm'])
-        '''
-        inchikey_mnxm = {}
-        for mnxm in mnxm_strc:
-            inchikey_mnxm[mnxm_strc[mnxm]['inchikey']] = {'mnx': []}
-            inchikey_mnxm[mnxm_strc[mnxm]['inchikey']]['mnx'].append(tmp['mnxm'])
-        '''
-        return mnxm_strc#, inchikey_mnxm
+        return mnxm_strc
 
 
     ## Function to parse the chem_xref.tsv file of MetanetX
@@ -426,25 +411,6 @@ class rpCache:
                 cid_comp[row[-1].split(':')[1]]['major_ms'] = int(literal_eval(row[6]))
                 cid_comp[row[-1].split(':')[1]]['number_of_protons'] = literal_eval(row[7])
                 cid_comp[row[-1].split(':')[1]]['charges'] = literal_eval(row[8])
-        '''
-        ###################### mnxm_kegg ################
-        kegg_mnxm = {}
-        with open(self._checkFilePath(chem_xref_path, 'chem_xref.tsv')) as f:
-            c = csv.reader(f, delimiter='\t')
-            for row in c:
-                mnx = row[0].split(':')
-                if mnx[0]=='kegg' and mnx[1][0]=='C':
-                    if mnx[1] in kegg_mnxm:
-                        self.logger.warning(
-                            'Replaced '+str(mnx[1])+': '+str(kegg_mnxm[mnx[1]])+' from '+str(row[1])
-                        )
-                    else:
-                        try:
-                            mnxm = self.deprecatedMNXM_mnxm[mnx[1]]
-                        except KeyError:
-                            mnxm = mnx[1]
-                        kegg_mnxm[mnxm] = row[1]
-        '''
         ####################### cc_compounds ############
         #TODO: seems like the new version of equilibrator got rid of this file... need to update the function
         #to take as input the new file --> i.e. the JSON input
@@ -453,22 +419,6 @@ class rpCache:
         f_c = gz_file.read()
         c = json.loads(f_c)
         for cd in c:
-            '''
-            #find MNXM from CID
-            try:
-                mnxm = kegg_mnxm[cd['CID']]
-            except KeyError:
-                try:
-                    mnxm = self.curated_kegg_mnxm[cd['CID']]
-                    try:
-                        mnxm = self.deprecatedMNXM_mnxm[mnxm]
-                    except KeyError:
-                        pass
-                except KeyError:
-                    self.logger.warning('Cannot find: '+str(cd))
-                    notFound_cc.append(cd['CID'])
-                    continue
-            '''
             #find the compound descriptions
             try:
                 cd.update(cid_comp[cd['CID']])
@@ -486,22 +436,6 @@ class rpCache:
         with open(alberty_path) as json_data:
             d = json.loads(json_data.read())
             for cd in d:
-                '''
-                #find the MNXM from CID
-                try:
-                    mnxm = kegg_mnxm[cd['cid']]
-                except KeyError:
-                    try:
-                        mnxm = self.curated_kegg_mnxm[cd['cid']]
-                        try:
-                            mnxm = self.deprecatedMNXM_mnxm[mnxm]
-                        except KeyError:
-                            pass
-                    except KeyError:
-                        self.logger.warning('Cannot find: '+str(cd))
-                        notFound_alberty.append(cd['cid'])
-                        continue
-                '''
                 #find the compound description
                 try:
                     cd.update(cid_comp[cd['CID']])
@@ -537,7 +471,6 @@ class rpCache:
             #    for row in reader:
             rule = {}
             for row in csv.DictReader(open(rules_rall_path), delimiter='\t'):
-                #rule[row[0]]= {'rule_id': row[0], 'rule_score': row[11], 'reaction':row[1], 'rel_direction': row[13], 'left': row[5], 'right': row[7]}
                 #NOTE: as of now all the rules are generated using MNX
                 #but it may be that other db are used, we are handling this case
                 #WARNING: can have multiple products so need to seperate them
@@ -549,9 +482,6 @@ class rpCache:
                     else:
                         products[mnxm] += 1
                 try:
-                    '''
-                    rule[row['# Rule_ID']] = {'rule_id': row['# Rule_ID'], 'rule_score': float(row['Score_normalized']), 'reac_id': self._checkMNXRdeprecated(row['Reaction_ID']), 'subs_id': self._checkMNXMdeprecated(row['Substrate_ID']), 'rel_direction': int(row['Rule_relative_direction']), 'left': {self._checkMNXMdeprecated(row['Substrate_ID']): 1}, 'right': products}
-                    '''
                     #WARNING: one reaction rule can have multiple reactions associated with them
                     #To change when you can set subpaths from the mutliple numbers of
                     #we assume that the reaction rule has multiple unique reactions associated
@@ -587,10 +517,6 @@ class rpCache:
                            '(n-1)': 0, '(n-2)': -1}
         reaction = {}
         try:
-            #with open(rxn_recipes_path) as f:
-            #    reader = csv.reader(f, delimiter='\t')
-            #    next(reader)
-            #    for row in reader:
             for row in csv.DictReader(open(rxn_recipes_path), delimiter='\t'):
                 tmp = {} # makes sure that if theres an error its not added
                 #parse the reaction equation
@@ -598,8 +524,6 @@ class rpCache:
                     self.logger.warning('There should never be more or less than a left and right of an euation')
                     self.logger.warnin(row['Equation'])
                     continue
-                #reac_left = row[1].split('=')[0]
-                #reac_right = row[1].split('=')[1]
                 ######### LEFT ######
                 #### MNX id
                 tmp['left'] = {}
@@ -614,21 +538,6 @@ class rpCache:
                         except ValueError:
                             self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
-                '''# Common name of chemicals -- Perhaps implement some day
-                #### chem names
-                tmp['chem_left'] = {}
-                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[0]):
-                    #1) try to rescue if its one of the values
-                    try:
-                        tmp['chem_left'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                    except KeyError:
-                        #2) try to convert to int if its not
-                        try:
-                            tmp['chem_left'][spe[1]] = int(spe[0])
-                        except ValueError:
-                            self.logger.warning('Cannot convert '+str(spe[0]))
-                            continue
-                '''
                 ####### RIGHT #####
                 ####  MNX id
                 tmp['right'] = {}
@@ -643,21 +552,6 @@ class rpCache:
                         except ValueError:
                             self.logger.warning('Cannot convert '+str(spe[0]))
                             continue
-                ''' Common name of chemicals -- Perhaps implement some day
-                #### chem names
-                tmp['chem_right'] = {}
-                for spe in re.findall('(\(n-1\)|\d+|4n|3n|2n|n|\(n\)|\(N\)|\(2n\)|\(x\)|N|m|q|\(n\-2\)|\d+\.\d+) `([^`]+)`', row[2].split('=')[1]):
-                    #1) try to rescue if its one of the values
-                    try:
-                        tmp['chem_right'][spe[1]] = DEFAULT_STOICHIO_RESCUE[spe[0]]
-                    except KeyError:
-                        #2) try to convert to int if its not
-                        try:
-                            tmp['chem_right'][spe[1]] = int(spe[0])
-                        except ValueError:
-                            self.logger.warning('Cannot convert '+str(spe[0]))
-                            continue
-                '''
                 ####### DIRECTION ######
                 try:
                     tmp['direction'] = int(row['Direction'])
@@ -683,34 +577,23 @@ class rpCache:
 if __name__ == "__main__":
     if not os.path.isdir(os.getcwd()+'/cache'):
         os.mkdir('cache')
-    #dirname = os.path.dirname(os.path.abspath( __file__ ))
     cache = rpCache()
     #generate the deprecated
-    #self.logger.info('Generating deprecatedMNXM_mnxm')
     cache._deprecatedMNXM('input_cache/chem_xref.tsv')
     cache._deprecatedMNXR('input_cache/reac_xref.tsv')
     pickle.dump(cache.deprecatedMNXM_mnxm, open('cache/deprecatedMNXM_mnxm.pickle', 'wb'))
     pickle.dump(cache.deprecatedMNXR_mnxr, open('cache/deprecatedMNXR_mnxr.pickle', 'wb'))
     #mnxm_dG
-    #self.logger.info('Generating mnxm_dG')
     pickle.dump(cache.kegg_dG('input_cache/cc_compounds.json.gz',
         'input_cache/alberty.json',
         'input_cache/compounds.csv'),
         open('cache/kegg_dG.pickle', 'wb'))
     #rr_reactions
-    #self.logger.info('Generating rr_reactions')
-    #rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
-    #rr_reactions = cache.retro_reactions('input_cache/rules_rall_hs.tsv')
     rr_reactions = cache.retro_reactions('input_cache/rules_rall.tsv')
     pickle.dump(rr_reactions, open('cache/rr_reactions.pickle', 'wb'))
     #full_reactions
-    #self.logger.info('Generating full_reactions')
     pickle.dump(cache.full_reac('input_cache/rxn_recipes.tsv'),
             open('cache/full_reactions.pickle', 'wb'))
-    #mnxm_strc --> use gzip since it is a large file
-    #self.logger.info('Parsing the SMILES and InChI')
-    #pickle.dump(cache.mnxm_strc(), open('cache/mnxm_strc.pickle', 'wb'))
-    #mnx_strc, inchikey_mnxm = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     mnx_strc = cache.mnx_strc('input_cache/compounds.tsv', 'input_cache/chem_prop.tsv')
     pickle.dump(mnx_strc, gzip.open('cache/mnxm_strc.pickle.gz','wb'))
     inchikey_mnxm = {}
@@ -718,14 +601,7 @@ if __name__ == "__main__":
         if not mnx_strc[mnxm]['inchikey'] in inchikey_mnxm:
             inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = []
         inchikey_mnxm[mnx_strc[mnxm]['inchikey']].append(mnxm)
-    '''
-    inchikey_mnxm = {}
-    for mnxm in mnx_strc:
-        inchikey_mnxm[mnx_strc[mnxm]['inchikey']] = mnxm
-    '''
     pickle.dump(inchikey_mnxm, gzip.open('cache/inchikey_mnxm.pickle.gz','wb'))
-    #xref --> use gzip since it is a large file
-    #self.logger.info('Parsing the Cross-references')
     pickle.dump(cache.mnx_chemXref('input_cache/chem_xref.tsv'), gzip.open('cache/chemXref.pickle.gz','wb'))
     pickle.dump(cache.mnx_reacXref('input_cache/reac_xref.tsv', 'input_cache/rxn_recipes.tsv'), gzip.open('cache/reacXref.pickle.gz','wb'))
     name_pubDB_xref, compName_mnxc = cache.mnx_compXref('input_cache/comp_xref.tsv')
@@ -733,6 +609,3 @@ if __name__ == "__main__":
     pickle.dump(compName_mnxc, gzip.open('cache/nameCompXref.pickle.gz','wb'))
     #copy the other file required
     copyfile('input_cache/cc_preprocess.npz', 'cache/cc_preprocess.npz')
-    #copy the rules_rall.tsv
-    #with tarfile.open('cache/rules_rall.tsv.tar.xz', "w:xz") as tar:
-    #    tar.add('input_cache/rules_rall.tsv')
