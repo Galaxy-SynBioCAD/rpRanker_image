@@ -60,8 +60,8 @@ class rpReader:
         #self.rpsbml_paths = {} #keep all the generated sbml's in this parameter
         #input files
         #TODO: remove all the rp parameters since these should not be used,
-        self.rp_strc = None #These are the structures contained within the output of rp2paths
-        self.rp_transformation = {}
+        #self.rp_strc = None #These are the structures contained within the output of rp2paths
+        #self.rp_transformation = {}
         self.deprecatedMNXM_mnxm = None
         self.deprecatedMNXR_mnxr = None
         self.mnxm_strc = None #There are the structures from MNXM
@@ -69,8 +69,8 @@ class rpReader:
         self.rr_reactions = None
         self.chemXref = None
         self.compXref = None
-        self.rp_paths = {}
-        self.sbml_paths = {}
+        #self.rp_paths = {}
+        #self.sbml_paths = {}
         #self.reacXref = None #for the moment we are not using it, we are adding heterologous reactions
         if not self._loadCache():
             raise ValueError
@@ -89,19 +89,19 @@ class rpReader:
     # @return Boolean detemining the success of the function or not
     def _loadCache(self, fetchInputFiles=False):
         dirname = os.path.dirname(os.path.abspath( __file__ ))
-        #################### make the folders locally ############################
+        #################### make the local folders ############################
         # input_cache
         if not os.path.isdir(dirname+'/input_cache')
             os.mkdir(dirname+'/input_cache')
         # cache
         if not os.path.isdir(dirname+'/cache'):
             os.mkdir(dirname+'/cache')
-        ###################### Fetch the files is necessary ######################
-        #reac_xref
+        ###################### Fetch the files if necessary ######################
+        #chem_xref
         if not os.path.isfile(dirname+'/input_cache/chem_xref.tsv') or fetchInputFiles:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_xref.tsv', 
                     dirname+'/input_cache/chem_xref.tsv')
-        #chem_xref
+        #reac_xref
         if not os.path.isfile(dirname+'/input_cache/reac_xref.tsv') or fetchInputFiles:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/reac_xref.tsv', 
                     dirname+'/input_cache/reac_xref.tsv')
@@ -118,8 +118,11 @@ class rpReader:
         #TODO: need to add this file to the git or another location
         if not os.path.isfile(dirname+'/input_cache/rr_compounds.tsv') or fetchInputFiles:
             urllib.request.urlretrieve(
-                    'https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rr_compounds.tsv', 
-                    dirname+'/input_cache/rr_compounds.tsv')
+                    'https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/required_files/rr_compounds.tar.xz', 
+                    dirname+'/input_cache')
+            tf = tarfile.open(dirname+'/input_cache/retrorules_preparsed.tar.xz')
+            tf.extractall(path=dirname+'/input_cache/')
+            tf.close()
         # chem_prop.tsv
         if not os.path.isfile(dirname+'/input_cache/chem_prop.tsv') or fetchInputFiles:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv', 
@@ -130,7 +133,7 @@ class rpReader:
                     dirname+'/input_cache/comp_xref.tsv')
         ###################### Populate the cache #################################
         if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
-            rpCache.deprecatedMNXM(dirname+'/input_cache/reac_xref.tsv')
+            rpCache.deprecatedMNXM(dirname+'/input_cache/chem_xref.tsv')
             pickle.dump(rpCache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
         self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         if not os.path.isfile(dirname+'/cache/deprecatedMNXR_mnxr.pickle'):
@@ -215,35 +218,36 @@ class rpReader:
     #  @param path The compounds.txt file path
     #  @return rp_compounds Dictionnary of smile and structure for each compound
     def compounds(self, path):
-        self.rp_strc = {}
+        #self.rp_strc = {}
         try:
             with open(path) as f:
                 reader = csv.reader(f, delimiter='\t')
                 next(reader)
                 for row in reader:
-                    self.rp_strc[row[0]] = {'smiles': row[1]}  #, 'structure':row[1].replace('[','').replace(']','')
+                    rp_strc[row[0]] = {'smiles': row[1]}  #, 'structure':row[1].replace('[','').replace(']','')
                     try:
-                        self.rp_strc[row[0]]['inchi'] = self.mnxm_strc[row[0]]['inchi']
+                        rp_strc[row[0]]['inchi'] = self.mnxm_strc[row[0]]['inchi']
                     except KeyError:
                         #try to generate them yourself by converting them directly
                         try:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchi'})
-                            self.rp_strc[row[0]]['inchi'] = resConv['inchi']
+                            rp_strc[row[0]]['inchi'] = resConv['inchi']
                         except DepictionError as e:
                             self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
                     try:
-                        self.rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
+                        rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
                         #try to generate them yourself by converting them directly
                         #TODO: consider using the inchi writing instead of the SMILES notation to find the inchikey
                     except KeyError:
                         try:
                             resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})
-                            self.rp_strc[row[0]]['inchikey'] = resConv['inchikey']
+                            rp_strc[row[0]]['inchikey'] = resConv['inchikey']
                         except DepictionError as e:
                             self.logger.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
         except (TypeError, FileNotFoundError) as e:
             self.logger.error('Could not read the compounds file ('+str(path)+')')
-            return False
+            return {}
+        return rp_strc
 
 
     ## Function to parse the scope.csv file
@@ -253,19 +257,21 @@ class rpReader:
     #  @param self Object pointer
     #  @param path The scope.csv file path
     def transformation(self, path):
+        rp_transformation = {}
         try:
             with open(path) as f:
                 reader = csv.reader(f, delimiter=',')
-                self.rp_transformation = {}
+                #self.rp_transformation = {}
                 next(reader)
                 for row in reader:
-                    if not row[1] in self.rp_transformation:
-                        self.rp_transformation[row[1]] = {}
-                        self.rp_transformation[row[1]]['rule'] = row[2]
-                        self.rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
+                    if not row[1] in rp_transformation:
+                        rp_transformation[row[1]] = {}
+                        rp_transformation[row[1]]['rule'] = row[2]
+                        rp_transformation[row[1]]['ec'] = [i.replace(' ', '') for i in row[11][1:-1].split(',') if not i.replace(' ', '')=='NOEC']
         except FileNotFoundError:
             self.logger.error('Could not read the compounds file: '+str(path))
-            return False
+            return {}
+        return rp_transformation
 
 
     #TODO: make sure that you account for the fact that each reaction may have multiple associated reactions
@@ -281,7 +287,7 @@ class rpReader:
     #  @maxRuleId maximal numer of rules associated with a step
     #  @return toRet_rp_paths Pathway object
     #def outPaths(self, path, maxRuleIds=10):
-    def outPathsToSBML(self, path, maxRuleIds=10, pathId='rp_pathway', compartment_id='MNXC3'):
+    def outPathsToSBML(self, rp_strc, rp_transformation, path, maxRuleIds=10, pathId='rp_pathway', compartment_id='MNXC3'):
         #try:
         rp_paths = {}
         #reactions = self.rr_reactionsingleRule.split('__')[1]s
@@ -382,7 +388,8 @@ class rpReader:
         except KeyError:
             self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
             return False
-        self.sbml_paths = {}
+        #self.sbml_paths = {}
+        sbml_paths = {}
         #for pathNum in self.rp_paths:
         for pathNum in rp_paths:
             #first level is the list of lists of sub_steps
@@ -421,18 +428,18 @@ class rpReader:
                                 compartment_id,
                                 chemName,
                                 self.chemXref[meta],
-                                self.rp_strc[meta]['inchi'],
-                                self.rp_strc[meta]['inchikey'],
-                                self.rp_strc[meta]['smiles'])
+                                rp_strc[meta]['inchi'],
+                                rp_strc[meta]['inchikey'],
+                                rp_strc[meta]['smiles'])
                     except KeyError:
                         try:
                             rpsbml.createSpecies(meta,
                                     compartment_id,
                                     chemName,
                                     {},
-                                    self.rp_strc[meta]['inchi'],
-                                    self.rp_strc[meta]['inchikey'],
-                                    self.rp_strc[meta]['smiles'])
+                                    rp_strc[meta]['inchi'],
+                                    rp_strc[meta]['inchikey'],
+                                    rp_strc[meta]['smiles'])
                         except KeyError:
                             self.logger.error('Could not create the following metabolite in either rpReaders rp_strc or mnxm_strc: '+str(meta))
                 #4) add the complete reactions and their annotations
@@ -444,8 +451,8 @@ class rpReader:
                             'B_0', #only for genericModel
                             step,
                             compartment_id,
-                            self.rp_transformation[step['transformation_id']]['rule'],
-                            self.rp_transformation[step['transformation_id']]['ec'])
+                            rp_transformation[step['transformation_id']]['rule'],
+                            rp_transformation[step['transformation_id']]['ec'])
                     #5) adding the consumption of the target
                 targetStep = {'rule_id': None, 
                         'left': {[i for i in all_meta if i[:6]=='TARGET'][0]: 1}, 
@@ -462,13 +469,10 @@ class rpReader:
                         targetStep,
                         compartment_id)
                 #6) Optional?? Add the flux objectives. Could be in another place, TBD
-                #rpsbml.createFluxObj('rpFBA_obj', 'RP0', 1, True)
                 rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
-                #self.sbml_paths['rp_'+str(path_id)] = rpsbml
-                #self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(step['sub_step'])] = rpsbml
-                self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
+                sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
                 altPathNum += 1
-        return True
+        return sbml_paths
 
     
     ## Function to group all the functions for parsing RP2 output to SBML files
@@ -482,9 +486,9 @@ class rpReader:
     # @param compartment_id string The ID of the SBML's model compartment where to add the reactions to
     # @return Boolean The success or failure of the function
     def rp2ToSBML(self, compounds, scope, outPaths, maxRuleIds=10, pathId='rp_pathway', compartment_id='MNXC3'):
-        self.compounds(compounds)
-        self.transformation(scope)
-        return self.outPathsToSBML(outPaths, maxRuleIds, pathId, compartment_id)
+        rp_strc = self.compounds(compounds)
+        rp_transformation = self.transformation(scope)
+        return self.outPathsToSBML(rp_strc, rp_transformation, outPaths, maxRuleIds, pathId, compartment_id)
 
     #######################################################################
     ############################# JSON input ##############################
@@ -652,7 +656,8 @@ class rpReader:
         except KeyError:
             self.logger.error('Could not Xref compartment_id ('+str(compartment_id)+')')
             return False
-        self.sbml_paths = {}
+        #self.sbml_paths = {}
+        sbml_paths = {}
         for pathNum in rp_paths:
             #first level is the list of lists of sub_steps
             #second is itertools all possible combinations using product
@@ -750,7 +755,7 @@ class rpReader:
                         compartment_id)
                 #6) Optional?? Add the flux objectives. Could be in another place, TBD
                 rpsbml.createFluxObj('rpFBA_obj', 'targetSink', 1, True)
-                self.sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
+                sbml_paths['rp_'+str(step['path_id'])+'_'+str(altPathNum)] = rpsbml
                 altPathNum += 1
 
 

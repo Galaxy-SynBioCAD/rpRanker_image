@@ -1,0 +1,25 @@
+FROM ibisba/rpsbml
+
+RUN conda install -y -c rdkit rdkit && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpReader.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpReaderServe.py && \ 
+    #find all the files. NOTE: that the rules and the rr_compounds will change locations and will be hosted on RetroRules.org
+    mkdir input_cache && \
+    wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_xref.tsv -P /home/input_cache/ && \
+    wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/reac_xref.tsv -P /home/input_cache/ && \
+    wget https://retrorules.org/dl/retrorules_preparsed -P /home/input_cache/ && \
+    tar xvzf retrorules_preparsed.tar.gz && \
+    mv /home/input_cache/retrorules_preparsed/retrorules-rr01_flat_all.csv /home/input_cache/ && \
+    wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv -P /home/input_cache/ && \
+    wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/comp_xref.tsv -P /home/input_cache/ && \
+    #if we want to run a REST server
+    conda install -c conda-forge flask-restful
+
+
+ENTRYPOINT ["python"]
+CMD ["/home/rpReaderServe.py"]
+
+# Open server port
+EXPOSE 8997
+
