@@ -11,6 +11,10 @@ import io
 import tarfile
 import libsbml
 
+##############################################
+################### REST #####################
+##############################################
+
 app = Flask(__name__)
 api = Api(app)
 #dataFolder = os.path.join( os.path.dirname(__file__),  'data' )
@@ -21,7 +25,7 @@ api = Api(app)
 rpreader = rpReader.rpReader()
 
 
-def stamp( data, status=1 ):
+def stamp(data, status=1):
     appinfo = {'app': 'rpReader', 'version': '1.0', 
                'author': 'Melchior du Lac',
                'organization': 'BRS',
@@ -32,12 +36,12 @@ def stamp( data, status=1 ):
     return out
 
 
-class RestApp( Resource ):
+class RestApp(Resource):
     """ REST App."""
     def post(self):
-        return jsonify( stamp(None) )
+        return jsonify(stamp(None))
     def get(self):
-        return jsonify( stamp(None) )
+        return jsonify(stamp(None))
 
 
 class RestQuery(Resource):
@@ -55,13 +59,13 @@ class RestQuery(Resource):
                             rp2_scope, 
                             rp2paths_outPaths,
                             int(params['maxRuleIds']),
-                            params['pathId'],
-                            params['compartmentId'])
+                            params['path_id'],
+                            params['compartment_id'])
         #pass the SBML results to a tar
         if rpsbml_paths=={}:
             flask.abort(204)
-        outTar = io.BytesIO()
-        tf = tarfile.open(fileobj=outTar, mode='w:xz')
+        outputTar = io.BytesIO()
+        tf = tarfile.open(fileobj=outputTar, mode='w:xz')
         for rpsbml_name in rpsbml_paths:
             data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
             fiOut = io.BytesIO(data)
@@ -70,9 +74,9 @@ class RestQuery(Resource):
             tf.addfile(tarinfo=info, fileobj=fiOut)
         ########IMPORTANT######
         tf.close()
-        outTar.seek(0)
+        outputTar.seek(0)
         #######################
-        return send_file(outTar, as_attachment=True, attachment_filename='test123.tar', mimetype='application/x-tar')
+        return send_file(outputTar, as_attachment=True, attachment_filename='rpReader.tar', mimetype='application/x-tar')
 
 
 api.add_resource(RestApp, '/REST')

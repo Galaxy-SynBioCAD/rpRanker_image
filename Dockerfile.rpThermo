@@ -1,0 +1,25 @@
+FROM ibisba/rpsbml
+
+WORKDIR /home
+
+RUN conda install -y -c rdkit rdkit && \
+    conda install -y -c openbabel openbabel && \
+    conda install -c conda-forge flask-restful && \
+    pip install --upgrade pip && \ 
+    pip install --no-cache-dir scipy && \
+    mkdir input-cache && \
+    mkdir cache && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpThermo.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpThermoServe.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/tree/master/component_contribution && \
+    wget cc_preprocess.npz_TODO -P /home/cache/ && \
+    wget cc_compounds.json.gz_TODO -P /home/input_cache/ && \
+    wget alberty.json_TODO -P /home/input_cache/ && \
+    wget compounds.csv_TODO -P /home/input_cache/ 
+
+ENTRYPOINT ["python"]
+CMD ["/home/rpThermoServe.py"]
+
+# Open server port
+EXPOSE 8995

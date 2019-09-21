@@ -19,5 +19,4 @@ ENTRYPOINT ["python"]
 CMD ["/home/rpCofactorsServe.py"]
 
 # Open server port
-EXPOSE 8995
-
+EXPOSE 8996

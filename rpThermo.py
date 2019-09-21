@@ -8,8 +8,10 @@ import os
 import libsbml
 
 #local package
-#import component_contribution
-from . import component_contribution
+import component_contribution
+#from . import component_contribution
+#import rpSBML
+import rpCache
 
 import logging
 
@@ -66,18 +68,40 @@ class rpThermo:
     ##
     #
     #
-    def _loadCache(self):
+    def _loadCache(self, fetchInputFiles=False):
         dirname = os.path.dirname(os.path.abspath( __file__ ))
         try:
             self.cc_preprocess = np.load(dirname+'/cache/cc_preprocess.npz')
         except FileNotFoundError as e:
             self.logger.error(e)
             return False
-        try:
-            self.kegg_dG = pickle.load(open(dirname+'/cache/kegg_dG.pickle', 'rb'))
-        except FileNotFoundError as e:
-            self.logger.error(e)
-            return False
+        ###################### Fetch the files if necessary ######################
+        #cc_compounds.json.gz
+        if not os.path.isfile(dirname+'/input_cache/cc_compounds.json.gz') or fetchInputFiles:
+            urllib.request.urlretrieve('TODO',
+                    dirname+'/input_cache/cc_compounds.json.gz')
+        #alberty.json
+        if not os.path.isfile(dirname+'/input_cache/alberty.json') or fetchInputFiles:
+            urllib.request.urlretrieve('TODO',
+                    dirname+'/input_cache/alberty.json')
+        #compounds.csv
+        if not os.path.isfile(dirname+'/input_cache/compounds.csv') or fetchInputFiles:
+            urllib.request.urlretrieve('TODO',
+                    dirname+'/input_cache/compounds.csv')
+        #cc_preprocess.npz
+        if not os.path.isfile(dirname+'/cache/cc_preprocess.npz') or fetchInputFiles:
+            urllib.request.urlretrieve('TODO',
+                    dirname+'/cache/compounds.csv')
+        ###################### Populate the cache #################################
+        #kegg_dG.pickle
+        if not os.path.isfile(dirname+'/cache/kegg_dG.pickle'):
+            rpcache = rpCache.rpCache()
+            pickle.dump(rpcache.kegg_dG(dirname+'/input_cache/cc_compounds.json.gz',
+                dirname+'/input_cache/alberty.json',
+                dirname+'/input_cache/compounds.csv'),
+                open(dirname+'/cache/kegg_dG.pickle', 'wb'))
+        self.kegg_dG = pickle.load(open(dirname+'/cache/kegg_dG.pickle', 'rb'))
+        self.cc_preprocess = np.load(dirname+'/cache/cc_preprocess.npz')
         return True
 
 
@@ -608,13 +632,14 @@ class rpThermo:
         """
         return False
 
+"""
 if __name__ == "__main__":
     #READ THE TAR.XZ FILE
     rpsbml_paths = {}
     tar = tarfile.open('tests/testTHERMOin.tar.xz') #TODO: create this
     rpsbml_paths = {}
     for member in tar.getmembers():
-        rpsbml_paths[member.name] = rpFBA.rpSBML(member.name,libsbml.readSBMLFromString(tar.extractfile(member).read().decode("utf-8")))
+        rpsbml_paths[member.name] = rpSBML.rpSBML(member.name,libsbml.readSBMLFromString(tar.extractfile(member).read().decode("utf-8")))
     ###
     rpthermo = rpThermo()
     for rpsbml_name in rpsbml_paths:
@@ -627,3 +652,4 @@ if __name__ == "__main__":
             info = tarfile.TarInfo(rpsbml_name)
             info.size = len(data)
             tf.addfile(tarinfo=info, fileobj=fiOut)
+"""

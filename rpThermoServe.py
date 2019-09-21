@@ -1,31 +1,28 @@
 #!/usr/bin/env python3
-"""
-Created on September 21 2019
 
-@author: Melchior du Lac
-@description: Backend rpCofactors server
-
-"""
-
-import os
-import shutil
-import json
+#from contextlib import closing
+#import time
 import libsbml
+import argparse
+import sys #exit using sys exit if any error is encountered
+import os
+
+import io
+#import zipfile
+import tarfile
+import shutil
+
+import json
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, abort
 from flask_restful import Resource, Api
-import io
-import tarfile
-import csv
-import sys
 
-import rpCofactors
+import rpThermo
 import rpSBML
 
-
-########################### Processify each #################
-######## code taken from 
-
+###################################################################################
+###################################################################################
+###################################################################################
 
 import inspect
 import traceback
@@ -127,60 +124,55 @@ def processify(func):
     return wrapper
 
 
-###############################################
-###############################################
-###############################################
+###########################################################
+################## multiprocesses run #####################
+###########################################################
 
-############## run all using processify ####
+#hack to stop the memory leak. Indeed it seems that looping through rpFBA (possibly rpSBML also) causes a memory leak... According to: https://github.com/opencobra/cobrapy/issues/568 there is still memory leak issues with cobrapy. looping through hundreds of models and running FBA may be the culprit
+
 
 @processify
-def runSingleSBML(rpcofactors, member_name, rpsbml_string, path_id, compartment_id):
+def runSingleSBML(member_name, rpsbml_string, path_id):
     #open one of the rp SBML files
     rpsbml = rpSBML.rpSBML(member_name, libsbml.readSBMLFromString(rpsbml_string))
-    #rpcofactors = rpRanker.rpCofactors()
-    if rpcofactors.addCofactors(rpsbml, compartment_id, path_id):
-        return libsbml.writeSBMLToString(rpsbml.document).encode('utf-8')
-    else:
-        return ''
+    rpthermo.pathway_drG_prime_m(rpsbml, path_id)
+    return libsbml.writeSBMLToString(rpsbml.document).encode('utf-8')
 
 
-def runAllSBML(inputTar, outputTar, path_id, compartment_id):
+def runAllSBML(inputTar, outputTar, path_id):
     #loop through all of them and run FBA on them
     with tarfile.open(fileobj=outputTar, mode='w:xz') as tf:
         with tarfile.open(fileobj=inputTar, mode='r:xz') as in_tf:
             for member in in_tf.getmembers():
                 if not member.name=='':
-                    data = runSingleSBML(rpcofactors,
-                            member.name,
+                    data = runSingleSBML(member.name,
                             in_tf.extractfile(member).read().decode("utf-8"),
-                            path_id,
-                            compartment_id)
-                    if not data=='':
-                        fiOut = io.BytesIO(data)
-                        info = tarfile.TarInfo(member.name)
-                        info.size = len(data)
-                        tf.addfile(tarinfo=info, fileobj=fiOut)
+                            path_id)
+                    fiOut = io.BytesIO(data)
+                    info = tarfile.TarInfo(member.name)
+                    info.size = len(data)
+                    tf.addfile(tarinfo=info, fileobj=fiOut)
 
 
 #######################################################
 ############## REST ###################################
 #######################################################
 
+
 app = Flask(__name__)
 api = Api(app)
 #dataFolder = os.path.join( os.path.dirname(__file__),  'data' )
 
 
-#TODO: test that it works well
-#declare the rpReader globally to avoid reading the pickle at every instance
-rpcofactors = rpCofactors.rpCofactors()
+#global thermo parameter
+rpthermo = rpThermo.rpThermo()
 
 
 def stamp(data, status=1):
-    appinfo = {'app': 'rpCofactors', 'version': '1.0', 
+    appinfo = {'app': 'rpThermo', 'version': '1.0',
                'author': 'Melchior du Lac',
                'organization': 'BRS',
-               'time': datetime.now().isoformat(), 
+               'time': datetime.now().isoformat(),
                'status': status}
     out = appinfo.copy()
     out['data'] = data
@@ -205,11 +197,11 @@ class RestQuery(Resource):
         params = json.load(request.files['data'])
         #pass the files to the rpReader
         outputTar = io.BytesIO()
-        runAllSBML(inputTar, outputTar, params['path_id'], params['compartment_id'])
+        runAllSBML(inputTar, outputTar, params['path_id'])
         ###### IMPORTANT ######
         outputTar.seek(0)
         #######################
-        return send_file(outputTar, as_attachment=True, attachment_filename='rpCofactors.tar', mimetype='application/x-tar')
+        return send_file(outputTar, as_attachment=True, attachment_filename='rpThermo.tar', mimetype='application/x-tar')
 
 
 api.add_resource(RestApp, '/REST')
@@ -218,5 +210,4 @@ api.add_resource(RestQuery, '/REST/Query')
 
 if __name__== "__main__":
     #debug = os.getenv('USER') == 'mdulac'
-    app.run(host="0.0.0.0", port=8996, debug=True, threaded=True)
-
+    app.run(host="0.0.0.0", port=8995, debug=True, threaded=True)

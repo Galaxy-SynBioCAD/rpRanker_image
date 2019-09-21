@@ -21,5 +21,4 @@ ENTRYPOINT ["python"]
 CMD ["/home/rpReaderServe.py"]
 
 # Open server port
-EXPOSE 8996
-
+EXPOSE 8997

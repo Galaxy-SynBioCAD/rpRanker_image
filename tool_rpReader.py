@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Created on Mar 19
+Created on September 21 2019
 
 @author: Melchior du Lac
 @description: Galaxy script to query rpReader REST service
@@ -18,12 +18,12 @@ def rp2ReaderUpload(rp2paths_compounds,
         rp2_scope, 
         rp2paths_outPaths, 
         maxRuleIds, 
-        pathId, 
-        compartmentId, 
+        path_id, 
+        compartment_id, 
         server, 
         outputTar):
     # Post request
-    data = {'maxRuleIds': maxRuleIds, 'pathId': pathId, 'compartmentId': compartmentId}
+    data = {'maxRuleIds': maxRuleIds, 'path_id': path_id, 'compartment_id': compartment_id}
     files = {'rp2paths_compounds': open(rp2paths_compounds, 'rb'), 
              'rp2paths_outPaths': open(rp2paths_outPaths, 'rb'),
              'rp2_scope': open(rp2_scope, 'rb'),
@@ -43,8 +43,8 @@ if __name__ == "__main__":
     parser.add_argument('-rp2_scope', type=str)
     parser.add_argument('-rp2paths_outPaths', type=str)
     parser.add_argument('-maxRuleIds', type=str)
-    parser.add_argument('-pathId', type=str)
-    parser.add_argument('-compartmentId', type=str)
+    parser.add_argument('-path_id', type=str)
+    parser.add_argument('-compartment_id', type=str)
     parser.add_argument('-server', type=str)
     parser.add_argument('-outputTar', type=str)
     params = parser.parse_args()
@@ -52,7 +52,7 @@ if __name__ == "__main__":
             params.rp2_scope,
             params.rp2paths_outPaths,
             params.maxRuleIds,
-            params.pathId,
-            params.compartmentId,
+            params.path_id,
+            params.compartment_id,
             params.server,
             params.outputTar) 
