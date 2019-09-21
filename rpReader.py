@@ -4,9 +4,9 @@ import itertools
 import collections
 import pickle
 import gzip
+from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 import sys
 import random
-from rdkit.Chem import MolFromSmiles, MolFromInchi, MolToSmiles, MolToInchi, MolToInchiKey, AddHs
 import json
 import copy
 import urllib.request
@@ -238,34 +238,31 @@ class rpReader:
                 reader = csv.reader(io.StringIO(path.decode('utf-8')), delimiter='\t')
             else:
                 reader = csv.reader(open(path, 'r', encoding='utf-8'), delimiter='\t')
-                next(reader)
-                for row in reader:
-                    rp_strc[row[0]] = {'smiles': row[1]}  #, 'structure':row[1].replace('[','').replace(']','')
+            next(reader)
+            for row in reader:
+                rp_strc[row[0]] = {'smiles': row[1]}  #, 'structure':row[1].replace('[','').replace(']','')
+                try:
+                    rp_strc[row[0]]['inchi'] = self.mnxm_strc[row[0]]['inchi']
+                except KeyError:
+                    #try to generate them yourself by converting them directly
                     try:
-                        rp_strc[row[0]]['inchi'] = self.mnxm_strc[row[0]]['inchi']
-                    except KeyError:
-                        #try to generate them yourself by converting them directly
-                        try:
-                            resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchi'})
-                            rp_strc[row[0]]['inchi'] = resConv['inchi']
-                        except DepictionError as e:
-                            self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
+                        resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchi'})
+                        rp_strc[row[0]]['inchi'] = resConv['inchi']
+                    except DepictionError as e:
+                        self.logger.warning('Could not convert the following SMILES to InChI: '+str(row[1]))
+                try:
+                    rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
+                    #try to generate them yourself by converting them directly
+                    #TODO: consider using the inchi writing instead of the SMILES notation to find the inchikey
+                except KeyError:
                     try:
-                        rp_strc[row[0]]['inchikey'] = self.mnxm_strc[row[0]]['inchikey']
-                        #try to generate them yourself by converting them directly
-                        #TODO: consider using the inchi writing instead of the SMILES notation to find the inchikey
-                    except KeyError:
-                        try:
-                            resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})
-                            rp_strc[row[0]]['inchikey'] = resConv['inchikey']
-                        except DepictionError as e:
-                            self.logger.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
+                        resConv = self._convert_depiction(idepic=row[1], itype='smiles', otype={'inchikey'})
+                        rp_strc[row[0]]['inchikey'] = resConv['inchikey']
+                    except DepictionError as e:
+                        self.logger.warning('Could not convert the following SMILES to InChI key: '+str(row[1]))
         except (TypeError, FileNotFoundError) as e:
             self.logger.error('Could not read the compounds file ('+str(path)+')')
-            return None
-        self.logger.info(rp_strc)    
-        print(rp_strc)
-        self.logger.error(rp_strc)
+            raise RuntimeError
         return rp_strc
 
 
@@ -516,9 +513,11 @@ class rpReader:
         rp_transformation = self.transformation(scope)
         return self.outPathsToSBML(rp_strc, rp_transformation, outPaths, maxRuleIds, pathId, compartment_id)
 
+
     #######################################################################
     ############################# JSON input ##############################
     #######################################################################
+
 
     #WARNING: we are not setting any restrictions on the number of steps allowed here and instead we
     #take the rule with the highest dimension. Also assume that there is a single rule at a maximal

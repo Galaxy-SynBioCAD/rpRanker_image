@@ -7,9 +7,9 @@ from flask import Flask, request, jsonify, send_file, abort
 from flask_restful import Resource, Api
 #from rpviz.main import run
 import rpReader
-from io import BytesIO
+import io
 import tarfile
-
+import libsbml
 
 app = Flask(__name__)
 api = Api(app)
@@ -60,39 +60,19 @@ class RestQuery(Resource):
         #pass the SBML results to a tar
         if rpsbml_paths=={}:
             flask.abort(204)
-        outTar = BytesIO()
-        tf = tarfile.open(outTar, 'w:xz')
+        outTar = io.BytesIO()
+        tf = tarfile.open(fileobj=outTar, mode='w:xz')
         for rpsbml_name in rpsbml_paths:
             data = libsbml.writeSBMLToString(rpsbml_paths[rpsbml_name].document).encode('utf-8')
-            fiOut = BytesIO(data)
+            fiOut = io.BytesIO(data)
             info = tarfile.TarInfo(name=rpsbml_name)
             info.size = len(data)
             tf.addfile(tarinfo=info, fileobj=fiOut)
-        return send_file(outTar, as_attachment=True)
-
-    '''
-    tmpTar = BytesIO()
-    with tarfile.open(fileobj=tmpTar, mode='w:xz') as tmpf:
-        #rp2paths_compounds
-        rp2paths_compounds_fi = open(rp2paths_compounds, mode='rb').read()
-        tarinfo = tarfile.TarInfo(name='rp2paths_compounds.tsv')
-        tarinfo.size = len(rp2paths_compounds_fi)
-        tarinfo.mtime = time.time()
-        tmpf.addfile(tarinfo, BytesIO(rp2paths_compounds_fi))
-        #rp2paths_outPaths
-        rp2paths_outPaths_fi = open(rp2paths_outPaths, mode='rb').read()
-        tarinfo = tarfile.TarInfo(name='rp2paths_outPaths.csv')
-        tarinfo.size = len(rp2paths_outPaths_fi)
-        tarinfo.mtime = time.time()
-        tmpf.addfile(tarinfo, BytesIO(rp2paths_outPaths_fi))
-        #rp2_scope
-        rp2_scope_fi = open(rp2_scope, mode='rb').read()
-        tarinfo = tarfile.TarInfo(name='rp2paths_outPaths.csv')
-        tarinfo.size = len(rp2_scope_fi)
-        tarinfo.mtime = time.time()
-        tmpf.addfile(tarinfo, BytesIO(rp2_scope_fi))
-    tmpTar.seek(0)
-    '''
+        ########IMPORTANT######
+        tf.close()
+        outTar.seek(0)
+        #######################
+        return send_file(outTar, as_attachment=True, attachment_filename='test123.tar', mimetype='application/x-tar')
 
 
 api.add_resource(RestApp, '/REST')
