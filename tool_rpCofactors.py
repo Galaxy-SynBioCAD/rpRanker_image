@@ -3,30 +3,51 @@
 Created on September 21 2019
 
 @author: Melchior du Lac
-@description: Galaxy script to query rpCofactors REST service
+@description: Galaxy script to populate cofactors of a tarball of SBML
 
 """
-import requests
+
+import rpCofactors
+import rpSBML
+import tarfile
+import io
+import libsbml
 import argparse
-import json
 
 
 ##
 #
 #
-def rpCofactors(inputTar, 
-        path_id, 
-        compartment_id, 
-        server, 
-        outputTar):
-    # Post request
-    data = {'path_id': path_id, 'compartment_id': compartment_id}
-    files = {'inputTar': open(inputTar, 'rb'), 
-             'data': ('data.json', json.dumps(data))}
-    r = requests.post(server+'/Query', files=files)
-    r.raise_for_status()
-    with open(outputTar, 'wb') as ot:
-        ot.write(r.content)
+def runSingleSBML(rpcofactors, member_name, rpsbml_string, path_id, compartment_id):
+    #open one of the rp SBML files
+    rpsbml = rpSBML.rpSBML(member_name, libsbml.readSBMLFromString(rpsbml_string))
+    #rpcofactors = rpRanker.rpCofactors()
+    if rpcofactors.addCofactors(rpsbml, compartment_id, path_id):
+        return libsbml.writeSBMLToString(rpsbml.document).encode('utf-8')
+    else:
+        return ''
+
+
+##
+#
+#
+def runAllSBML(inputTar, outputTar, path_id, compartment_id):
+    #loop through all of them and run FBA on them
+    rpcofactors = rpCofactors.rpCofactors()
+    with tarfile.open(outputTar, 'w:xz') as tf:
+        with tarfile.open(inputTar, 'r:xz') as in_tf:
+            for member in in_tf.getmembers():
+                if not member.name=='':
+                    data = runSingleSBML(rpcofactors,
+                            member.name,
+                            in_tf.extractfile(member).read().decode("utf-8"),
+                            path_id,
+                            compartment_id)
+                    if not data=='':
+                        fiOut = io.BytesIO(data)
+                        info = tarfile.TarInfo(member.name)
+                        info.size = len(data)
+                        tf.addfile(tarinfo=info, fileobj=fiOut)
 
 
 ##
@@ -37,11 +58,9 @@ if __name__ == "__main__":
     parser.add_argument('-inputTar', type=str)
     parser.add_argument('-path_id', type=str)
     parser.add_argument('-compartment_id', type=str)
-    parser.add_argument('-server', type=str)
     parser.add_argument('-outputTar', type=str)
     params = parser.parse_args()
-    rpCofactors(params.inputTar, 
+    runAllSBML(params.inputTar,
+            params.outputTar,
             params.path_id,
-            params.compartment_id,
-            params.server,
-            params.outputTar) 
+            params.compartment_id)

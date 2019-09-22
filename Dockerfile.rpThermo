@@ -2,10 +2,7 @@ FROM ibisba/rpsbml
 
 WORKDIR /home
 
-RUN conda install -y -c rdkit rdkit && \
-    conda install -y -c openbabel openbabel && \
-    conda install -c conda-forge flask-restful && \
-    pip install --upgrade pip && \ 
+RUN conda install -y -c openbabel openbabel && \
     pip install --no-cache-dir scipy && \
     mkdir input-cache && \
     mkdir cache && \
@@ -17,9 +14,3 @@ RUN conda install -y -c rdkit rdkit && \
     wget cc_compounds.json.gz_TODO -P /home/input_cache/ && \
     wget alberty.json_TODO -P /home/input_cache/ && \
     wget compounds.csv_TODO -P /home/input_cache/ 
-
-ENTRYPOINT ["python"]
-CMD ["/home/rpThermoServe.py"]
-
-# Open server port
-EXPOSE 8995

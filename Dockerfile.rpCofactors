@@ -3,7 +3,6 @@ FROM ibisba/rpsbml
 WORKDIR /home
 
 RUN conda install -y -c rdkit rdkit && \
-    conda install -c conda-forge flask-restful && \
     wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
     wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCofactors.py && \
     wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCofactorsServe.py && \ 
@@ -14,9 +13,3 @@ RUN conda install -y -c rdkit rdkit && \
     wget rules_rall_TODO -P /home/input_cache/ && \
     wget rr_compounds_TODO -P /home/input_cache/ && \
     wget rxn_recipes_TODO -P /home/input_cache/
-
-ENTRYPOINT ["python"]
-CMD ["/home/rpCofactorsServe.py"]
-
-# Open server port
-EXPOSE 8996

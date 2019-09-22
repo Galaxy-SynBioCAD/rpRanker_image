@@ -102,7 +102,7 @@ class rpSBML:
     #
     # @param input string
     def _genMetaID(self, name):
-        return self._nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())        
+        return self._nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())
 
 
     #####################################################################

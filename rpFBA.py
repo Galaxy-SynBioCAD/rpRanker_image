@@ -14,7 +14,7 @@ class rpFBA:
         self.logger.info('Started instance of rpFBA')
         self.rpsbml = rpsbml
         self.cobraModel = None
-  
+
 
     ## Check the libSBML calls
     #
