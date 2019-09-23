@@ -1,0 +1,36 @@
+<tool id="rpThermo" name="RP Thermodynamics" version="1.0">
+  <description>Calculate the formation enery of the individual species, reactions and pathways from the heterologous RP2paths SBML files</description>
+  <requirements>
+    <container type="docker">ibisba/rpbase:latest</container>
+    <requirement type="package">libsbml</requirement>
+  </requirements>
+  <!--
+  <stdio>
+    <exit_code range="1:" level="error"/>
+  </stdio>
+  -->
+  <stdio>
+		<regex match="WARNING:" level="warning" />
+		<regex match="ERROR:root:ChemAxon" level="warning" />
+	</stdio>
+  <command detect_errors="exit_code"><![CDATA[
+    '$__tool_directory__/tool_rpThermo.py' -inputTar '$inputTar' -outputTar '$outputTar' -path_id '$path_id'
+  ]]></command>
+  <inputs>
+    <param name="inputTar" type="data" format="tar" label="rpSBML" />
+    <param name="path_id" type="text" value="rp_pathway" label="Name of the heterologous pathway" />
+  </inputs>
+  <outputs>
+    <data name="outputTar" format="tar" label="rpSBML Thermodynamics" />
+  </outputs>
+  <help>
+   This is the help section. Should really write something usefull here :) 
+  </help>
+</tool>
+
+<!-- 
+    <param name="inputTar" type="data" format="tar.xz" label="rpSBML" />
+    <data name="outputTar" format="tar.xz" label="rpSBML+thermo" />
+'$__tool_directory__/wrapRPthermo.py' -inputTar '$inputTar' -outputTar '$outputTar'
+		
+-->
