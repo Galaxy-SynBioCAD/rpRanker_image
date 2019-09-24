@@ -3,6 +3,6 @@ FROM ibisba/rpsbml
 WORKDIR /home/
 
 RUN pip install --no-cache-dir cobra && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpFBA.py && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpFBAServe.py && \
+    #wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpFBA.py #&& \
+    #wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpFBAServe.py && \

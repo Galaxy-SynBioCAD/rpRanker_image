@@ -6,11 +6,13 @@ RUN conda install -y -c openbabel openbabel && \
     pip install --no-cache-dir scipy && \
     mkdir input-cache && \
     mkdir cache && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
     wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpThermo.py && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpThermoServe.py && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/tree/master/component_contribution && \
-    wget cc_preprocess.npz_TODO -P /home/cache/ && \
-    wget cc_compounds.json.gz_TODO -P /home/input_cache/ && \
-    wget alberty.json_TODO -P /home/input_cache/ && \
-    wget compounds.csv_TODO -P /home/input_cache/ 
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/tree/master/component_contribution #&& \
+    #wget cc_preprocess.npz_TODO -P /home/cache/ && \
+    #wget cc_compounds.json.gz_TODO -P /home/input_cache/ && \
+    #wget alberty.json_TODO -P /home/input_cache/ && \
+    #wget compounds.csv_TODO -P /home/input_cache/ 
+COPY cc_preprocess.npz /home/cache/ && \
+COPY cc_compounds.json.gz /hone/input_cache/ && \
+COPY alberty.json /home/input_cache/ && \
+COPY compounds.csv /home/input_cache/ 
