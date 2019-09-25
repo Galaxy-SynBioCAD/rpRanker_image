@@ -3,16 +3,19 @@ FROM ibisba/rpsbml
 WORKDIR /home
 
 RUN conda install -y -c rdkit rdkit && \
-    #wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCache.py && \
-    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/master/rpCofactors.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/rpCofactors.py rpCofactors.py && \
     #find all the files. NOTE: that the rules and the rr_compounds will change locations and will be hosted on RetroRules.org
     mkdir input_cache && \
     wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_xref.tsv -P /home/input_cache/ && \
     wget https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv -P /home/input_cache/ #&& \
     #wget rules_rall_TODO -P /home/input_cache/ && \
-COPY input_cache/rules_rall.tsv /home/input_cache/ && \
-COPY input_cache/rr_compounds.tsv /home/input_cache/ && \
-COPY input_cache/rxn_recipes.tsv /home/input_cache/ && \
     #wget rr_compounds_TODO -P /home/input_cache/ && \
     #wget rxn_recipes_TODO -P /home/input_cache/
-RUN python rpCofactors.py
+
+#this is tmp before we can have the files online
+COPY required_data/input_cache/rules_rall.tsv /home/input_cache/
+COPY required_data/input_cache/compounds.tsv /home/input_cache/rr_compounds.tsv 
+COPY required_data/input_cache/rxn_recipes.tsv /home/input_cache/
+
+#build the cache -- not sure if needed
+RUN python /home/rpCofactors.py

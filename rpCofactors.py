@@ -641,3 +641,6 @@ class rpCofactors:
                 #if the cofactors cannot be found delete it from the list
                 return False
         return True
+
+if __name__== "__main__":
+    rpcofactors = rpCofactors.rpCofactors()
