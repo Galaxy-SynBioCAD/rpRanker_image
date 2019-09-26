@@ -4,6 +4,7 @@ import sys
 import gzip
 import copy
 import logging
+import urllib.request
 import csv
 import gzip
 import pickle
@@ -643,4 +644,4 @@ class rpCofactors:
         return True
 
 if __name__== "__main__":
-    rpcofactors = rpCofactors.rpCofactors()
+    rpCofactors()

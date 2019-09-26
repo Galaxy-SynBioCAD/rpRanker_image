@@ -731,3 +731,6 @@ if __name__ == "__main__":
             info.size = len(data)
             tf.addfile(tarinfo=info, fileobj=fiOut)
 """
+
+if __name__== "__main__":
+    rpThermo()

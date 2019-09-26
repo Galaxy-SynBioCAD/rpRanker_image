@@ -1387,4 +1387,4 @@ class rpReader:
             return True
 
 if __name__== "__main__":
-    rpreader = rpReader.rpReader()
+    rpReader()
