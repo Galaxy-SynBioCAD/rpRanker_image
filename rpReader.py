@@ -483,10 +483,12 @@ class rpReader:
             rpcache.deprecatedMNXR(dirname+'/input_cache/reac_xref.tsv')
             pickle.dump(rpcache.deprecatedMNXR_mnxr, open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'wb'))
         self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
-        if not os.path.isfile(dirname+'/cache/mnxm_strc.pickle.gz'):
-            pickle.dump(rpcache.mnx_strc(dirname+'/input_cache/rr_compounds.tsv', 
-                            dirname+'/input_cache/chem_prop.tsv'), 
-                        gzip.open(dirname+'/cache/mnxm_strc.pickle.gz','wb'))
+        if not os.path.isfile(dirname+'/cache/mnxm_strc.pickle.gz') or not os.path.isfile(dirname+'/cache/inchikey_mnxm.pickle.gz'):
+            mnxm_strc, inchikey_mnxm = rpcache.mnx_strc(dirname+'/input_cache/rr_compounds.tsv',
+                                                        dirname+'/input_cache/chem_prop.tsv')
+            pickle.dump(mnxm_strc, gzip.open(dirname+'/cache/mnxm_strc.pickle.gz','wb'))
+            pickle.dump(inchikey_mnxm, gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz','wb'))
+        self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
         self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/inchikey_mnxm.pickle.gz'):
             inchikey_mnxm = {}
@@ -495,7 +497,6 @@ class rpReader:
                     inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']] = []
                 inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']].append(mnxm)
             pickle.dump(inchikey_mnxm, gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz','wb'))
-        self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/rr_reactions.pickle'):
             pickle.dump(
                     rpcache.retro_reactions(dirname+'/input_cache/rules_rall_hs.tsv'), 
