@@ -103,6 +103,16 @@ class rpCache:
             return mnxm
 
 
+    ## Function to create a dictionnary of old to new reaction id's
+    #
+    # TODO: check other things about the mnxm emtry like if it has the right structure etc...
+    def _checkMNXRdeprecated(self, mnxr):
+        try:
+            return self.deprecatedMNXR_mnxr[mnxr]
+        except KeyError:
+            return mnxr
+
+
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
     #
@@ -124,6 +134,25 @@ class rpCache:
                         self.deprecatedMNXM_mnxm[mnx[1]] = row[1]
             self.deprecatedMNXM_mnxm.update(self.convertMNXM)
             self.deprecatedMNXM_mnxm['MNXM01'] = 'MNXM1'
+
+
+    ## Function to parse the reac_xref.tsv file of MetanetX
+    #
+    #  Generate a dictionnary of old to new MetanetX identifiers to make sure that we always use the freshest id's.
+    # This can include more than one old id per new one and thus returns a dictionnary. Private function
+    #
+    #  @param self Object pointer
+    #  @param reac_xref_path Input file path
+    #  @return Dictionnary of identifiers
+    def deprecatedMNXR(self, reac_xref_path):
+        self.deprecatedMNXMR_mnxr = {}
+        with open(reac_xref_path) as f:
+            c = csv.reader(f, delimiter='\t')
+            for row in c:
+                if not row[0][0]=='#':
+                    mnx = row[0].split(':')
+                    if mnx[0]=='deprecated':
+                        self.deprecatedMNXR_mnxr[mnx[1]] = row[1]
 
 
     ## Function to parse the chemp_prop.tsv file from MetanetX and compounds.tsv from RetroRules. Uses the InchIkey as key to the dictionnary
@@ -394,6 +423,10 @@ class rpCofactors:
         if not os.path.isdir(dirname+'/cache'):
             os.mkdir(dirname+'/cache')
         ###################### Fetch the files if necessary ######################
+        #reac_xref
+        if not os.path.isfile(dirname+'/input_cache/reac_xref.tsv') or fetchInputFiles:
+            urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/reac_xref.tsv', 
+                    dirname+'/input_cache/reac_xref.tsv')
         #chem_xref
         if not os.path.isfile(dirname+'/input_cache/chem_xref.tsv') or fetchInputFiles:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_xref.tsv', 
@@ -421,8 +454,12 @@ class rpCofactors:
                     dirname+'/input_cache/chem_prop.tsv')
         ###################### Populate the cache #################################
         rpcache = rpCache()
-        if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
+        if not os.path.isfile(dirname+'/cache/deprecatedMNXR_mnxr.pickle'):
             rpcache.deprecatedMNXM(dirname+'/input_cache/chem_xref.tsv')
+            pickle.dump(rpcache.deprecatedMNXR_mnxr, open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'wb'))
+        self.deprecatedMNXR_mnxr = pickle.load(open(dirname+'/cache/deprecatedMNXR_mnxr.pickle', 'rb'))
+        if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
+            rpcache.deprecatedMNXM(dirname+'/input_cache/reac_xref.tsv')
             pickle.dump(rpcache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
         self.deprecatedMNXM_mnxm = pickle.load(open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'rb'))
         if not os.path.isfile(dirname+'/cache/mnxm_strc.pickle.gz'):
