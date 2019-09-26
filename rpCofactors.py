@@ -408,7 +408,7 @@ class rpCofactors:
             urllib.request.urlretrieve('https://www.metanetx.org/cgi-bin/mnxget/mnxref/chem_prop.tsv', 
                     dirname+'/input_cache/chem_prop.tsv')
         ###################### Populate the cache #################################
-        rpcache = rpCache.rpCache()
+        rpcache = rpCache()
         if not os.path.isfile(dirname+'/cache/deprecatedMNXM_mnxm.pickle'):
             rpcache.deprecatedMNXM(dirname+'/input_cache/chem_xref.tsv')
             pickle.dump(rpcache.deprecatedMNXM_mnxm, open(dirname+'/cache/deprecatedMNXM_mnxm.pickle', 'wb'))
