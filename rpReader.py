@@ -490,10 +490,14 @@ class rpReader:
         self.mnxm_strc = pickle.load(gzip.open(dirname+'/cache/mnxm_strc.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/inchikey_mnxm.pickle.gz'):
             inchikey_mnxm = {}
-            for mnxm in self.mnxm_strc:
-                if not self.mnxm_strc[mnxm]['inchikey'] in inchikey_mnxm:
-                    inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']] = []
-                inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']].append(mnxm)
+            try:
+                for mnxm in self.mnxm_strc:
+                    if not self.mnxm_strc[mnxm]['inchikey'] in inchikey_mnxm:
+                        inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']] = []
+                    inchikey_mnxm[self.mnxm_strc[mnxm]['inchikey']].append(mnxm)
+            except TypeError:
+                self.logger.error('TypeError: '+str(mnxm))
+                continue
             pickle.dump(inchikey_mnxm, gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz','wb'))
         self.inchikey_mnxm = pickle.load(gzip.open(dirname+'/cache/inchikey_mnxm.pickle.gz', 'rb'))
         if not os.path.isfile(dirname+'/cache/rr_reactions.pickle'):
