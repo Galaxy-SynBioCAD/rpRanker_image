@@ -91,6 +91,18 @@ class rpCache:
         return odepic
 
 
+    ## Function to create a dictionnary of old to new chemical id's
+    #
+    #  Generate a one-to-one dictionnary of old id's to new ones. Private function
+    #
+    # TODO: check other things about the mnxm emtry like if it has the right structure etc...
+    def _checkMNXMdeprecated(self, mnxm):
+        try:
+            return self.deprecatedMNXM_mnxm[mnxm]
+        except KeyError:
+            return mnxm
+
+
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
     #
