@@ -109,6 +109,28 @@ class rpCache:
     #######################################################
 
 
+    ## Function to create a dictionnary of old to new chemical id's
+    #
+    #  Generate a one-to-one dictionnary of old id's to new ones. Private function
+    #
+    # TODO: check other things about the mnxm emtry like if it has the right structure etc...
+    def _checkMNXMdeprecated(self, mnxm):
+        try:
+            return self.deprecatedMNXM_mnxm[mnxm]
+        except KeyError:
+            return mnxm
+
+
+    ## Function to create a dictionnary of old to new reaction id's
+    #
+    # TODO: check other things about the mnxm emtry like if it has the right structure etc...
+    def _checkMNXRdeprecated(self, mnxr):
+        try:
+            return self.deprecatedMNXR_mnxr[mnxr]
+        except KeyError:
+            return mnxr
+
+
     #[TODO] merge the two functions
     ## Function to parse the chem_xref.tsv file of MetanetX
     #
