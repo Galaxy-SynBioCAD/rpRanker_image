@@ -16,4 +16,4 @@ RUN apt-get --quiet update && \
     pip install --upgrade pip && \ 
     conda update -n base -c defaults conda && \
     conda install -y -c SBMLTeam python-libsbml && \
-    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/master/rpSBML.py rpSBML.py
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/master/rpSBML.py
