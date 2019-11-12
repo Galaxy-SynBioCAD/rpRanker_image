@@ -1,0 +1,6 @@
+FROM ibisba/rpsbml
+
+WORKDIR /home/
+
+RUN pip install --no-cache-dir cobra && \
+    wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/blob/dev/rpFBA.py #&& \

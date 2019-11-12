@@ -1,9 +1,6 @@
 import libsbml
 from hashlib import md5
 import os
-import pickle
-import gzip
-
 import logging
 
 ## @package RetroPath SBML writer
@@ -105,7 +102,7 @@ class rpSBML:
     #
     # @param input string
     def _genMetaID(self, name):
-        return self._nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())        
+        return self._nameToSbmlId(md5(str(name).encode('utf-8')).hexdigest())
 
 
     #####################################################################
@@ -261,7 +258,21 @@ class rpSBML:
     ## Takes for input a libSBML annotatio object and returns a dictionnary of the annotations
     #
     def readIBISBAAnnotation(self, annot):
-        toRet = {}
+        toRet = {'dfG_prime_m': {},
+                 'dfG_uncert': {},
+                 'dfG_prime_o': {},
+                 'fba_rpFBA_obj': {},
+                 'path_id': None,
+                 'step_id': None,
+                 'sub_step_id': None,
+                 'rule_score': None,
+                 'smiles': None,
+                 'selenzyme': None,
+                 'rule_id': None,
+                 'rule_mnxr': None,
+                 'rule_score': None,
+                 'global_score': None
+                }
         bag = annot.getChild('RDF').getChild('Ibisba').getChild('ibisba')
         for i in range(bag.getNumChildren()):
             ann = bag.getChild(i)
@@ -269,7 +280,7 @@ class rpSBML:
                 self.logger.warning('This contains no attributes: '+str(ann.toXMLString()))
                 continue
             #if not ann.getName() in toRet:
-            if ann.getName()=='dG_prime_m' or ann.getName()=='dG_uncert' or ann.getName()=='dG_prime_o' or ann.getName()[0:4]=='fba_':
+            if ann.getName()=='dfG_prime_m' or ann.getName()=='dfG_uncert' or ann.getName()=='dfG_prime_o' or ann.getName()[0:4]=='fba_':
                 toRet[ann.getName()] = {
                         'units': ann.getAttrValue('units'), 
                         'value': float(ann.getAttrValue('value'))}
@@ -278,7 +289,7 @@ class rpSBML:
                     toRet[ann.getName()] = int(ann.getAttrValue('value'))
                 except ValueError:
                     toRet[ann.getName()] = None
-            elif ann.getName()=='rule_score':
+            elif ann.getName()=='rule_score' or ann.getName()=='global_score':
                 try:
                     toRet[ann.getName()] = float(ann.getAttrValue('value'))
                 except ValueError:
@@ -301,7 +312,7 @@ class rpSBML:
     ## Function to return the products and the species associated with a reaction
     #
     # @return Dictionnary with right==product and left==reactants
-    def readReactionSpecies(self, reaction):
+    def readReactionSpecies(self, reaction, isID=False):
         #TODO: check that reaction is either an sbml species; if not check that its a string and that
         # it exists in the rpsbml model
         toRet = {'left': {}, 'right': {}}
@@ -309,12 +320,19 @@ class rpSBML:
         for i in range(reaction.getNumReactants()):
             reactant_ref = reaction.getReactant(i)
             reactant = self.model.getSpecies(reactant_ref.getSpecies())
-            toRet['left'][reactant.getName()] = int(reactant_ref.getStoichiometry())
+            if isID:
+                toRet['left'][reactant.getId()] = int(reactant_ref.getStoichiometry())
+            else:
+                toRet['left'][reactant.getName()] = int(reactant_ref.getStoichiometry())
         #products
         for i in range(reaction.getNumProducts()):
             product_ref = reaction.getProduct(i)
             product = self.model.getSpecies(product_ref.getSpecies())
-            toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
+            if isID:
+                toRet['right'][product.getId()] = int(product_ref.getStoichiometry())
+            else:
+                toRet['right'][product.getName()] = int(product_ref.getStoichiometry())
+            toRet['reversible'] = reaction.getReversible()
         return toRet
 
 
@@ -366,6 +384,7 @@ class rpSBML:
     ############################# COMPARE MODELS ############################
     #########################################################################
 
+
     ## Find out if two libSBML Species or Reactions come from the same species
     #
     # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
@@ -381,6 +400,8 @@ class rpSBML:
             if source_dict[same_key]==target_dict[same_key]:
                 return True
         return False
+
+
     ## Find out if two libSBML Species or Reactions come from the same species
     #
     # Compare two dictionnaries and if any of the values of any of the same keys are the same then the 
@@ -427,7 +448,6 @@ class rpSBML:
         return False
 
 
-
     ## Function to compare two SBML's RP pathways
     #
     # Function that compares the annotations of reactions and if not found, the annotations of all
@@ -440,8 +460,6 @@ class rpSBML:
         try:
             meas_rp_species = measured_sbml.readRPspecies()
             found_meas_rp_species = measured_sbml.readRPspecies()
-            found_meas_rp_species['measured_model_id'] = measured_sbml.model.getId()
-            found_meas_rp_species['rp_model_id'] = self.model.getId()
             for meas_step_id in meas_rp_species:
                 meas_rp_species[meas_step_id]['annotation'] = measured_sbml.model.getReaction(meas_step_id).getAnnotation()
                 found_meas_rp_species[meas_step_id]['found'] = False
@@ -467,7 +485,7 @@ class rpSBML:
             return False, {}
         #compare the number of steps in the pathway
         if not len(meas_rp_species)==len(rp_rp_species): #add one for the targetSink
-            self.logger.error('The pathways are not of the same length')
+            self.logger.warning('The pathways are not of the same length')
             #self.logger.error(len(meas_rp_species))
             #self.logger.error(meas_rp_species.keys())
             #self.logger.error(len(rp_rp_species))
@@ -484,79 +502,45 @@ class rpSBML:
                     break
         ############## compare using the species ###################
         for meas_step_id in measured_sbml.readRPpathway():
-            if not found_meas_rp_species[meas_step_id]['found']:
-                for rp_step_id in rp_rp_species:
-                    # We test to see if the meas reaction elements all exist in rp reaction and not the opposite
-                    #because the measured pathways may not contain all the elements
-                    ########## reactants ##########
-                    for meas_spe_id in meas_rp_species[meas_step_id]['reactants']:
-                        for rp_spe_id in rp_rp_species[rp_step_id]['reactants']:
-                            if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
+            #if not found_meas_rp_species[meas_step_id]['found']:
+            for rp_step_id in rp_rp_species:
+                # We test to see if the meas reaction elements all exist in rp reaction and not the opposite
+                #because the measured pathways may not contain all the elements
+                ########## reactants ##########
+                for meas_spe_id in meas_rp_species[meas_step_id]['reactants']:
+                    for rp_spe_id in rp_rp_species[rp_step_id]['reactants']:
+                        if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
+                            found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
+                            break
+                        else:
+                            if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
                                 found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
                                 break
-                            else:
-                                if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['reactants'][meas_spe_id], rp_rp_species[rp_step_id]['reactants'][rp_spe_id]):
-                                    found_meas_rp_species[meas_step_id]['reactants'][meas_spe_id] = True
-                                    break
-                    ########### products ###########
-                    for meas_spe_id in meas_rp_species[meas_step_id]['products']:
-                        for rp_spe_id in rp_rp_species[rp_step_id]['products']:
-                            if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
+                ########### products ###########
+                for meas_spe_id in meas_rp_species[meas_step_id]['products']:
+                    for rp_spe_id in rp_rp_species[rp_step_id]['products']:
+                        if self.compareMIRIAMAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
+                            found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
+                            break
+                        else:
+                            if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
                                 found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
                                 break
-                            else:
-                                if self.compareIBISBAAnnotations(meas_rp_species[meas_step_id]['products'][meas_spe_id], rp_rp_species[rp_step_id]['products'][rp_spe_id]):
-                                    found_meas_rp_species[meas_step_id]['products'][meas_spe_id] = True
-                                    break
-                    ######### test to see the difference
-                    pro_found = [found_meas_rp_species[meas_step_id]['products'][i] for i in found_meas_rp_species[meas_step_id]['products']]
-                    rea_found = [found_meas_rp_species[meas_step_id]['reactants'][i] for i in found_meas_rp_species[meas_step_id]['reactants']]
-                    if pro_found and rea_found:
-                        if all(pro_found) and all(rea_found):
-                            found_meas_rp_species[meas_step_id]['found'] = True
-                            found_meas_rp_species[meas_step_id]['rp_step_id'] = rp_step_id
-                            break
+                ######### test to see the difference
+                pro_found = [found_meas_rp_species[meas_step_id]['products'][i] for i in found_meas_rp_species[meas_step_id]['products']]
+                rea_found = [found_meas_rp_species[meas_step_id]['reactants'][i] for i in found_meas_rp_species[meas_step_id]['reactants']]
+                if pro_found and rea_found:
+                    if all(pro_found) and all(rea_found):
+                        found_meas_rp_species[meas_step_id]['found'] = True
+                        found_meas_rp_species[meas_step_id]['rp_step_id'] = rp_step_id
+                        break
         ################# Now see if all steps have been found ############
         if all(found_meas_rp_species[i]['found'] for i in found_meas_rp_species):
+            found_meas_rp_species['measured_model_id'] = measured_sbml.model.getId()
+            found_meas_rp_species['rp_model_id'] = self.model.getId()
             return True, found_meas_rp_species
         else:
             return False, {}
-
-        """
-        #''.join(i for i in s if i.isdigit())
-        #rp_pathways = sorted(self.readRPpathway(), key=lambda x : int(x.replace('RP', '')))
-        #measured_pathways = sorted(measured_sbml.readRPpathways(), key=lambda x : int(x.replace('M', '')))
-        #check that they are the same size #TODO: consider if the pathway is a subpart if an output of RP
-        toRet = []
-        if len(rp_pathways)==len(measured_pathways):
-            for rp_step, meas_step in zip(rp_pathways, measured_pathways):
-                rp_reaction = self.model.getReaction(rp_step)
-                meas_reaction = measured_sbml.model.getReaction(meas_step)
-                #compare the reaction annotations
-                if compareMIRIAMAnnotations(rp_reaction.getAnnotation(), meas_reaction.getAnnotation()):
-                    return True
-                else:
-                    #remove the stoichiometry. We will not be using it to compare
-                    #if the annotations are not the same, check that the measured species are contained within the rp one
-                    #rp_reaction_species = self.readReactionSpecies(rp_reaction)
-                    #rp_reaction_species = {'left': list(rp_reaction_species['left'].keys()), 'right': list(rp_reaction_species['right'].keys())}
-                    #meas_reaction_species = measured_sbml.readReactionSpecies(meas_reaction)
-                    #meas_reaction_species = {'left': list(meas_reaction_species['left'].keys()), 'right': list(meas_reaction_species['right'].keys())}
-                    #NOTE: we chack that the measured step species are contained within the current SBML.
-                    #This is because we assume that there are a number of steps that are missing
-                    for m_l in list(measured_sbml.readReactionSpecies(meas_reaction)['left'].keys()):
-                        for rp_l in list(self.readReactionSpecies(rp_reaction)['left'].keys()): 
-                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_l).getAnnotation(), measured_sbml.model.getReaction(m_l).getAnnotation()):
-                                return False
-                    for m_r in list(measured_sbml.readReactionSpecies(meas_reaction)['right'].keys()):
-                        for rp_r in list(self.readReactionSpecies(rp_reaction)['right'].keys()):
-                            if not compareMIRIAMAnnotations(self.model.getReaction(rp_r).getAnnotation(), measured_sbml.model.getReaction(m_r).getAnnotation()):
-                                return False
-            return True
-        else:
-            self.logger.error('The pathways are not the same length')
-            return False
-        """
 
 
     #########################################################################
@@ -570,7 +554,9 @@ class rpSBML:
     #called rp_pathway.
     # We add the reactions and species from the rpsbml to the target_model
     #
-    def mergeModels(self, target_model, pathId='rp_pathway'):
+    # @param bilevel_obj: Defines if the different objectves are to be added to the model (False if (0.0, 0.0) and what are the coefficients to add it)
+    #
+    def mergeModels(self, target_model, pathId='rp_pathway', bilevel_obj=(0.0, 0.0)):
         #target_model = target_document.getModel()
         #Find the ID's of the similar target_model species
         ################ UNITDEFINITIONS ######
@@ -690,6 +676,7 @@ class rpSBML:
         ############### FBC OBJECTIVES ############
         #WARNING: here we compare the Objective by ID, and we add the downstream fluxObjectives
         targetObjectiveID = [i.getId() for i in target_fbc.getListOfObjectives()]
+        sourceObjectiveID = [i.getId() for i in source_fbc.getListOfObjectives()]
         for source_objective in source_fbc.getListOfObjectives():
             if not source_objective.getId() in targetObjectiveID:
                 target_objective = target_fbc.createObjective()
@@ -707,6 +694,43 @@ class rpSBML:
                         'setting target flux objective coefficient')
                     self._checklibSBML(target_fluxObjective.setReaction(source_fluxObjective.getReaction()),
                         'setting target flux objective reaction')
+        #### bilevel
+        #add a bilevel fluxObjective. Under the assumption that the GEM model input only has a single objective and that that is the biomass one. 
+        #NOTE: only if each model have only one objective with a single flux objective
+        #create the two list of objectives
+        if 1>=len(targetObjectiveID)>0 and 1>=len(sourceObjectiveID)>0:
+            #create a new one objective
+            bilevel_objective = target_fbc.createObjective()
+            self._checklibSBML(bilevel_objective, 'creating bilevel objective')
+            self._checklibSBML(bilevel_objective.setId('rpFBA_bilevel_obj'), 'setting bilevel obj id')
+            self._checklibSBML(bilevel_objective.setType('maximize'), 'setting type of bilevel')
+            #list the flux objectives
+            source_fluxObjective = source_fbc.getObjective(sourceObjectiveID[0])
+            target_fluxObjective = target_fbc.getObjective(targetObjectiveID[0])
+            targetFluxObjectives = target_fluxObjective.getListOfFluxObjectives()
+            sourceFluxObjectives = source_fluxObjective.getListOfFluxObjectives()
+            if 1>=len(targetFluxObjectives)>0 and 1>=len(sourceFluxObjectives)>0:
+                #biomass
+                bilevel_fluxObjective_biomass = bilevel_objective.createFluxObjective()
+                self._checklibSBML(bilevel_fluxObjective_biomass.setName(sourceFluxObjectives[0].getName()),
+                    'setting target flux objective name')
+                self._checklibSBML(bilevel_fluxObjective_biomass.setCoefficient(0.5),
+                    'setting target flux objective coefficient')
+                self._checklibSBML(bilevel_fluxObjective_biomass.setReaction(sourceFluxObjectives[0].getReaction()),
+                    'setting target flux objective reaction')
+                #target
+                bilevel_fluxObjective_target = bilevel_objective.createFluxObjective()
+                self._checklibSBML(bilevel_fluxObjective_target, 'creating target flux objective')
+                self._checklibSBML(bilevel_fluxObjective_target.setName(targetFluxObjectives[0].getName()),
+                    'setting target flux objective name')
+                self._checklibSBML(bilevel_fluxObjective_target.setCoefficient(0.5),
+                    'setting target flux objective coefficient')
+                self._checklibSBML(bilevel_fluxObjective_target.setReaction(targetFluxObjectives[0].getReaction()),
+                    'setting target flux objective reaction')
+            else:
+                self.logger.warning('Either the target or source model has one of the oobjectives with multiple flux values')
+        else:
+            self.logger.warning('There are more than one, or zero objective in the target and the source')
         ################ SPECIES ####################
         #TODO: modify the name to add rpPathway
         sourceSpeciesID_targetSpeciesID = {}
@@ -1237,11 +1261,12 @@ class rpSBML:
     def createSpecies(self, 
             chemId,
             compartmentId,
-            chemXref={}, 
-            metaID=None, 
+            metaName=None,
+            chemXref={},
             inchi=None,
             inchiKey=None,
-            smiles=None):
+            smiles=None,
+            metaID=None):
             #TODO: add these at some point -- not very important
             #charge=0,
             #chemForm=''):
@@ -1269,7 +1294,16 @@ class rpSBML:
         if metaID==None:
             metaID = self._genMetaID(chemId)
         self._checklibSBML(spe.setMetaId(metaID), 'setting reaction metaID')
-        self._checklibSBML(spe.setName(chemId), 'setting name for the namebolites')
+
+        if not metaName==None:
+            self._checklibSBML(spe.setName(chemId), 'setting name for the namebolites')
+        elif not metaID==None:
+            self._checklibSBML(spe.setName(metaID), 'setting name for the namebolites')
+        else:
+            self.logger.warning('There are no inputs for the name')
+        #this is setting MNX id as the name
+        #this is setting the name as the input name
+        
         ###### annotation ###
         annotation = '''<annotation>
   <rdf:RDF 

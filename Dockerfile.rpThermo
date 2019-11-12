@@ -1,0 +1,38 @@
+FROM ibisba/rpsbml
+
+WORKDIR /home
+
+RUN conda install -y -c openbabel openbabel && \
+    pip install --no-cache-dir scipy && \
+    mkdir input-cache && \
+    mkdir cache && \
+    mkdir component_contribution && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/__init__.py component_contribution/__init__.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/_version.py component_contribution/_version.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/chemaxon.py component_contribution/chemaxon.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/component_contribution_trainer.py component_contribution/component_contribution_trainer.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/compound.py component_contribution/compound.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/compound_cache.py component_contribution/compound_cache.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/databases.py component_contribution/databases.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/exceptions.py component_contribution/exceptions.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/export_to_equilibrator.py component_contribution/export_to_equilibrator.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/inchi2gv.py component_contribution/inchi2gv.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/linalg.py component_contribution/linalg.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/mol_utils.py component_contribution/mol_utils.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/molecule.py component_contribution/molecule.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/reaction.py component_contribution/reaction.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/thermodynamic_constants.py component_contribution/thermodynamic_constants.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/component_contribution/training_data.py component_contribution/training_data.py && \
+    wget https://raw.githubusercontent.com/Galaxy-SynBioCAD/rpRanker_image/dev/rpThermo.py rpThermo.py #&& \
+    #wget https://github.com/Galaxy-SynBioCAD/rpRanker_image/tree/master/component_contribution #&& \
+    #wget cc_preprocess.npz_TODO -P /home/cache/ && \
+    #wget cc_compounds.json.gz_TODO -P /home/input_cache/ && \
+    #wget alberty.json_TODO -P /home/input_cache/ && \
+    #wget compounds.csv_TODO -P /home/input_cache/ 
+
+#This is tmp before we can have these online
+COPY required_data/input_cache/cc_preprocess.npz /home/cache/
+COPY required_data/input_cache/cc_compounds.json.gz /hone/input_cache/
+COPY required_data/input_cache/alberty.json /home/input_cache/
+COPY required_data/input_cache/compounds.csv /home/input_cache/
+COPY required_data/data /home/component_contribution/data
